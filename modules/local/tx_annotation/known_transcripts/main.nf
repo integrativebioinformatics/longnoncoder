@@ -33,7 +33,7 @@ process KNOWN_TRANSCRIPTS {
 
     script:
     def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    def args     = task.ext.args ? task.ext.args : "-ensembl_organism_dataset ${params.ensembl_organism_dataset} -ensembl_version ${params.ensembl_version}"
     """
     # Copy the R script to the working directory
     cp ${projectDir}/bin/known_transcripts.R ./
@@ -43,7 +43,6 @@ process KNOWN_TRANSCRIPTS {
         --transcript_counts ${transcript_counts} \\
         --gene_counts ${gene_counts} \\
         --gtf_file ${gtf_file} \\
-        --prefix ${prefix} \\
         $args
 
     cat <<-END_VERSIONS > versions.yml
@@ -54,12 +53,14 @@ process KNOWN_TRANSCRIPTS {
         bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-httr: \$(Rscript -e "cat(as.character(packageVersion('httr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
     END_VERSIONS
     """
 
     stub:
     def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    def args     = task.ext.args ? task.ext.args : "-ensembl_organism_dataset ${params.ensembl_organism_dataset} -ensembl_version ${params.ensembl_version}"
     """
     touch annotated_transcriptome_metadata.csv
     touch annotated_lncRNAs_metadata.csv
@@ -80,6 +81,8 @@ process KNOWN_TRANSCRIPTS {
         bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-httr: \$(Rscript -e "cat(as.character(packageVersion('httr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
     END_VERSIONS
     """
 }

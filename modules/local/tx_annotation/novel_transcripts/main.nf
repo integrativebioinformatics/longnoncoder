@@ -44,6 +44,7 @@ process NOVEL_TRANSCRIPTS {
         bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
     END_VERSIONS
     """
 
@@ -68,6 +69,7 @@ process NOVEL_TRANSCRIPTS {
         bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
     END_VERSIONS
     """
 }

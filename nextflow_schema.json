@@ -357,6 +357,12 @@
         },
         "organism": {
             "type": "string"
+        },
+        "ensembl_organism_dataset": {
+            "type": "string"
+        },
+        "ensembl_version": {
+            "type": "string"
         }
     }
 }

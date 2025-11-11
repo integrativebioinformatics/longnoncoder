@@ -25,8 +25,8 @@ option_list <- list(
                 help="Path to Bambu gene counts file", metavar="character"),
     make_option(c("--gtf_file"), type="character", default=NULL,
                 help="Path to Bambu GTF annotations file", metavar="character"),
-    make_option(c("--prefix"), type="character", default="sample",
-                help="Output prefix [default= %default]", metavar="character"),
+    make_option(c("--ensembl_organism_dataset"), type="character", default="hsapiens_gene_ensembl",
+                help="Ensembl genome dataset [default= %default]", metavar="character"),
     make_option(c("--ensembl_version"), type="integer", default=114,
                 help="Ensembl version to use [default= %default]", metavar="integer")
 )
@@ -46,15 +46,18 @@ cat("Starting transcript annotation analysis...\n")
 # Read transcript counts
 cat("Reading transcript counts...\n")
 tx <- read_table(opt$transcript_counts, show_col_types = FALSE)
+tx <- read.csv("C:/Users/mbarb/RatOmics/bambu/BambuOutput_counts_transcript_validated.txt", sep="\t", header=TRUE)
+organism <- opt$ensembl_organism_dataset
+ensembl_version <- opt$ensembl_version
 
 # Extract Ensembl transcript IDs
-ens_ids <- tx$TXNAME[startsWith(tx$TXNAME, "ENST")]
+ens_ids <- tx$TXNAME[startsWith(tx$TXNAME, "ENS")]
 cat(paste("Found", length(ens_ids), "Ensembl transcript IDs\n"))
 
 # Apply biomaRt to gather metadata
 cat("Connecting to Ensembl biomaRt...\n")
 
-ensembl <- useEnsembl(biomart="genes", dataset="hsapiens_gene_ensembl")
+ensembl <- useEnsembl(biomart="genes", dataset=organism, version=ensembl_version)
 
 attributes <- c("chromosome_name","ensembl_gene_id", "ensembl_transcript_id",
                 "external_transcript_name","external_gene_name", "strand",
