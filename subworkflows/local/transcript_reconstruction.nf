@@ -33,7 +33,7 @@ workflow TRANSCRIPT_RECONSTRUCTION {
 
     // Setting TSV file with sample information
     bams
-        .map { meta, path -> [meta.cell_line, path.getName()] }
+        .map { meta, path -> [meta.group, path.getName()] }
         .collectFile(newLine: true) { item ->
             [ "${item[0]}.txt", item[0] + '\t' + item[1] ]
         }
@@ -43,7 +43,7 @@ workflow TRANSCRIPT_RECONSTRUCTION {
 
     // Setting up the BAM list
     bams
-        .map { meta, path -> [meta.cell_line, path.toString()] }
+        .map { meta, path -> [meta.group, path.toString()] }
         .collectFile(newLine: true) { item ->
         ["${item[0]}.txt", item[1]]
         }

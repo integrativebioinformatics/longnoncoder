@@ -13,11 +13,11 @@
                 "errorMessage": "Sample name must be provided and cannot contain spaces",
                 "meta": ["id"]
             },
-            "cell_line": {
+            "group": {
                 "type": "string",
                 "pattern": "^\\S+$",
                 "errorMessage": "Group name must be provided and cannot contain spaces",
-                "meta": ["cell_line"]
+                "meta": ["group"]
             },
             "fastq": {
                 "type": "string",
@@ -27,6 +27,6 @@
                 "errorMessage": "FastQ file for reads 1 must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
             }
         },
-        "required": ["sample", "cell_line", "fastq"]
+        "required": ["sample", "group", "fastq"]
     }
 }

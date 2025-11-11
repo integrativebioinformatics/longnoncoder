@@ -81,7 +81,44 @@ sample_info <- tryCatch({
   stop(paste("Error reading sample information file:", e$message))
 })
 
-colData(se.multiSample)$cellLine <- as.factor(sample_info[[1]])
+# basenames of BAM paths (in the order listed in bamFiles)
+bam_basenames     <- basename(bamFiles)
+bam_names_noext   <- sub('\\.bam(?:\\.gz)?$', '', bam_basenames, ignore.case = TRUE)
+
+# determine which column in sample_info contains the BAM filename
+# common case for sampinfo_samplesheet.tsv: column 2 is filename (col1 = group)
+if (ncol(sample_info) >= 2) {
+  sample_filenames <- as.character(sample_info[[2]])
+} else {
+  sample_filenames <- as.character(sample_info[[1]])
+}
+sample_basenames_noext <- sub('\\.bam(?:\\.gz)?$', '', basename(sample_filenames), ignore.case = TRUE)
+
+# match sample rows to bamFiles by basename without extension
+match_idx <- match(sample_basenames_noext, bam_names_noext)
+
+# try fallback: match by full basename (with extension) for any NAs
+na_rows <- which(is.na(match_idx))
+if (length(na_rows) > 0) {
+  fallback_idx <- match(basename(sample_filenames[na_rows]), bam_basenames)
+  match_idx[na_rows] <- fallback_idx
+}
+
+if (all(is.na(match_idx))) {
+  warning("Could not match any sample_info filenames to bamlist entries — keeping original sample_info order")
+} else {
+  # order sample_info rows by the matched index (unmatched rows will be placed at the end)
+  ord <- order(ifelse(is.na(match_idx), Inf, match_idx), na.last = TRUE)
+  sample_info <- sample_info[ord, , drop = FALSE]
+}
+
+# Optional sanity check
+if (nrow(sample_info) != length(bamFiles)) {
+  warning(sprintf("Number of sample_info rows (%d) differs from number of BAMs (%d). Check for missing or extra entries.",
+                  nrow(sample_info), length(bamFiles)))
+}
+
+colData(se.multiSample)$group <- as.factor(sample_info[[1]])
 colData(se.multiSample)$groupVar <- sample_info[[1]]
 
 # --- Transcript-level analysis ---
@@ -90,7 +127,7 @@ colData(se.multiSample)$groupVar <- sample_info[[1]]
 seGene.multiSample <- transcriptToGeneExpression(se.multiSample)
 
 # Add sample metadata to gene-level object
-colData(seGene.multiSample)$cellLine <- as.factor(sample_info[[1]])
+colData(seGene.multiSample)$group <- as.factor(sample_info[[1]])
 colData(seGene.multiSample)$groupVar <- sample_info[[1]]
 
 

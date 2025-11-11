@@ -1,11 +1,4 @@
 .nextflow*
 work/
-data/
-results/
-.DS_Store
-testing/
-test/
-testing*
-*.pyc
-encode/
-ebi/
+seba.config
+null/

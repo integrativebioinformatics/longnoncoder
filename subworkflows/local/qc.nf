@@ -2,8 +2,8 @@
 // MODULE: Installed directly from nf-core/modules
 //
 
-include { NANOCOMP as NANOCOMP_RAW_BOX      } from '../../modules/local/nanocomp/main'
-include { NANOCOMP as NANOCOMP_FILT_BOX     } from '../../modules/local/nanocomp/main'
+include { NANOCOMP as NANOCOMP_RAW          } from '../../modules/nf-core/nanocomp/main'
+include { NANOCOMP as NANOCOMP_FILT         } from '../../modules/nf-core/nanocomp/main'
 include { CHOPPER                           } from '../../modules/nf-core/chopper/main'
 
 /*
@@ -33,15 +33,15 @@ workflow QC_FILT {
              .map {filelist -> [[id:"All"],filelist]}
              .set {ch_combined_raw}
 
-     NANOCOMP_RAW_BOX(ch_combined_raw)
+     NANOCOMP_RAW(ch_combined_raw)
 
 
-     ch_versions = ch_versions.mix(NANOCOMP_RAW_BOX.out.versions)
+     ch_versions = ch_versions.mix(NANOCOMP_RAW.out.versions)
 
     // Generating a multiqc file for raw reads report
 
     // ch_multiqc_raw = ch_multiqc_raw.mix(RAW_NANOCOMP.out.zip.collect{it[1]}.ifEmpty([]))
-    ch_multiqc_raw = ch_multiqc_raw.mix(NANOCOMP_RAW_BOX.out.stats_txt.collect{it[1]}.ifEmpty([]))
+    ch_multiqc_raw = ch_multiqc_raw.mix(NANOCOMP_RAW.out.stats_txt.collect{it[1]}.ifEmpty([]))
 
     ch_multiqc_all = ch_multiqc_all.mix(ch_multiqc_raw.ifEmpty([]))
 
@@ -58,10 +58,10 @@ workflow QC_FILT {
              .map {filelist -> [[id:"All"],filelist]}
              .set {ch_combined_filtered}
 
-    NANOCOMP_FILT_BOX(ch_combined_filtered)
+    NANOCOMP_FILT(ch_combined_filtered)
 
     //ch_multiqc_filt = ch_multiqc_filt.mix(FILT_NANOCOMP.out.zip.collect{it[1]}.ifEmpty([]))
-    ch_multiqc_filt = ch_multiqc_filt.mix(NANOCOMP_FILT_BOX.out.stats_txt.collect{it[1]}.ifEmpty([]))
+    ch_multiqc_filt = ch_multiqc_filt.mix(NANOCOMP_FILT.out.stats_txt.collect{it[1]}.ifEmpty([]))
 
     ch_multiqc_all = ch_multiqc_all.mix(ch_multiqc_filt.ifEmpty([]))
 
