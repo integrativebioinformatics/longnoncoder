@@ -222,8 +222,8 @@ if (!file.exists(params$transcriptome_meta)) {
 }
 
 # --- 1B. Check if Novel lncRNA/PC Metadata exists ---
-if (!file.exists(params$novel_lncrna_meta)) {
-  stop("Error: The novel transcript metadata file was not found at: ", params$novel_lncrna_meta)
+if (!file.exists(params$novel_transcriptome_meta)) {
+  stop("Error: The novel transcript metadata file was not found at: ", params$novel_transcriptome_meta)
 }
 
 # --- 2A. Import Annotated Transcriptome Metadata ---
@@ -235,7 +235,7 @@ tryCatch({
 
 # --- 2B. Import Novel lncRNA/PC Metadata ---
 tryCatch({
-  novel_tx <- read.csv(params$novel_lncrna_meta)
+  novel_tx <- read.csv(params$novel_transcriptome_meta)
 }, error = function(e) {
   stop("Critical Error reading novel transcript metadata file: ", e$message)
 })
