@@ -19,7 +19,7 @@ process RENDER_REPORT {
         path(lncrna_meta)
         path(protein_coding_exonlength)
         path(lncrna_exonlength)
-        path(novel_lncrna_meta)
+        path(novel_transcriptome_meta)
         path(novel_lncrna_exonlength)
         path(novel_protein_coding_exonlength)
 
