@@ -61,7 +61,7 @@ process RENDER_REPORT {
             -P lncrna_meta:${lncrna_meta} \\
             -P protein_coding_exonlength:${protein_coding_exonlength} \\
             -P lncrna_exonlength:${lncrna_exonlength} \\
-            -P novel_lncrna_meta:${novel_lncrna_meta} \\
+            -P novel_transcriptome_meta:${novel_transcriptome_meta} \\
             -P novel_lncrna_exonlength:${novel_lncrna_exonlength} \\
             -P novel_protein_coding_exonlength:${novel_protein_coding_exonlength} \\
             -P plot_heatmap_gene:${plot_heatmap_gene} \\
