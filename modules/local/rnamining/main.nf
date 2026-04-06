@@ -1,6 +1,6 @@
 process RNAMINING {
     tag 'Predicting_Coding_Potential'
-    label 'process_single'
+    label 'process_low'
 
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/rnamining:1.0.4--pyhdfd78af_0':

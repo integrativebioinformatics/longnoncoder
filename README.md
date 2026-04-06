@@ -35,7 +35,7 @@ We can describe each step of the workflow as follows:
 ## Usage
 
 > [!NOTE]
-> If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with both Docker and Singularity.
+> If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with both Docker and Singularity/Apptainer.
 
 You can run an example test by following the instructions:
 
@@ -50,11 +50,11 @@ Download and unzip the reference `FASTA` and `GTF` files, and also download the 
 Make the file executable!!
 
 ``` bash
-chmod +x download-ref.sh
+chmod +x download-ref-fastq.sh
 ```
 Run it
 ``` bash
-./download-ref.sh
+./download-ref-fastq.sh
 ```
 
 Add YOUR full path for the samples in the `samplesheet.csv` ([file](test_data/samplesheet.csv)). For example, your full path for a sample could be:

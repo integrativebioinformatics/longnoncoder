@@ -1,6 +1,6 @@
 process BAMBU_VALIDATE {
     tag "Validating_BAMBU"
-    label 'process_medium'
+    label 'process_low'
 
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'docker://lfreitasl/bambu:3.8.0':
