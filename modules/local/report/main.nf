@@ -32,8 +32,7 @@ process RENDER_REPORT {
     output:
         path("*.html")                      , emit: report
         path("Bambu_assembly_summary.csv")  , emit: bambu_assembly_summary
-        // path("*.png")                       , emit: generated_plots_png
-        // path("*.pdf")                       , emit: generated_plots_pdf
+        path("Bambu_lncRNA_PC_summary.csv") , emit: bambu_lncRNA_PC_summary
 
     when:
         task.ext.when == null || task.ext.when
@@ -74,8 +73,7 @@ process RENDER_REPORT {
         """
         touch report.html
         touch Bambu_assembly_summary.csv
-        touch generated_plot.png
-        touch generated_plot.pdf
+        touch Bambu_lncRNA_PC_summary.csv
         """
 
 }
