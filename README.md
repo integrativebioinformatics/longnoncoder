@@ -86,13 +86,13 @@ To see the results of an example test run with a full size dataset refer to the 
 If you would like to contribute to this pipeline, please see the [contributing guidelines](.github/CONTRIBUTING.md).
 
 ## Citations
-If you use SlytheRINs in your research, please consider citing it.
+If you use integrativebioinformatics/longnoncoder in your research, please consider citing it.
 An extensive list of references for the tools incorporated by the pipeline can be found in the [`CITATIONS.md`](CITATIONS.md) file.
 
 ## Acknowledgments
 
 ### Development & Contributions
-The longnoncoder pipeline was originally developed by Bárbara Borges (@borgessbarbara). We extend our sincere thanks to Lucas Freitas (@lfreitasl), João Cavalcante (@jvfe), and Gleison Azevedo (@gleisonm) for their significant contributions and assistance.
+The longnoncoder pipeline was originally developed by Bárbara Borges ([@borgessbarbara](https://github.com/borgessbarbara)). We extend our sincere thanks to Lucas Freitas ([@lfreitasl](https://github.com/lfreitasl)), João Cavalcante ([@jvfe](https://github.com/jvfe)), and Gleison Azevedo ([@gleisonm](https://github.com/gleisonm) for their significant contributions and assistance.
 
 ### Supervision
 This project was carried out under the leadership and supervision of Principal Investigators Vinícius Maracajá-Coutinho, Thaís Gaudencio, and Rodrigo Dalmolin.
