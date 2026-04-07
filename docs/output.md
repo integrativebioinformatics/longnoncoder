@@ -11,6 +11,18 @@ This document describes the file-level reference for outputs produced by each pi
 
 > _All output files are organized by stage-specific directories._
 
+## `transcriptome_report/` (final report outputs)
+
+| File                          | Description                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `Bambu_assembly_summary.csv`  | Summary table of transcriptome assembly metrics derived from bambu outputs. |
+| `Bambu_lncRNA_PC_summary.csv` | Summary table comparing lncRNA and protein-coding assembly status   .       |
+| `report.html`                 | Final transcriptome report with integrated summaries and visualizations.    |
+
+### Report interface
+
+![longnoncoder-report](images/longnoncoder-report-interface.gif)
+
 ## `chopper/` (read filtering and trimming)
 
 | File                  | Description                                                                 |
@@ -263,23 +275,6 @@ Class_codes description figure below retrieved from the official [documentation]
 | `novel_protein-coding.gtf`                      | GTF file containing novel protein-coding RNA isoform candidates.                             |
 | `novel_protein-coding_metadata.csv`             | Metadata table for novel protein-coding RNA isoform candidates.                              |
 | `novel_transcripts_metadata.csv`                | Metadata table for all novel RNA isoform candidates.                                         |
-
-## `transcriptome_report/` (final report outputs)
-
-| File                          | Description                                                                 |
-| ----------------------------- | --------------------------------------------------------------------------- |
-| `Bambu_assembly_summary.csv`  | Summary table of transcriptome assembly metrics derived from bambu outputs. |
-| `Bambu_lncRNA_PC_summary.csv` | Summary table comparing lncRNA and protein-coding assembly status   .       |
-| `report.html`                 | Final transcriptome report with integrated summaries and visualizations.    |
-
-### Report interface
-![report-top-panel](images/pipeline-report.png)
-
-#### Quantification of all biotypes assembled
-![biotypes](images/pipeline-report-annotation-biotypes.png)
-
-#### Transcript feature relationships
-![exnum-tlen-rel](images/pipeline-report-exnum-tlen.png)
 
 ## `pipeline_info/` (workflow run metadata)
 
