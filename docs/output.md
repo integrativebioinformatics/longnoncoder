@@ -1,71 +1,298 @@
-# nf-core/longnoncoder: Output
+# integrativebioinformatics/longnoncoder: Output
+This document describes the file-level reference for outputs produced by each pipeline step, which include: 
 
-## Introduction
+1. Read quality control and optional filtering
+2. Mapping/alingment of reads to a reference genome
+3. Transcriptome assembly and quantification
+4. Novel RNA isoform candidates classification and coding-potential prediction
+5. Annotation and summarization of assembled isoforms
+6. Final visual reporting
+7. Run traceability
 
-This document describes the output produced by the pipeline. Most of the plots are taken from the MultiQC report, which summarises results at the end of the pipeline.
+> _All output files are organized by stage-specific directories._
 
-The directories listed below will be created in the results directory after the pipeline has finished. All paths are relative to the top-level results directory.
+## `chopper/` (read filtering and trimming)
 
-<!-- TODO nf-core: Write this documentation describing your workflow's output -->
+| File                  | Description                                                                 |
+| --------------------- | --------------------------------------------------------------------------- |
+| `filtered_*.fastq.gz` | Filtered/compressed FASTQ reads generated after filtering/trimming. |
 
-## Pipeline overview
+## `multiqc/` (aggregated QC)
 
-The pipeline is built using [Nextflow](https://www.nextflow.io/) and processes data using the following steps:
+### `multiqc/`
 
-- [FastQC](#fastqc) - Raw read QC
-- [MultiQC](#multiqc) - Aggregate report describing results and QC from the whole pipeline
-- [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
+| File                  | Description                           |
+| --------------------- | ------------------------------------- |
+| `multiqc_report.html` | Main MultiQC interactive HTML report. |
 
-### FastQC
+#### Summary statistics
+![multiqc_table](images/multiqc-nanostat_fastq-qc.png)
 
-<details markdown="1">
-<summary>Output files</summary>
+#### Phred-score quality plot
+![multiqc_plot_qual](images/multiqc-nanostat_fastq-qual-dist.png)
 
-- `fastqc/`
-  - `*_fastqc.html`: FastQC report containing quality metrics.
-  - `*_fastqc.zip`: Zip archive containing the FastQC report, tab-delimited data file and plot images.
 
-</details>
+### `multiqc/multiqc_data/`
 
-[FastQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/) gives general quality metrics about your sequenced reads. It provides information about the quality score distribution across your reads, per base sequence content (%A/T/G/C), adapter contamination and overrepresented sequences. For further reading and documentation see the [FastQC help pages](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/).
+| File                             | Description                                                         |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `multiqc_citations.txt`          | Citation information for tools represented in the MultiQC report.   |
+| `multiqc_data.json`              | Structured JSON with parsed metrics used to render MultiQC outputs. |
+| `multiqc_general_stats.txt`      | Tabular general statistics exported by MultiQC.                     |
+| `multiqc.log`                    | MultiQC execution log.                                              |
+| `multiqc_nanostat.txt`           | Parsed NanoStat metrics as imported by MultiQC.                     |
+| `multiqc_software_versions.txt`  | Software version summary collected by MultiQC modules.              |
+| `multiqc_sources.txt`            | Source file provenance for metrics included in MultiQC.             |
+| `nanostat_fastq_stats_table.txt` | NanoStat FASTQ summary table extracted by MultiQC.                  |
+| `nanostat_quality_dist.txt`      | Quality distribution table extracted by MultiQC.                    |
 
-![MultiQC - FastQC sequence counts plot](images/mqc_fastqc_counts.png)
+### `multiqc/multiqc_plots/pdf/`
 
-![MultiQC - FastQC mean quality scores plot](images/mqc_fastqc_quality.png)
+| File                             | Description                                        |
+| -------------------------------- | -------------------------------------------------- |
+| `general_stats_table.pdf`        | PDF export of MultiQC general statistics table.    |
+| `nanostat_fastq_stats_table.pdf` | PDF export of NanoStat FASTQ statistics table.     |
+| `nanostat_quality_dist-cnt.pdf`  | PDF plot of quality-score counts distribution.     |
+| `nanostat_quality_dist-pct.pdf`  | PDF plot of quality-score percentage distribution. |
 
-![MultiQC - FastQC adapter content plot](images/mqc_fastqc_adapter.png)
+### `multiqc/multiqc_plots/png/`
 
-:::note
-The FastQC plots displayed in the MultiQC report shows _untrimmed_ reads. They may contain adapter sequence and potentially regions with low quality.
-:::
+| File                             | Description                                        |
+| -------------------------------- | -------------------------------------------------- |
+| `general_stats_table.png`        | PNG export of MultiQC general statistics table.    |
+| `nanostat_fastq_stats_table.png` | PNG export of NanoStat FASTQ statistics table.     |
+| `nanostat_quality_dist-cnt.png`  | PNG plot of quality-score counts distribution.     |
+| `nanostat_quality_dist-pct.png`  | PNG plot of quality-score percentage distribution. |
 
-### MultiQC
+### `multiqc/multiqc_plots/svg/`
 
-<details markdown="1">
-<summary>Output files</summary>
+| File                             | Description                                        |
+| -------------------------------- | -------------------------------------------------- |
+| `general_stats_table.svg`        | SVG export of MultiQC general statistics table.    |
+| `nanostat_fastq_stats_table.svg` | SVG export of NanoStat FASTQ statistics table.     |
+| `nanostat_quality_dist-cnt.svg`  | SVG plot of quality-score counts distribution.     |
+| `nanostat_quality_dist-pct.svg`  | SVG plot of quality-score percentage distribution. |
 
-- `multiqc/`
-  - `multiqc_report.html`: a standalone HTML file that can be viewed in your web browser.
-  - `multiqc_data/`: directory containing parsed statistics from the different tools used in the pipeline.
-  - `multiqc_plots/`: directory containing static images from the report in various formats.
 
-</details>
+## `nanocomp/` (read quality comparison)
 
-[MultiQC](http://multiqc.info) is a visualization tool that generates a single HTML report summarising all samples in your project. Most of the pipeline QC results are visualised in the report and further statistics are available in the report data directory.
+### `nanocomp/raw_reads/`
 
-Results generated by MultiQC collate pipeline QC from supported tools e.g. FastQC. The pipeline has special steps which also allow the software versions to be reported in the MultiQC output for future traceability. For more information about how to use MultiQC reports, see <http://multiqc.info>.
+| File                                              | Description                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------- |
+| `AllNanoComp_lengths_violin.html`                 | Violin plot report for raw-read length distribution.          |
+| `AllNanoComp_log_length_violin.html`              | Violin plot report for raw-read log-length distribution.      |
+| `AllNanoComp_N50.html`                            | N50 summary plot/report for raw reads.                        |
+| `AllNanoComp_number_of_reads.html`                | Plot/report of raw read counts per sample.                    |
+| `AllNanoComp_OverlayHistogram.html`               | Overlay histogram report for raw-read lengths.                |
+| `AllNanoComp_OverlayHistogram_Normalized.html`    | Normalized overlay histogram report for raw-read lengths.     |
+| `AllNanoComp_OverlayLogHistogram.html`            | Overlay log-histogram report for raw-read lengths.            |
+| `AllNanoComp_OverlayLogHistogram_Normalized.html` | Normalized overlay log-histogram report for raw-read lengths. |
+| `AllNanoComp_quals_violin.html`                   | Violin plot report for raw-read quality score distributions.  |
+| `AllNanoComp-report.html`                         | Main NanoComp HTML summary report for raw reads.              |
+| `AllNanoComp_total_throughput.html`               | Throughput plot/report for raw reads.                         |
+| `AllNanoStats.txt`                                | Text summary statistics generated by NanoComp for raw reads.  |
 
-### Pipeline information
+### `nanocomp/filt_reads/`
 
-<details markdown="1">
-<summary>Output files</summary>
+| File                                              | Description                                               |
+| ------------------------------------------------- | --------------------------------------------------------- |
+| `AllNanoComp_lengths_violin.html`                 | Violin plot report for read-length distribution.          |
+| `AllNanoComp_log_length_violin.html`              | Violin plot report for log-transformed read lengths.      |
+| `AllNanoComp_N50.html`                            | N50 summary plot/report for read lengths.                 |
+| `AllNanoComp_number_of_reads.html`                | Plot/report of read counts per sample.                    |
+| `AllNanoComp_OverlayHistogram.html`               | Overlay histogram report for read lengths.                |
+| `AllNanoComp_OverlayHistogram_Normalized.html`    | Normalized overlay histogram report for read lengths.     |
+| `AllNanoComp_OverlayLogHistogram.html`            | Overlay log-histogram report for read lengths.            |
+| `AllNanoComp_OverlayLogHistogram_Normalized.html` | Normalized overlay log-histogram report for read lengths. |
+| `AllNanoComp_quals_violin.html`                   | Violin plot report for base quality score distributions.  |
+| `AllNanoComp-report.html`                         | Main NanoComp HTML summary report for filtered reads.     |
+| `AllNanoComp_total_throughput.html`               | Throughput plot/report for cumulative bases per sample.   |
+| `AllNanoStats.txt`                                | Text summary statistics generated by NanoComp.            |
 
-- `pipeline_info/`
-  - Reports generated by Nextflow: `execution_report.html`, `execution_timeline.html`, `execution_trace.txt` and `pipeline_dag.dot`/`pipeline_dag.svg`.
-  - Reports generated by the pipeline: `pipeline_report.html`, `pipeline_report.txt` and `software_versions.yml`. The `pipeline_report*` files will only be present if the `--email` / `--email_on_fail` parameter's are used when running the pipeline.
-  - Reformatted samplesheet files used as input to the pipeline: `samplesheet.valid.csv`.
-  - Parameters used by the pipeline run: `params.json`.
+### `nanocomp/mapping/`
 
-</details>
+| File                                              | Description                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------ |
+| `AllNanoComp_lengths_violin.html`                 | Violin plot report for mapped-read length distribution.            |
+| `AllNanoComp_log_length_violin.html`              | Violin plot report for mapped-read log-length distribution.        |
+| `AllNanoComp_N50.html`                            | N50 summary plot/report for mapped reads.                          |
+| `AllNanoComp_number_of_reads.html`                | Plot/report of mapped read counts per sample.                      |
+| `AllNanoComp_OverlayHistogram.html`               | Overlay histogram report for mapped-read lengths.                  |
+| `AllNanoComp_OverlayHistogram_Identity.html`      | Overlay histogram report for mapping identity distribution.        |
+| `AllNanoComp_OverlayHistogram_Normalized.html`    | Normalized overlay histogram report for mapped-read lengths.       |
+| `AllNanoComp_OverlayHistogram_PhredScore.html`    | Overlay histogram report for mapped-read Phred score distribution. |
+| `AllNanoComp_OverlayLogHistogram.html`            | Overlay log-histogram report for mapped-read lengths.              |
+| `AllNanoComp_OverlayLogHistogram_Normalized.html` | Normalized overlay log-histogram report for mapped-read lengths.   |
+| `AllNanoComp_percentIdentity_violin.html`         | Violin plot report for mapping percent identity distribution.      |
+| `AllNanoComp_quals_violin.html`                   | Violin plot report for mapped-read quality scores.                 |
+| `AllNanoComp-report.html`                         | Main NanoComp HTML summary report for mapped reads.                |
+| `AllNanoComp_total_throughput.html`               | Throughput plot/report for mapped reads.                           |
+| `AllNanoStats.txt`                                | Text summary statistics generated by NanoComp for mapped reads.    |
 
-[Nextflow](https://www.nextflow.io/docs/latest/tracing.html) provides excellent functionality for generating various reports relevant to the running and execution of the pipeline. This will allow you to troubleshoot errors with the running of the pipeline, and also provide you with other information such as launch commands, run times and resource usage.
+### Mapped number of reads
+![NanoComp_Num_Reads](images/NanoComp-Num-reads.png)
+
+### Mapped read length
+![NanoComp_Read_Length](images/NanoComp-Read-Length-Log.png)
+
+### Mapped reads' identity to reference
+![NanoComp_Ref_Identity](images/NanoComp-Ref-Identity.png)
+
+
+## `minimap2/` (genome mapping)
+
+| File        | Description                                                |
+| ----------- | ---------------------------------------------------------- |
+| `*.bam`     | Sorted BAM alignment files generated by minimap2/samtools. |
+| `*.bam.bai` | BAM index files for the corresponding `*.bam` alignments.  |
+
+## `bambu/` (transcriptome assembly and quantification)
+
+### Raw count-matrix & annotation standard outputs
+> _Bambu standard outputs are constructed as an extension of the reference annotation that incorporates the novel RNA isoform candidates. Therefore, the raw files will include reference transcripts/genes that were not assembled. The count-matrix will will contain zero-counts in all samples for these specific extended reference features._
+
+| File                                                    | Description                                                           |
+| ------------------------------------------------------- | --------------------------------------------------------------------- |
+| `BambuOutput_counts_gene.txt`                           | Gene-level raw count matrix.                                          |
+| `BambuOutput_counts_transcript.txt`                     | Transcript-level raw count matrix.                                    |
+| `BambuOutput_CPM_transcript.txt`                        | Transcript-level CPM-normalized expression matrix.                    |
+| `BambuOutput_fullLengthCounts_transcript.txt`           | Full-length transcript count matrix.                                  |
+| `BambuOutput_uniqueCounts_transcript.txt`               | Uniquely mapped transcript count matrix.                              |
+| `BambuOutput_extended_annotations.gtf`                  | Extended reference transcript annotations.                            |
+| `bambu_novel_transcripts.gtf`                           | Novel isoform candidates identified by Bambu.                         |
+
+### Standard automatic plots
+
+| File                                                    | Description                                                           |
+| ------------------------------------------------------- | --------------------------------------------------------------------- |
+| `heatmap_gene.png`                                      | Heatmap visualization of gene-level expression patterns.              |
+| `heatmap_transcript.png`                                | Heatmap visualization of transcript-level expression patterns.        |
+| `pca_grouped.png`                                       | PCA plot for samples organized by experimental design groups.         |
+| `pca.png`                                               | PCA plot for individual samples.                                      |
+
+#### Spearman correlation coefficients
+![SpR_Gene_level](images/bambu-gene-level-spR.png)
+#### PCA analysis
+![PCA](images/bambu-pca.png)
+
+### Rdata
+
+| File                                                    | Description                                                           |
+| ------------------------------------------------------- | --------------------------------------------------------------------- |
+| `seGene_multiSample.rds`                                | Serialized R object with gene-level summarized experiment data.       |
+| `se_multiSample.rds`                                    | Serialized R object with transcript-level summarized experiment data. |
+
+### Filtered count-matrices
+> _Transcripts/genes from the extended reference annotations that have 0-counts in all samples are removed, keeping only annotated and novel features that were actually assembled and quantified by Bambu from the input dataset._
+
+| File                                                    | Description                                                           |
+| ------------------------------------------------------- | --------------------------------------------------------------------- |
+| `BambuOutput_counts_transcript_filtered.txt`            | Filtered transcript-level raw count matrix.                           |
+| `BambuOutput_counts_gene_filtered.txt`                  | Filtered gene-level raw count matrix.                                 |
+| `BambuOutput_CPM_transcript_filtered.txt`               | Filtered transcript-level CPM-normalized expression matrix.           |
+| `BambuOutput_fullLengthCounts_transcript_filtered.txt`  | Filtered full-length transcript count matrix.                         |
+| `BambuOutput_fullLengthCounts_transcript_validated.txt` | Full-length transcript count matrix for validated features.           |
+| `BambuOutput_uniqueCounts_transcript_filtered.txt`      | Filtered uniquely mapped transcript count matrix.                     |
+
+### Validated transcripts & annotations
+> _Filtered count-matrices are submitted to validation of novel transcript isoforms, further keeping only the reference features and selected novel lncRNA and protein-coding RNA isoform candidates that were *assembled* by Bambu from the input dataset._
+
+| File                                                    | Description                                                           |
+| ------------------------------------------------------- | --------------------------------------------------------------------- |
+| `BambuOutput_counts_gene_validated.txt`                 | Gene-level raw count matrix restricted to validated features.         |
+| `BambuOutput_counts_transcript_validated.txt`           | Transcript-level raw count matrix restricted to validated features.   |
+| `BambuOutput_CPM_transcript_validated.txt`              | Transcript-level CPM matrix for validated features.                   |
+| `BambuOutput_uniqueCounts_transcript_validated.txt`     | Uniquely mapped transcript count matrix for validated features.       |
+| `BambuOutput_fullLength_validated.gtf`                  | GTF of validated full-length transcript isoforms.                     |
+| `BambuOutput_annotations_validated.gtf`                 | Final validated annotation.                                           |
+| `BambuOutput_uniquelyMapped_validated.gtf`              | Validated transcript isoforms supported by uniquely mapped reads.     |
+
+## `gffcompare/` (novel transcript comparison)
+> _Check the GffCompare's official [documentation](http://ccb.jhu.edu/software/stringtie/gffcompare.shtml).
+
+| File                                          | Description                                                                                   |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `compared.annotated.gtf`                      | GTF output with reference-aware annotation status from gffcompare.                            |
+| `compared.bambu_novel_transcripts.gtf.refmap` | Mapping of reference transcripts to novel isoform candidates assembled.                       |
+| `compared.bambu_novel_transcripts.gtf.tmap`   | Mapping/classification table for novel isoform candidatesagainst the reference.               |
+| `compared.loci`                               | Loci-level grouping of reference and novel isoform candidates' structures.                    |
+| `compared.stats`                              | Summary statistics from novel isoform candidates comparison against the reference annotation. |
+| `compared.tracking`                           | Tracking table.                                                                               |
+
+### GffCompare classification codes
+Class_codes description figure below retrieved from the official [documentation](https://ccb.jhu.edu/software/stringtie/gffcompare_codes.png).
+
+![descriptions](images/gffcompare_codes.png)
+
+## `gffread/` (sequence extraction)
+
+| File                         | Description                                                    |
+| ---------------------------- | -------------------------------------------------------------- |
+| `bambu_novel_transcripts.fa` | FASTA sequences extracted for bambu novel isoform candidates.  |
+
+## `rnamining/` (coding potential prediction for novel transcripts)
+
+| File              | Description                                                                  |
+| ----------------- | ---------------------------------------------------------------------------- |
+| `codings.txt`     | List of novel isoform candidates predicted as protein-coding RNAs.           |
+| `noncodings.txt`  | List of novel isoform candidates predicted as non-coding RNAs.               |
+| `predictions.txt` | Full RNAmining prediction output for all evaluated novel isoform candidates. |
+
+## `annotations_metadata/` (metadata handling)
+
+| File                                            | Description                                                                                  |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `annotated_lncRNAs_exonlength.csv`              | Exon length summary for annotated lncRNA transcripts.                                        |
+| `annotated_lncRNAs_metadata.csv`                | Metadata table for annotated lncRNA transcripts.                                             |
+| `annotated_protein-coding_exonlength.csv`       | Exon length summary for annotated protein-coding transcripts.                                |
+| `annotated_protein-coding_metadata.csv`         | Metadata table for annotated protein-coding transcripts.                                     |
+| `annotated_transcriptome_metadata.csv`          | Metadata summary for the entire annotated transcriptome.                                     |
+| `bambu_annotated_lncRNAs.gtf`                   | GTF annotation file containing annotated lncRNA isoforms from bambu outputs.                 |
+| `bambu_annotated_mRNAs.gtf`                     | GTF annotation file containing annotated mRNA/protein-coding isoforms from bambu outputs.    |
+| `bambu_annotated_transcriptome_gene_counts.csv` | Gene-level count matrix for annotated transcriptome features.                                |
+| `bambu_annotated_transcriptome.gtf`             | GTF file for annotated features assembled/quantified by bambu.                               |
+| `bambu_annotated_transcriptome_tx_counts.csv`   | Transcript-level count matrix for annotated transcriptome features.                          |
+| `bambu_novel_pc_lnc_RNA_gene_counts.csv`        | Gene-level counts for novel isoform candidates classified as protein-coding or lncRNA.       |
+| `bambu_novel_pc_lnc_RNA_tx_counts.csv`          | Transcript-level counts for novel isoform candidates classified as protein-coding or lncRNA. |
+| `novel_lncRNA_exon_lengths.csv`                 | Exon length summary for novel lncRNA isoform candidates.                                     |
+| `novel_lncRNAs.gtf`                             | GTF file containing novel lncRNA isoform candidates.                                         |
+| `novel_lncRNAs_metadata.csv`                    | Metadata table for novel lncRNA isoform candidates.                                          |
+| `novel_pc_lnc_RNAs_metadata.csv`                | Combined metadata table for novel protein-coding and lncRNA transcript isoform candidates.   |
+| `novel_protein-coding_exon_lengths.csv`         | Exon length summary for novel protein-coding isoform candidates.                             |
+| `novel_protein-coding.gtf`                      | GTF file containing novel protein-coding RNA isoform candidates.                             |
+| `novel_protein-coding_metadata.csv`             | Metadata table for novel protein-coding RNA isoform candidates.                              |
+| `novel_transcripts_metadata.csv`                | Metadata table for all novel RNA isoform candidates.                                         |
+
+## `transcriptome_report/` (final report outputs)
+
+| File                          | Description                                                                 |
+| ----------------------------- | --------------------------------------------------------------------------- |
+| `Bambu_assembly_summary.csv`  | Summary table of transcriptome assembly metrics derived from bambu outputs. |
+| `Bambu_lncRNA_PC_summary.csv` | Summary table comparing lncRNA and protein-coding assembly status   .       |
+| `report.html`                 | Final transcriptome report with integrated summaries and visualizations.    |
+
+### Report interface
+![report-top-panel](images/pipeline-report.png)
+
+#### Quantification of all biotypes assembled
+![biotypes](images/pipeline-report-annotation-biotypes.png)
+
+#### Transcript feature relationships
+![exnum-tlen-rel](images/pipeline-report-exnum-tlen.png)
+
+## `pipeline_info/` (workflow run metadata)
+
+| File                                         | Description                                                                     |
+| -------------------------------------------- | ------------------------------------------------------------------------------- |
+| `execution_report_<timestamp>.html`          | Nextflow execution report with runtime, resources, and process-level summaries. |
+| `execution_timeline_<timestamp>.html`        | Nextflow execution timeline visualization.                                      |
+| `execution_trace_<timestamp>.txt`            | Nextflow trace table with task-level runtime and resource usage.                |
+| `nf_core_pipeline_software_mqc_versions.yml` | Consolidated software versions used in the run and reported by MultiQC.         |
+| `params_<timestamp>.json`                    | Parameters snapshot used for the current pipeline run.                          |
+| `pipeline_dag_<timestamp>.html`              | DAG visualization of process dependencies for the current pipeline run.         |
+
+### Resource usage
+
+## Nextflow reports
+Nextflow provides excellent functionality for generating various [reports](https://www.nextflow.io/docs/latest/reports.html) relevant to the running and execution of the pipeline. This will allow you to troubleshoot errors with the running of the pipeline, and also provide you with other information such as launch commands, run times and resource usage.
