@@ -81,21 +81,29 @@ For more details and further functionality, please refer to the [usage documenta
 
 To see the results of an example test run with a full size dataset refer to the [results](test_data/results) tab on the nf-core website pipeline page. For more details about the output files and reports, please refer to the [output documentation](docs/output.md).
 
-## Credits
+## Contributions and Support
 
-integrativebioinformatics/longnoncoder was originally written by Bárbara Borges and Lucas Freitas.
+If you would like to contribute to this pipeline, please see the [contributing guidelines](.github/CONTRIBUTING.md).
 
-We thank the following people for their extensive assistance in the development of this pipeline:
+## Citations
+If you use SlytheRINs in your research, please consider citing it.
+An extensive list of references for the tools incorporated by the pipeline can be found in the [`CITATIONS.md`](CITATIONS.md) file.
 
-João Cavalcante
+## Acknowledgments
 
-Gleison Azevedo
+### Development & Contributions
+The longnoncoder pipeline was originally developed by Bárbara Borges (@borgessbarbara). We extend our sincere thanks to Lucas Freitas (@lfreitasl), João Cavalcante (@jvfe), and Gleison Azevedo (@gleisonm) for their significant contributions and assistance.
 
-Rodrigo Dalmolin
+### Supervision
+This project was carried out under the leadership and supervision of Principal Investigators Vinícius Maracajá-Coutinho, Thaís Gaudencio, and Rodrigo Dalmolin.
 
-Thaís Gaudencio
+### Computational resources
+This project was supported by the High-Performance Computing Center at UFRN (NPAD/UFRN) and the National Laboratory for High Performance Computing (NLHPC) (CCSS210001) at UChile.
 
-Vinícius Maracajá-Coutinho
+### Funding
+CAPES (001), CNPq (MCTI/FNDCT 445067/2024-1), FONDECYT-ANID Postdoctorado (3250452), FONDECYT-ANID (1211731), FONDAP-ANID (15130011 and 1523A0008), and Anillo-ANID (ATE220016).
+
+### Laboratories and Institutions Involved
 
 <h1>
     <picture> 
@@ -103,11 +111,3 @@ Vinícius Maracajá-Coutinho
         <img src="docs/images/institutional-logos-light.png" alt="Institutions involved" width="700" style="max-width:100%;height:auto"/> 
     </picture>
 </h1>
-
-## Contributions and Support
-
-If you would like to contribute to this pipeline, please see the [contributing guidelines](.github/CONTRIBUTING.md).
-
-## Citations
-
-An extensive list of references for the tools used by the pipeline can be found in the [`CITATIONS.md`](CITATIONS.md) file.
