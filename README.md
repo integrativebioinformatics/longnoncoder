@@ -9,6 +9,8 @@
 
 **integrativebioinformatics/longnoncoder** is a bioinformatics nextflow pipeline that provides a comprehensive analysis of raw long-read RNA-seq data, encompassing transcriptome assembly, quantification, and characterization. The pipeline reports a detailed overview on the entire transcriptome with particular emphasis on lncRNA structure and isoforms across annotated transcripts and novel candidates.
 
+For more details and further functionality, please refer to the [usage](docs/usage.md) and [output](docs/output.md) documentations.
+
 > [!IMPORTANT]
 > LongNonCoder is compatible Ensembl reference genomes and annotations from the following organisms: > *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.* **In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
 
@@ -71,13 +73,6 @@ nextflow run main.nf -profile test,singularity -params-file test_data/testing.ym
 
 > [!WARNING]
 > Please provide pipeline parameters via the CLI or Nextflow `-params-file` option and input a `yaml` parameters file. Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
-
-
-For more details and further functionality, please refer to the [usage documentation](docs/usage.md).
-
-## Pipeline output
-
-To see the results of an example test run with a full size dataset refer to the [results](test_data/results) tab on the nf-core website pipeline page. For more details about the output files and reports, please refer to the [output documentation](docs/output.md).
 
 ## Contributions and Support
 
