@@ -1,12 +1,11 @@
 # integrativebioinformatics/longnoncoder: Citations
 
-## [nf-core](https://pubmed.ncbi.nlm.nih.gov/32055031/)
+## Nextflow & nf-core community
+> Di Tommaso P, Chatzou M, Floden EW, Barja PP, Palumbo E, Notredame C. Nextflow enables reproducible computational workflows. Nat Biotechnol. 2017 Apr 11;35(4):316-319. doi: [10.1038/nbt.3820](https://pubmed.ncbi.nlm.nih.gov/28398311/). PubMed PMID: 28398311.
 
-> Ewels PA, Peltzer A, Fillinger S, Patel H, Alneberg J, Wilm A, Garcia MU, Di Tommaso P, Nahnsen S. The nf-core framework for community-curated bioinformatics pipelines. Nat Biotechnol. 2020 Mar;38(3):276-278. doi: 10.1038/s41587-020-0439-x. PubMed PMID: 32055031.
+> Ewels PA, Peltzer A, Fillinger S, Patel H, Alneberg J, Wilm A, Garcia MU, Di Tommaso P, Nahnsen S. The nf-core framework for community-curated bioinformatics pipelines. Nat Biotechnol. 2020 Mar;38(3):276-278. doi: [10.1038/s41587-020-0439-x](https://pubmed.ncbi.nlm.nih.gov/32055031/). PubMed PMID: 32055031.
 
-## [Nextflow](https://pubmed.ncbi.nlm.nih.gov/28398311/)
-
-> Di Tommaso P, Chatzou M, Floden EW, Barja PP, Palumbo E, Notredame C. Nextflow enables reproducible computational workflows. Nat Biotechnol. 2017 Apr 11;35(4):316-319. doi: 10.1038/nbt.3820. PubMed PMID: 28398311.
+> Langer BE, Amaral A, Baudement MO, Bonath F, Charles M, Chitneedi PK, Clark EL, Di Tommaso P, Djebali S, Ewels PA, Eynard S, Fellows Yates JA, Fischer D, Floden EW, Foissac S, Gabernet G, Garcia MU, Gillard G, Gundappa MK, Guyomar C, Hakkaart C, Hanssen F, Harrison PW, Hörtenhuber M, Kurylo C, Kühn C, Lagarrigue S, Lallias D, Macqueen DJ, Miller E, Mir-Pedrol J, Moreira GCM, Nahnsen S, Patel H, Peltzer A, Pitel F, Ramayo-Caldas Y, Ribeiro-Dantas MDC, Rocha D, Salavati M, Sokolov A, Espinosa-Carrasco J, Notredame C, Community TN. Empowering bioinformatics communities with Nextflow and nf-core. Genome Biol. 2025 Jul 29;26(1):228. doi: [10.1186/s13059-025-03673-9](https://pubmed.ncbi.nlm.nih.gov/40731283/). PMID: 40731283; PMCID: PMC12309086. 
 
 ## Pipeline tools
 - [chopper/NanoComp](https://doi.org/10.1093/bioinformatics/btad311)
