@@ -1,4 +1,4 @@
-# integrativebioinformatics/longnoncoder: Usage
+# Usage
 
 > *Documentation of pipeline parameters is generated automatically from the pipeline schema and can no longer be found in markdown files.*
 
@@ -28,17 +28,42 @@ R2_HCC827,HCC827,home/user/R2_HCC827.fastq.gz
 R3_HCC827,HCC827,home/user/R3_HCC827.fastq.gz
 ```
 
-| Column | Description |
-|------------------------|------------------------------------------------|
-| `sample` | Custom sample name. This entry will be identical for multiple sequencing libraries/runs from the same sample. Spaces in sample names are automatically converted to underscores (`_`). |
-| `group` | Experimental group name. For example: `treatment` vs `control` or `cell_line1` vs `cell_line2` |
-| `fastq` | Full path to FastQ file for ONT or PacBio long-reads. File has to be gzipped and have the extension ".fastq.gz" or ".fq.gz". |
+| Column   | Description                                                                                     |
+|----------|-------------------------------------------------------------------------------------------------|
+| `sample` | Custom sample name. This entry will be identical for multiple sequencing libraries/runs from the same sample. Spaces in sample names are automatically converted to underscores (`_`).                        |
+| `group`  | Experimental group name. For example: `treatment` vs `control` or `cell_line1` vs `cell_line2`  |
+| `fastq`  | Full path to FastQ file for ONT or PacBio long-reads. File has to be gzipped and have the extension ".fastq.gz" or ".fq.gz".                                                                                     |
 
 Another [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
 
-## Input parameters
+## Pipeline parameters
 
-\[Describe here all input params that we describe in the yaml file XD\]
+After seeting up the samplesheet, follow up to set the pipeline parameters.
+
+> [!WARNING] Relative paths might cause issues! Always input double-quoted **FULL PATHS** (e.g. `"/full/path/to/file/file.extension"`). 
+
+> [!TIP] Stay up to date! Remember to always use the **lastest Ensembl releases** for reference genomes and annotations.
+
+| Parameter        | Description                                                                              |
+|------------------|------------------------------------------------------------------------------------------|
+| `input`          | Full path to the `samplesheet.csv` file                                                  |
+| `outdir`         | Full path to the output directory where you want the results to be saved                 |
+| `skip_qc`        | Skip entire QC process                                                                   |
+| `skip_filtering` | Skip filtering with `chopper`, just perform `NanoComp` reporting                         |
+| `minqual`        | Minimum read average Phred-score quality cut-off                                         |
+| `minlen`         | Minimum read length (bp)                                                                 |
+| `maxgc`          | Maximum GC content (%)                                                                   |
+| `mingc`          | Minimum GC content (%)                                                                   |
+| `headcrop`       | Cut `x` number of bases from the beginning of the reads                                  |
+| `tailcrop`       | Cut `y` number of bases from the end of the reads                                        |
+| `skip_alignment` | Skip mapping/alignment to genome reference (ends the pipeline)                           |
+| `skip_alingment_qc` | Skip mapping/alignment QC (might reduce resource usage and speed up execution)        |
+| `reference`      | Full path to a reference genome `FASTA` file from Ensembl                                |
+| `annotation`     | Full path to a reference annotation `GTF` file from Ensembl                              |
+| `skip_class`     | Skip transcriptome characterization (ends the pipeline)                                  |
+| `organism`       | Organism scientific name (e.g. `"Homo_sapiens"`)                                         |
+| `ensembl_organism_dataset` | Reference BiomaRt dataset (e.g. `"hsapiens_gene_ensembl"`)                    |
+| `ensembl_version` | Number of Ensembl release version (e.g. `114`)                                          |
 
 ## Running the pipeline {#running-the-pipeline}
 
