@@ -73,10 +73,6 @@ nextflow run main.nf -profile test,singularity -params-file test_data/testing.ym
 
 > \[!WARNING\] Please provide pipeline parameters via the CLI or Nextflow `-params-file` option and input a `yaml` parameters file. Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
 
-## Contributions and Support
-
-If you would like to contribute to this pipeline, please see the [contributing guidelines](.github/CONTRIBUTING.md).
-
 ## Citations
 
 If you use LongNonCoder in your research, please consider citing it.
