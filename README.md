@@ -112,7 +112,8 @@ CAPES (001), CNPq (MCTI/FNDCT 445067/2024-1), FONDECYT-ANID Postdoctorado (32504
 ### Laboratories and Institutions Involved
 
 <p align="center">
-
-<picture> <source media="(prefers-color-scheme: dark)" srcset="docs/images/institutional-logos-dark-theme.png" height=150> <img src="figures/institutional-logos-light.png" height="150"/> </picture>
-
+  <picture> 
+    <source media="(prefers-color-scheme: dark)" srcset="figures/institutional-logos-dark-theme.png" height=150>
+    <img src="figures/institutional-logos-light.png" height="150"/> 
+  </picture>
 </p>
