@@ -26,6 +26,10 @@ output:
       type: file
       description: GFF3 file resulting from the conversion of the GFF input file if '-T' argument is absent
       pattern: "*.{gff3}"
+  - gffread_fasta:
+      type: file
+      description: FASTA file containing sequences extracted from the GFF input file if '-g' argument is present
+      pattern: "*.{fa, fasta}"
   - versions:
       type: file
       description: File containing software versions

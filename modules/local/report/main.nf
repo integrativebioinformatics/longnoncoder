@@ -68,12 +68,33 @@ process RENDER_REPORT {
             -P plot_pca_grouped:${plot_pca_grouped} \\
             -P plot_pca:${plot_pca} \\
             --to html
+
+        cat <<-END_VERSIONS > versions.yml
+        "${task.process}":
+            quarto: \$(quarto --version | head -n1 | sed 's/Quarto //')
+            r-base: \$(R --version | head -n1 | sed 's/R version //; s/ .*//')
+            r-tidyverse: \$(Rscript -e "cat(as.character(packageVersion('tidyverse')))")
+            r-cowplot: \$(Rscript -e "cat(as.character(packageVersion('cowplot')))")
+            r-scales: \$(Rscript -e "cat(as.character(packageVersion('scales')))")
+            r-RColorBrewer: \$(Rscript -e "cat(as.character(packageVersion('RColorBrewer')))")
+            r-viridis: \$(Rscript -e "cat(as.character(packageVersion('viridis')))")
+        END_VERSIONS
         """
     stub:
         """
         touch report.html
         touch Bambu_assembly_summary.csv
         touch Bambu_lncRNA_PC_summary.csv
+        cat <<-END_VERSIONS > versions.yml
+        "${task.process}":
+            r-base: \$(R --version | head -n1 | sed 's/R version //; s/ .*//')
+            r-quarto: \$(Rscript -e "cat(as.character(packageVersion('quarto')))")
+            r-tidyverse: \$(Rscript -e "cat(as.character(packageVersion('tidyverse')))")
+            r-cowplot: \$(Rscript -e "cat(as.character(packageVersion('cowplot')))")
+            r-scales: \$(Rscript -e "cat(as.character(packageVersion('scales')))")
+            r-RColorBrewer: \$(Rscript -e "cat(as.character(packageVersion('RColorBrewer')))")
+            r-viridis: \$(Rscript -e "cat(as.character(packageVersion('viridis')))")
+        END_VERSIONS
         """
 
 }

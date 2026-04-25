@@ -21,6 +21,7 @@ process NOVEL_TRANSCRIPTS {
     path "novel_pc_lnc_RNAs_metadata.csv"          , emit: novel_combined_metadata
     path "novel_lncRNAs.gtf"                       , emit: novel_lncrnas_gtf
     path "novel_protein-coding.gtf"                , emit: novel_mrnas_gtf
+    path "novel_transcripts.gtf"                   , emit: novel_gtf
     path "novel_lncRNA_exon_lengths.csv"           , emit: novel_lncrna_exon_lengths
     path "novel_protein-coding_exon_lengths.csv"   , emit: novel_mrna_exon_lengths
     path "bambu_novel_pc_lnc_RNA_tx_counts.csv"    , emit: novel_tx_counts
@@ -52,6 +53,7 @@ process NOVEL_TRANSCRIPTS {
         bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
     END_VERSIONS
     """
 
@@ -64,6 +66,7 @@ process NOVEL_TRANSCRIPTS {
     touch novel_pc_lnc_RNAs_metadata.csv
     touch novel_lncRNAs.gtf
     touch novel_protein-coding.gtf
+    touch novel_transcripts.gtf
     touch novel_lncRNA_exon_lengths.csv
     touch novel_protein-coding_exon_lengths.csv
     touch bambu_novel_pc_lnc_RNA_tx_counts.csv
@@ -71,11 +74,7 @@ process NOVEL_TRANSCRIPTS {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
-        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
-        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
-        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
     END_VERSIONS
     """
 }

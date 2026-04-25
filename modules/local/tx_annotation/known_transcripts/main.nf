@@ -67,12 +67,7 @@ process KNOWN_TRANSCRIPTS {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        r-base: \$(R --version | head -n1 | sed 's/R version //; s/ .*//')
         bioconductor-biomart: \$(Rscript -e "cat(as.character(packageVersion('biomaRt')))")
-        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
-        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
-        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
-        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
     END_VERSIONS
     """
 }

@@ -33,6 +33,8 @@ We can describe each step of the workflow as follows:
 
 > \[!NOTE\] If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
 
+> \[!WARNING\] You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development.
+
 You can run an example test by following the instructions:
 
 Enter the `test_data` folder
@@ -77,7 +79,17 @@ If you would like to contribute to this pipeline, please see the [contributing g
 
 ## Citations
 
-If you use LongNonCoder in your research, please consider citing it. An extensive list of references for the tools incorporated by the pipeline can be found in the [`CITATIONS.md`](CITATIONS.md) file.
+If you use LongNonCoder in your research, please consider citing it.
+
+This pipeline uses code and infrastructure developed and maintained by the [nf-core](https://nf-co.re) initative, and reused here under the [MIT license](https://github.com/nf-core/tools/blob/master/LICENSE).
+ 
+> The nf-core framework for community-curated bioinformatics pipelines.
+>
+> Philip Ewels, Alexander Peltzer, Sven Fillinger, Harshil Patel, Johannes Alneberg, Andreas Wilm, Maxime Ulysse Garcia, Paolo Di Tommaso & Sven Nahnsen.
+>
+> Nat Biotechnol. 2020 Feb 13. doi: 10.1038/s41587-020-0439-x.
+
+An extensive list of references for the tools incorporated by the pipeline can be found in the [`CITATIONS.md`](CITATIONS.md) file.
 
 ## Acknowledgments
 

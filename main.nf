@@ -1,11 +1,9 @@
 #!/usr/bin/env nextflow
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    nf-core/longnoncoder
+    integrativebioinformatics/longnoncoder
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Github : https://github.com/nf-core/longnoncoder
-    Website: https://nf-co.re/longnoncoder
-    Slack  : https://nfcore.slack.com/channels/longnoncoder
+    Github : https://github.com/integrativebioinformatics/longnoncoder
 ----------------------------------------------------------------------------------------
 */
 
@@ -21,18 +19,11 @@ include { LONGNONCODER            } from './workflows/longnoncoder'
 include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_nfcore_longnoncoder_pipeline'
 include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_longnoncoder_pipeline'
 
-include { getGenomeAttribute      } from './subworkflows/local/utils_nfcore_longnoncoder_pipeline'
-
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     GENOME PARAMETER VALUES
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-
-// TODO nf-core: Remove this line if you don't need a FASTA file
-//   This is an example of how to use getGenomeAttribute() to fetch parameters
-//   from igenomes.config using `--genome`
-params.fasta = getGenomeAttribute('fasta')
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -43,7 +34,7 @@ params.fasta = getGenomeAttribute('fasta')
 //
 // WORKFLOW: Run main analysis pipeline depending on type of input
 //
-workflow NFCORE_LONGNONCODER {
+workflow NXF_LONGNONCODER {
 
     take:
     samplesheet // channel: samplesheet read in from --input
@@ -87,7 +78,7 @@ workflow {
     //
     // WORKFLOW: Run main workflow
     //
-    NFCORE_LONGNONCODER (
+    NXF_LONGNONCODER (
         PIPELINE_INITIALISATION.out.samplesheet
     )
 
@@ -95,13 +86,9 @@ workflow {
     // SUBWORKFLOW: Run completion tasks
     //
     PIPELINE_COMPLETION (
-        params.email,
-        params.email_on_fail,
-        params.plaintext_email,
         params.outdir,
         params.monochrome_logs,
-        params.hook_url,
-        NFCORE_LONGNONCODER.out.multiqc_report
+        NXF_LONGNONCODER.out.multiqc_report
     )
 }
 

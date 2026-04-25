@@ -11,17 +11,17 @@ suppressPackageStartupMessages({
 
 # Define command line options
 option_list <- list(
-    make_option(c("--bambu_gtf"), type="character", default='/mnt/beegfs/scratch/gmdazevedo/rstudio/ratomics/longnoncoder/modules/local/tx_annotation/lncRNA_filter/sandbox-e14748b9-acc0-4427-9298-d7bc49368287/test_data/Bambu_nf/bambu_novel_transcripts.gtf',
+    make_option(c("--bambu_gtf"), type="character", default=NULL,
                 help="Path to bambu novel transcripts GTF file", metavar="character"),
-    make_option(c("--compared_gtf"), type="character", default='/mnt/beegfs/scratch/gmdazevedo/rstudio/ratomics/longnoncoder/modules/local/tx_annotation/lncRNA_filter/sandbox-e14748b9-acc0-4427-9298-d7bc49368287/test_data/Bambu_nf/bambu_novel_compared_transcriptome.annotated.gtf',
+    make_option(c("--compared_gtf"), type="character", default=NULL,
                 help="Path to compared transcriptome annotated GTF file", metavar="character"),
-    make_option(c("--tmap_file"), type="character", default='/mnt/beegfs/scratch/gmdazevedo/rstudio/ratomics/longnoncoder/modules/local/tx_annotation/lncRNA_filter/sandbox-e14748b9-acc0-4427-9298-d7bc49368287/test_data/Bambu_nf/bambu_novel_compared_transcriptome.bambu_novel_transcripts.gtf.tmap',
+    make_option(c("--tmap_file"), type="character", default=NULL,
                 help="Path to tmap results file", metavar="character"),
-    make_option(c("--rnamining_predictions"), type="character", default='/mnt/beegfs/scratch/gmdazevedo/rstudio/ratomics/longnoncoder/modules/local/tx_annotation/lncRNA_filter/sandbox-e14748b9-acc0-4427-9298-d7bc49368287/test_data/Bambu_nf/predictions.txt',
+    make_option(c("--rnamining_predictions"), type="character", default=NULL,
                 help="Path to rnamining predictions file", metavar="character"),
-    make_option(c("--tx_counts"), type="character", default='/mnt/beegfs/scratch/gmdazevedo/rstudio/ratomics/longnoncoder/modules/local/tx_annotation/lncRNA_filter/sandbox-e14748b9-acc0-4427-9298-d7bc49368287/test_data/Bambu_nf/BambuOutput_counts_transcript.txt',
+    make_option(c("--tx_counts"), type="character", default=NULL,
                 help="Path to transcript counts file", metavar="character"),
-    make_option(c("--gene_counts"), type="character", default='/mnt/beegfs/scratch/gmdazevedo/rstudio/ratomics/longnoncoder/modules/local/tx_annotation/lncRNA_filter/sandbox-e14748b9-acc0-4427-9298-d7bc49368287/test_data/Bambu_nf/BambuOutput_counts_gene.txt',
+    make_option(c("--gene_counts"), type="character", default=NULL,
                 help="Path to gene counts file", metavar="character")
 )
 
@@ -72,6 +72,14 @@ tx_info <- dplyr::select(tx_info, seqnames, qry_id, ref_id, qry_gene_id, ref_gen
 tx_info <- tx_info[tx_info$strand != "*", ]
 
 tx_info$exon <- ifelse(tx_info$num_exons == 1, 'mono-exonic', 'multi-exonic')
+
+# Load counts
+cat("Filtering transcripts with zero counts...\n")
+tx_counts <- read_table(opt$tx_counts)
+gene_counts <- read_table(opt$gene_counts)
+
+# Remove novel transcripts that had 0 transcript counts in all samples
+tx_info <- tx_info[tx_info$qry_id %in% tx_counts$TXNAME, ]
 
 # Save the metadata of all novel transcripts
 cat("Saving novel transcripts metadata...\n")
@@ -125,6 +133,18 @@ new_mRNAs_gtf <- c(new_mRNAs_tx_gtf, new_mRNAs_exons_gtf)
 new_mRNAs_gtf <- new_mRNAs_gtf[order(new_mRNAs_gtf$transcript_id, new_mRNAs_gtf$type == "transcript", decreasing = TRUE)]
 export(new_mRNAs_gtf, "novel_protein-coding.gtf")
 
+# Save combined metadata of novel mRNAs and lncRNAs
+new_mRNA_lncRNA <- rbind(new_mRNAs, new_lncRNAs)
+write.csv(new_mRNA_lncRNA, "novel_pc_lnc_RNAs_metadata.csv", row.names = FALSE)
+
+# Update novel transcripts GTF with the new classifications
+ids <- new_mRNA_lncRNA$qry_id
+novel_tx_gtf <- subset(gtf, type == "transcript" & transcript_id %in% new_mRNA_lncRNA$qry_id)
+novel_exon_gtf <- subset(gtf, type == "exon" & transcript_id %in% new_mRNA_lncRNA$qry_id)
+novel_gtf <- c(novel_tx_gtf, novel_exon_gtf)
+novel_gtf <- novel_gtf[order(novel_gtf$transcript_id, novel_gtf$type == "transcript", decreasing = TRUE)]
+export(novel_gtf, "novel_transcripts.gtf")
+
 # Get exon lengths
 cat("Calculating exon lengths...\n")
 new_lncRNA_exon_len <- data.frame(
@@ -133,23 +153,17 @@ new_lncRNA_exon_len <- data.frame(
   width = width(new_lncRNAs_exons_gtf)
 ) 
 
+write.csv(new_lncRNA_exon_len, "novel_lncRNA_exon_lengths.csv", row.names = FALSE)
+
 new_mRNA_exon_len <- data.frame(
   transcript_id = new_mRNAs_exons_gtf$transcript_id,
   exon_number = new_mRNAs_exons_gtf$exon_number,
   width = width(new_mRNAs_exons_gtf)
 ) 
 
-write.csv(new_lncRNA_exon_len, "novel_lncRNA_exon_lengths.csv", row.names = FALSE)
 write.csv(new_mRNA_exon_len, "novel_protein-coding_exon_lengths.csv", row.names = FALSE)
 
-# Export transcript and gene counts
-cat("Processing counts data...\n")
-tx_counts <- read_table(opt$tx_counts)
-gene_counts <- read_table(opt$gene_counts)
-
-new_mRNA_lncRNA <- rbind(new_mRNAs, new_lncRNAs)
-write.csv(new_mRNA_lncRNA, "novel_pc_lnc_RNAs_metadata.csv", row.names = FALSE)
-
+# Save counts for novel mRNAs and lncRNAs
 tx_ids <- new_mRNA_lncRNA$qry_id
 gn_ids <- new_mRNA_lncRNA$qry_gene_id
 

@@ -77,7 +77,7 @@ workflow LONGNONCODER {
             params.reference
         )
         ch_versions = ch_versions.mix(CLASSIFICATION_POTENTIAL_CODING.out.versions)
-    }
+    
 
     SUBSET_BAMBU_COUNTS (
         TRANSCRIPT_RECONSTRUCTION.out.gene_counts,
@@ -95,6 +95,7 @@ workflow LONGNONCODER {
         SUBSET_BAMBU_COUNTS.out.counts_transcript_filtered,
         SUBSET_BAMBU_COUNTS.out.counts_gene_filtered
     )
+    ch_versions = ch_versions.mix(NOVEL_TRANSCRIPTS.out.versions)
 
     BAMBU_VALIDATE (
         NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
@@ -110,6 +111,7 @@ workflow LONGNONCODER {
         BAMBU_VALIDATE.out.counts_gene_validated,
         TRANSCRIPT_RECONSTRUCTION.out.gtf_all_transcripts
     )
+    ch_versions = ch_versions.mix(KNOWN_TRANSCRIPTS.out.versions)
 
     SUBSET_BAMBU_GTF (
         TRANSCRIPT_RECONSTRUCTION.out.gtf_all_transcripts,
@@ -117,6 +119,8 @@ workflow LONGNONCODER {
         BAMBU_VALIDATE.out.full_length_counts_transcript_validated,
         BAMBU_VALIDATE.out.unique_counts_transcript_validated
     )
+    ch_versions = ch_versions.mix(SUBSET_BAMBU_GTF.out.versions)
+
 
     RENDER_REPORT (
         params.report_template,
@@ -132,11 +136,14 @@ workflow LONGNONCODER {
         NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
         NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
         NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
+        NOVEL_TRANSCRIPTS.out.novel_gtf,
         TRANSCRIPT_RECONSTRUCTION.out.h_gene,
         TRANSCRIPT_RECONSTRUCTION.out.h_transcript,
         TRANSCRIPT_RECONSTRUCTION.out.pca,
         TRANSCRIPT_RECONSTRUCTION.out.pca_grouped
     )
+    ch_versions = ch_versions.mix(RENDER_REPORT.out.versions)
+    }
 
     //
     // Collate and save software versions

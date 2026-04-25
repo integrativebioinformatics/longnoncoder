@@ -47,7 +47,15 @@ process BAMBU {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        bambu: \$(Rscript -e "packageVersion('bambu')" | sed "s/\\[1\\] ‘\\([0-9.]*\\)’/\\1/")
+        r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
+        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
+        r-ggplot2: \$(Rscript -e "cat(as.character(packageVersion('ggplot2')))")
+        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
+        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
+        bioconductor-bambu: \$(Rscript -e "cat(as.character(packageVersion('bambu')))")
+        bioconductor-biocparallel: \$(Rscript -e "cat(as.character(packageVersion('BiocParallel')))")
+        bioconductor-rsamtools: \$(Rscript -e "cat(as.character(packageVersion('Rsamtools')))") 
     END_VERSIONS
     """
 
@@ -58,7 +66,15 @@ process BAMBU {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        bambu: \$(Rscript -e "packageVersion('bambu')" | sed "s/\\[1\\] ‘\\([0-9.]*\\)’/\\1/")
+        r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
+        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
+        r-ggplot2: \$(Rscript -e "cat(as.character(packageVersion('ggplot2')))")
+        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
+        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
+        bioconductor-bambu: \$(Rscript -e "cat(as.character(packageVersion('bambu')))")
+        bioconductor-biocparallel: \$(Rscript -e "cat(as.character(packageVersion('BiocParallel')))")
+        bioconductor-rsamtools: \$(Rscript -e "cat(as.character(packageVersion('Rsamtools')))") 
     END_VERSIONS
     """
 }

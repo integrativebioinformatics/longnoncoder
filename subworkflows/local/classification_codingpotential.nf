@@ -22,6 +22,7 @@ workflow CLASSIFICATION_POTENTIAL_CODING {
     ch_annotated_gtf  = Channel.empty()
     ch_tmap           = Channel.empty()
     ch_predictions    = Channel.empty()
+    ch_fasta          = Channel.empty()
 
     // Classification and potential coding of transcripts in the resulting GTF
 
@@ -39,16 +40,19 @@ workflow CLASSIFICATION_POTENTIAL_CODING {
         reference
     )
     
+    ch_gffread_fasta = ch_fasta.mix(GFFREAD.out.gffread_fasta)
     ch_versions = ch_versions.mix(GFFREAD.out.versions)
 
     RNAMINING(
-        GFFREAD.out.gtf_fasta
+        GFFREAD.out.gffread_fasta
     )
     ch_predictions = ch_predictions.mix(RNAMINING.out.preds)
+    ch_versions = ch_versions.mix(RNAMINING.out.versions)
 
    emit:
     annotated_gtf  = ch_annotated_gtf
     tmap           = ch_tmap
+    gffread_fasta  = ch_gffread_fasta
     predictions    = ch_predictions
     versions       = ch_versions
 }
