@@ -49,11 +49,11 @@ process NOVEL_TRANSCRIPTS {
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
-        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
-        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
-        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
         r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
+        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
+        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
+        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
     END_VERSIONS
     """
 
@@ -74,7 +74,12 @@ process NOVEL_TRANSCRIPTS {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
+        r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
+        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
+        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
+        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
     END_VERSIONS
     """
 }

@@ -1,6 +1,6 @@
 # Usage
 
-> *Documentation of pipeline parameters is generated automatically from the pipeline schema and can no longer be found in markdown files.*
+> *Pipeline parameters are described below and should match the current pipeline schema/configuration.*
 
 ## Introduction
 
@@ -58,11 +58,11 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `mingc`          | Minimum GC content (%)                                                                   |
 | `headcrop`       | Cut `x` number of bases from the beginning of the reads                                  |
 | `tailcrop`       | Cut `y` number of bases from the end of the reads                                        |
-| `skip_alignment` | Skip mapping/alignment to genome reference (ends the pipeline)                           |
-| `skip_alingment_qc` | Skip mapping/alignment QC (might reduce resource usage and speed up execution)        |
+| `skip_alignment` | Skip mapping/alignment to genome reference (runs MultiQC, then finishes pipeline execution)     |
+| `skip_alignment_qc` | Skip mapping/alignment QC (might reduce resource usage and speed up execution when running large datasets)        |
 | `reference`      | Full path to a reference genome `FASTA` file from Ensembl                                |
 | `annotation`     | Full path to a reference annotation `GTF` file from Ensembl                              |
-| `skip_class`     | Skip transcriptome characterization (ends the pipeline)                                  |
+| `skip_class`     | Skip transcriptome characterization (runs MultiQC, then finishes pipeline execution)                                  |
 | `organism`       | Organism scientific name (e.g. `"Homo_sapiens"`)                                         |
 | `ensembl_organism_dataset` | Reference BiomaRt dataset (e.g. `"hsapiens_gene_ensembl"`)                    |
 | `ensembl_version` | Number of Ensembl release version (e.g. `114`)                                          |
@@ -72,7 +72,7 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 The typical command for running the pipeline is as follows:
 
 ``` bash
-nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --refrence [fasta] --annotation [gtf] --organism [Genus_species] --ensembl_organism_dataset [Gspecies_gene_ensembl] --ensembl_version [release number] -profile [profile: light, medium, large, etc],[executor profile: docker/singularity]
+nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --reference [fasta] --annotation [gtf] --organism [Genus_species] --ensembl_organism_dataset [Gspecies_gene_ensembl] --ensembl_version [release number] -profile [profile: light, medium, large, etc],[executor profile: docker/singularity]
 ```
 
 Note that the pipeline will create the following files in your working directory:

@@ -44,8 +44,7 @@ workflow PIPELINE_INITIALISATION {
     UTILS_NEXTFLOW_PIPELINE (
         version,
         true,
-        outdir,
-        workflow.profile.tokenize(',').intersect(['conda', 'mamba']).size() >= 1
+        outdir
     )
 
     //
@@ -114,6 +113,13 @@ workflow PIPELINE_COMPLETION {
     FUNCTIONS
 ========================================================================================
 */
+
+//
+// Validate pipeline parameters beyond schema checks
+//
+def validateInputParameters() {
+    // Required hook for pipeline-specific validation; schema checks are handled by UTILS_NFVALIDATION_PLUGIN.
+}
 
 //
 // Generate methods description for MultiQC

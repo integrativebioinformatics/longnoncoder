@@ -2,19 +2,19 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
 name: "rnamining"
 ## TODO nf-core: Add a description of the module and list keywords
-description: write your description here
+description: Predict coding potential from transcript FASTA sequences using RNAmining.
 keywords:
-  - sort
-  - example
-  - genomics
+  - coding-potential
+  - lncRNA
+  - transcript-classification
 tools:
   - "rnamining":
       ## TODO nf-core: Add a description and other details for the software below
       description: "Package to predict potential coding of RNA sequences provided in fasta format"
-      homepage: "None"
-      documentation: "None"
-      tool_dev_url: "None"
-      doi: ""
+      homepage: "https://gitlab.com/integrativebioinformatics/RNAmining"
+      documentation: "https://rnamining.integrativebioinformatics.me/"
+      tool_dev_url: "https://gitlab.com/integrativebioinformatics/RNAmining"
+      doi: "10.12688/f1000research.52350.2"
       licence: ['MIT']
       identifier: biotools:rnamining
 
@@ -22,30 +22,38 @@ tools:
 input:
   #
   ## TODO nf-core: Delete / customise this example input
-    - bam:
+    - fasta:
         type: file
-        description: Sorted BAM/CRAM/SAM file
-        pattern: "*.{bam,cram,sam}"
+        description: Transcript FASTA file with sequences to classify.
+        pattern: "*.{fa,fasta,fna}"
         ontologies:
-          - edam: "http://edamontology.org/format_25722"
-          - edam: "http://edamontology.org/format_2573"
-          - edam: "http://edamontology.org/format_3462"
-          
-
+          - edam: "http://edamontology.org/format_1929"
+        
 ## TODO nf-core: Add a description of all of the variables used as output
 output:
-  - bam:
+  - codings:
   #
   ## TODO nf-core: Delete / customise this example output
-    - "*.bam":
+    - "codings.txt":
         type: file
-        description: Sorted BAM/CRAM/SAM file
-        pattern: "*.{bam,cram,sam}"
+        description: Predicted coding transcripts.
+        pattern: "*.txt"
         ontologies:
-          - edam: "http://edamontology.org/format_25722"
-          - edam: "http://edamontology.org/format_2573"
-          - edam: "http://edamontology.org/format_3462"
-          
+          - edam: "http://edamontology.org/data_2044"
+  - noncodings:
+    - "noncodings.txt":
+        type: file
+        description: Predicted non-coding transcripts.
+        pattern: "*.txt"
+        ontologies:
+          - edam: "http://edamontology.org/data_2044"
+  - predictions:
+    - "predictions.txt":
+        type: file
+        description: Combined coding potential predictions.
+        pattern: "*.txt"
+        ontologies:
+          - edam: "http://edamontology.org/data_2044"
   - versions:
     - "versions.yml":
         type: file

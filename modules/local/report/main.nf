@@ -33,7 +33,7 @@ process RENDER_REPORT {
         path("*.html")                      , emit: report
         path("Bambu_assembly_summary.csv")  , emit: bambu_assembly_summary
         path("Bambu_lncRNA_PC_summary.csv") , emit: bambu_lncRNA_PC_summary
-
+        path("versions.yml")                , emit: versions
     when:
         task.ext.when == null || task.ext.when
 

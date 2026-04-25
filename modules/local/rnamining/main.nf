@@ -30,19 +30,18 @@ process RNAMINING {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        rnamining: \$(rnamining --version 2>&1)
+        rnamining: \$(echo "v1.0.4")
     END_VERSIONS
     """
 
     stub:
-    def args     = task.ext.args ? task.ext.args : "-organism_name ${params.organism} -prediction_type coding_prediction"
-    def prefix   = task.ext.prefix ?: "Coding_Potential"
-    
     """
-    touch ${prefix}.txt
+    touch codings.txt
+    touch noncodings.txt
+    touch predictions.txt
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        rnamining: \$(rnamining --version 2>&1)
+        rnamining: \$(echo "v1.0.4")
     END_VERSIONS
     """
 }

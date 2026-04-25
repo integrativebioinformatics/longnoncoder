@@ -13,9 +13,9 @@ format:
     page-layout: full
 include-before-body:
   text: |
-    <div style="background-color: white; width: 100%; display: flex; justify-content: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6;">
-      <div style="display: flex; justify-content: center; padding: 10px 0;">
-        <img src="https://imgur.com/sSriGSM.png" width="300" height="200">
+    <div style="background-color: white; width: 100%; display: flex; justify-content: center; margin-bottom: 5px; border-bottom: 1px solid #dee2e6;">
+      <div style="display: flex; justify-content: left; padding: 10px 0;">
+        <img src="https://imgur.com/BdC6dGR.png" width="200" height="200">
       </div>
     </div>
     <br>

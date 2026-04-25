@@ -1,17 +1,16 @@
-# integrativebioinformatics/longnoncoder <img src="figures/logo.svg" align="right" height="200"/>
+## integrativebioinformatics/longnoncoder <img src="figures/logo.svg" align="right" height="200"/>
 
 `LongNonCoder` is a Nextflow pipeline designed for isoform-level lncRNA discovery and characterization from long-read RNA-seq data. The workflow encompasses QC, mapping, transcriptome assembly and quantification, followed by a detailed final characterization of the entire transcriptome with particular emphasis on lncRNA structure and isoforms across known annotations and novel candidates.
 
 For more details and further functionality, please refer to the [usage](docs/usage.md) and [output](docs/output.md) documentations.
 
-> [!IMPORTANT]
-> LongNonCoder is compatible Ensembl reference genomes and annotations from the following organisms:
+> \[!IMPORTANT\] LongNonCoder is compatible Ensembl reference genomes and annotations from the following organisms:
 >
 > *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.*
 >
->  **In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
+> **In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
 
-## The workflow
+**The workflow**
 
 ![longnoncoder workflow](figures/LongNonCoder.drawio.png)
 
@@ -31,9 +30,9 @@ We can describe each step of the workflow as follows:
 
 ## Usage
 
-> [!NOTE] If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
+> \[!NOTE\] If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
 
-> [!WARNING] You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development.
+> \[!WARNING\] You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development.
 
 You can run an example test by following the instructions:
 
@@ -73,12 +72,16 @@ nextflow run main.nf -profile test,singularity -params-file test_data/testing.ym
 
 > \[!WARNING\] Please provide pipeline parameters via the CLI or Nextflow `-params-file` option and input a `yaml` parameters file. Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
 
+> \[!TIP\] LongNonCoder is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. This directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
+
+> \[!NOTE\] Copying large datasets can significantly take a long time to complete or occupy a large amount of disk space. If you require other setup to optimize resource usage, follow the instructions from the [Nextflow documentation](https://docs.seqera.io/nextflow/reference/process#publishdir) to change the `publishDir` setting in the [`nextflow.config`](nextflow.config) file.
+
 ## Citations
 
 If you use LongNonCoder in your research, please consider citing it.
 
 This pipeline uses code and infrastructure developed and maintained by the [nf-core](https://nf-co.re) initative, and reused here under the [MIT license](https://github.com/nf-core/tools/blob/master/LICENSE).
- 
+
 > The nf-core framework for community-curated bioinformatics pipelines.
 >
 > Philip Ewels, Alexander Peltzer, Sven Fillinger, Harshil Patel, Johannes Alneberg, Andreas Wilm, Maxime Ulysse Garcia, Paolo Di Tommaso & Sven Nahnsen.
@@ -89,27 +92,48 @@ An extensive list of references for the tools incorporated by the pipeline can b
 
 ## Acknowledgments
 
-### Development & Contributions
+#### Development & Contributions
 
-The `LongNonCoder` pipeline was originally developed by Bárbara Borges ([\@borgessbarbara](https://github.com/borgessbarbara)). We extend our sincere thanks to Lucas Freitas ([\@lfreitasl](https://github.com/lfreitasl)), João Cavalcante ([\@jvfe](https://github.com/jvfe)), and Gleison Azevedo ([\@gleisonm](https://github.com/gleisonm)) for their significant contributions and assistance.
+The `LongNonCoder` pipeline was originally developed by **Bárbara Borges** ([\@borgessbarbara](https://github.com/borgessbarbara)). We extend our sincere thanks to **Lucas Freitas** ([\@lfreitasl](https://github.com/lfreitasl)), **Gleison Azevedo** ([\@gleisonm](https://github.com/gleisonm)) and **João Cavalcante** ([\@jvfe](https://github.com/jvfe)) for their significant contributions and assistance during development.
 
-### Supervision
+#### Supervision & Collaborations
 
-This project was carried out under the leadership and supervision of Principal Investigators Vinícius Maracajá-Coutinho, Thaís Gaudencio, and Rodrigo Dalmolin.
+This project was developed under the supervision of **Vinicius Maracaja-Coutinho** and **Thaís Gaudencio**, in collaboration with **Rodrigo Dalmolin** and the [Dalmolin Systems Biology Group](https://github.com/dalmolingroup)
 
-### Computational resources
+#### Computational resources
 
 This project was supported by the High-Performance Computing Center at UFRN (NPAD/UFRN) and the National Laboratory for High Performance Computing (NLHPC) (CCSS210001) at UChile.
 
-### Funding
+#### Funding
 
 CAPES (001), CNPq (MCTI/FNDCT 445067/2024-1), FONDECYT-ANID Postdoctorado (3250452), FONDECYT-ANID (1211731), FONDAP-ANID (15130011 and 1523A0008), and Anillo-ANID (ATE220016).
 
-### Laboratories and Institutions Involved
+#### Laboratories & Institutions Involved
+
+Bárbara Borges ^1,2,3^, Lucas Freitas ^4,5^, Gleison Azevedo ^1^, João Cavalcante ^1^, Rodrigo Dalmolin ^1^, Thaís Gaudencio ^1,3^, Vinicius Maracaja-Coutinho ^1,2,6,7^
+
+<details>
+
+<summary>Affiliations</summary>
+
+^1^ Bioinformatics Multidisciplinary Environment, Instituto Metrópole Digital, Universidade Federal do Rio Grande do Norte, Natal, Brazil
+
+^2^ Unidad de Genómica Avanzada, Advanced Center for Chronic Diseases, Facultad de Ciencias Químicas y Farmacéuticas, Universidad de Chile, Santiago, Chile
+
+^3^ Artificial Intelligence Applications, Universidade Federal da Paraíba, João Pessoa, Brazil
+
+^4^ Faculty of Natural Sciences, Universität Hohenheim, Stuttgart, Germany
+
+^5^ Staatliches Museum für Naturkunde Stuttgart, Department of Biodiversity Monitoring, Stuttgart, Germany
+
+^6^ Laboratório de Medicina e Saúde Pública de Precisão, Instituto Gonçalo Moniz, Fundação Oswaldo Cruz, Fiocruz, Salvador, Brazil
+
+^7^ Instituto Nacional de Ciência e Tecnologia em Saúde Digital (INCT-DigiSaúde)
+
+</details>
 
 <p align="center">
-  <picture> 
-    <source media="(prefers-color-scheme: dark)" srcset="figures/institutional-logos-dark-theme.png" height=150>
-    <img src="figures/institutional-logos-light.png" height="150"/> 
-  </picture>
+
+<picture> <source media="(prefers-color-scheme: dark)" srcset="figures/institutional-logos-dark-theme.png" height=150> <img src="figures/institutional-logos-light.png" height="150"/> </picture>
+
 </p>

@@ -36,6 +36,9 @@ workflow LONGNONCODER {
     ch_versions             = Channel.empty()
     ch_multiqc_files        = Channel.empty()
     ch_gtf_new_transcripts  = Channel.empty()
+    ch_reads_for_alignment  = ch_samplesheet
+    run_alignment           = !params.skip_alignment
+    run_classification      = run_alignment && !params.skip_class
 
     //
     //Run QC workflow
@@ -44,14 +47,15 @@ workflow LONGNONCODER {
         QC_FILT (
             ch_samplesheet
         )
+        ch_reads_for_alignment = QC_FILT.out.filt_reads
         ch_multiqc_files = ch_multiqc_files.mix(QC_FILT.out.multiqc)
         ch_versions = ch_versions.mix(QC_FILT.out.versions)
     }
     //
     // Run alignment workflow
     //
-    if (!params.skip_alignment){
-        ALIGNMENT(QC_FILT.out.filt_reads)
+    if (run_alignment){
+        ALIGNMENT(ch_reads_for_alignment)
 
         if (!params.skip_alignment_qc){
             ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT.out.multiqc)
@@ -70,7 +74,7 @@ workflow LONGNONCODER {
         ch_versions = ch_versions.mix(TRANSCRIPT_RECONSTRUCTION.out.versions)
     }
 
-    if (!params.skip_class){
+    if (run_classification){
         CLASSIFICATION_POTENTIAL_CODING (
             ch_gtf_new_transcripts,
             params.annotation,
@@ -136,7 +140,6 @@ workflow LONGNONCODER {
         NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
         NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
         NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
-        NOVEL_TRANSCRIPTS.out.novel_gtf,
         TRANSCRIPT_RECONSTRUCTION.out.h_gene,
         TRANSCRIPT_RECONSTRUCTION.out.h_transcript,
         TRANSCRIPT_RECONSTRUCTION.out.pca,
