@@ -239,19 +239,35 @@ tryCatch({
 novel_tx$biotype[novel_tx$prediction == "coding"] <- "novel protein_coding"
 novel_tx$biotype[novel_tx$prediction == "non-coding"] <- "novel lncRNA"
 
+# --- NEW FIX: Separate the raw gene and transcript IDs first ---
+raw_nov_pc_genes <- unique(novel_tx$qry_gene_id[novel_tx$prediction == "coding"])
+raw_nov_lnc_genes <- unique(novel_tx$qry_gene_id[novel_tx$prediction == "non-coding"])
+
+raw_nov_pc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "coding"])
+raw_nov_lnc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "non-coding"])
+
+# PREVENT DOUBLE COUNTING: If a feature has both coding and non-coding predictions,
+# it is classified as protein-coding. Remove these from the lncRNA list.
+raw_nov_lnc_genes <- setdiff(raw_nov_lnc_genes, raw_nov_pc_genes)
+raw_nov_lnc_tx <- setdiff(raw_nov_lnc_tx, raw_nov_pc_tx)
+
 # --- 3. Extract ID vectors for each category ---
 ids <- list(
   # Protein-coding
   ann_pc_genes = unique(ann_txome$ensembl_gene_id[ann_txome$gene_biotype == "protein_coding"]),
   ann_pc_tx = unique(ann_txome$ensembl_transcript_id[ann_txome$gene_biotype == "protein_coding"]),
-  nov_pc_genes = unique(novel_tx$qry_gene_id[novel_tx$prediction == "coding"]),
-  nov_pc_tx = unique(novel_tx$qry_id[novel_tx$prediction == "coding"]),
+  
+  # Filter to only include true novel features (starting with "Bambu")
+  nov_pc_genes = raw_nov_pc_genes[startsWith(raw_nov_pc_genes, "Bambu")],
+  nov_pc_tx = raw_nov_pc_tx[startsWith(raw_nov_pc_tx, "Bambu")],
   
   # lncRNAs
   ann_lnc_genes = unique(ann_txome$ensembl_gene_id[ann_txome$gene_biotype == "lncRNA"]),
   ann_lnc_tx = unique(ann_txome$ensembl_transcript_id[ann_txome$gene_biotype == "lncRNA"]),
-  nov_lnc_genes = unique(novel_tx$qry_gene_id[novel_tx$prediction == "non-coding"]),
-  nov_lnc_tx = unique(novel_tx$qry_id[novel_tx$prediction == "non-coding"])
+  
+  # Filter to only include true novel features (starting with "Bambu")
+  nov_lnc_genes = raw_nov_lnc_genes[startsWith(raw_nov_lnc_genes, "Bambu")],
+  nov_lnc_tx = raw_nov_lnc_tx[startsWith(raw_nov_lnc_tx, "Bambu")]
 )
 
 # --- 4. Read Bambu IDs from the output files ---
@@ -261,7 +277,6 @@ for (name in names(bambu_outputs)) {
     # Only read the first column (IDs)
     data_ids <- read.delim(current_file, header = TRUE, sep = "\t")[[1]]
     bambu_ids[[name]] <- as.character(data_ids)
-
 }
 
 # Helper function to count overlaps between Bambu outputs and our target IDs
