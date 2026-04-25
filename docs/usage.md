@@ -40,9 +40,11 @@ Another [example samplesheet](../assets/samplesheet.csv) has been provided with 
 
 After seeting up the samplesheet, follow up to set the pipeline parameters.
 
-> [!WARNING] Relative paths might cause issues! Always input double-quoted **FULL PATHS** (e.g. `"/full/path/to/file/file.extension"`). 
+> [!WARNING]
+> Relative paths might cause issues! Always input double-quoted **FULL PATHS** (e.g. `"/full/path/to/file/file.extension"`). 
 
-> [!TIP] Stay up to date! Remember to always use the **lastest Ensembl releases** for reference genomes and annotations.
+> [!TIP]
+> Stay up to date! Remember to always use the **lastest Ensembl releases** for reference genomes and annotations.
 
 | Parameter        | Description                                                                              |
 |------------------|------------------------------------------------------------------------------------------|
