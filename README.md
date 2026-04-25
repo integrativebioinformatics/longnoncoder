@@ -31,9 +31,9 @@ We can describe each step of the workflow as follows:
 
 ## Usage
 
-> \[!NOTE\] If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
+> [!NOTE] If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
 
-> \[!WARNING\] You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development.
+> [!WARNING] You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development.
 
 You can run an example test by following the instructions:
 
