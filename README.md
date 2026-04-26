@@ -4,7 +4,8 @@
 
 For more details and further functionality, please refer to the [usage](docs/usage.md) and [output](docs/output.md) documentations.
 
-> \[!IMPORTANT\] LongNonCoder is compatible Ensembl reference genomes and annotations from the following organisms:
+> [!IMPORTANT]
+> LongNonCoder is compatible Ensembl reference genomes and annotations from the following organisms:
 >
 > *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.*
 >
@@ -30,9 +31,11 @@ We can describe each step of the workflow as follows:
 
 ## Usage
 
-> \[!NOTE\] If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
+> [!NOTE]
+> If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
 
-> \[!WARNING\] You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development.
+> [!WARNING]
+> You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development.
 
 You can run an example test by following the instructions:
 
@@ -70,11 +73,14 @@ cd ..
 nextflow run main.nf -profile test,singularity -params-file test_data/testing.yml
 ```
 
-> \[!WARNING\] Please provide pipeline parameters via the CLI or Nextflow `-params-file` option and input a `yaml` parameters file. Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
+> [!WARNING]
+> Please provide pipeline parameters via the CLI or Nextflow `-params-file` option and input a `yaml` parameters file. Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
 
-> \[!TIP\] LongNonCoder is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. This directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
+> [!TIP]
+> LongNonCoder is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. This directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
 
-> \[!NOTE\] Copying large datasets can significantly take a long time to complete or occupy a large amount of disk space. If you require other setup to optimize resource usage, follow the instructions from the [Nextflow documentation](https://docs.seqera.io/nextflow/reference/process#publishdir) to change the `publishDir` setting in the [`nextflow.config`](nextflow.config) file.
+> [!NOTE]
+> Copying large datasets can significantly take a long time to complete or occupy a large amount of disk space. If you require other setup to optimize resource usage, follow the instructions from the [Nextflow documentation](https://docs.seqera.io/nextflow/reference/process#publishdir) to change the `publishDir` setting in the [`nextflow.config`](nextflow.config) file.
 
 ## Citations
 
