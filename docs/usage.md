@@ -1,6 +1,6 @@
-# integrativebioinformatics/longnoncoder: Usage
+# Usage
 
-> *Documentation of pipeline parameters is generated automatically from the pipeline schema and can no longer be found in markdown files.*
+> *Pipeline parameters are described below and should match the current pipeline schema/configuration.*
 
 ## Introduction
 
@@ -28,24 +28,51 @@ R2_HCC827,HCC827,home/user/R2_HCC827.fastq.gz
 R3_HCC827,HCC827,home/user/R3_HCC827.fastq.gz
 ```
 
-| Column | Description |
-|------------------------|------------------------------------------------|
-| `sample` | Custom sample name. This entry will be identical for multiple sequencing libraries/runs from the same sample. Spaces in sample names are automatically converted to underscores (`_`). |
-| `group` | Experimental group name. For example: `treatment` vs `control` or `cell_line1` vs `cell_line2` |
-| `fastq` | Full path to FastQ file for ONT or PacBio long-reads. File has to be gzipped and have the extension ".fastq.gz" or ".fq.gz". |
+| Column   | Description                                                                                     |
+|----------|-------------------------------------------------------------------------------------------------|
+| `sample` | Custom sample name. This entry will be identical for multiple sequencing libraries/runs from the same sample. Spaces in sample names are automatically converted to underscores (`_`).                        |
+| `group`  | Experimental group name. For example: `treatment` vs `control` or `cell_line1` vs `cell_line2`  |
+| `fastq`  | Full path to FastQ file for ONT or PacBio long-reads. File has to be gzipped and have the extension ".fastq.gz" or ".fq.gz".                                                                                     |
 
 Another [example samplesheet](../assets/samplesheet.csv) has been provided with the pipeline.
 
-## Input parameters
+## Pipeline parameters
 
-\[Describe here all input params that we describe in the yaml file XD\]
+After seeting up the samplesheet, follow up to set the pipeline parameters.
+
+> [!WARNING]
+> Relative paths might cause issues! Always input double-quoted **FULL PATHS** (e.g. `"/full/path/to/file/file.extension"`). 
+
+> [!TIP]
+> Stay up to date! Remember to always use the **lastest Ensembl releases** for reference genomes and annotations.
+
+| Parameter        | Description                                                                              |
+|------------------|------------------------------------------------------------------------------------------|
+| `input`          | Full path to the `samplesheet.csv` file                                                  |
+| `outdir`         | Full path to the output directory where you want the results to be saved                 |
+| `skip_qc`        | Skip entire QC process                                                                   |
+| `skip_filtering` | Skip filtering with `chopper`, just perform `NanoComp` reporting                         |
+| `minqual`        | Minimum read average Phred-score quality cut-off                                         |
+| `minlen`         | Minimum read length (bp)                                                                 |
+| `maxgc`          | Maximum GC content (%)                                                                   |
+| `mingc`          | Minimum GC content (%)                                                                   |
+| `headcrop`       | Cut `x` number of bases from the beginning of the reads                                  |
+| `tailcrop`       | Cut `y` number of bases from the end of the reads                                        |
+| `skip_alignment` | Skip mapping/alignment to genome reference (runs MultiQC, then finishes pipeline execution)     |
+| `skip_alignment_qc` | Skip mapping/alignment QC (might reduce resource usage and speed up execution when running large datasets)        |
+| `reference`      | Full path to a reference genome `FASTA` file from Ensembl                                |
+| `annotation`     | Full path to a reference annotation `GTF` file from Ensembl                              |
+| `skip_class`     | Skip transcriptome characterization (runs MultiQC, then finishes pipeline execution)                                  |
+| `organism`       | Organism scientific name (e.g. `"Homo_sapiens"`)                                         |
+| `ensembl_organism_dataset` | Reference BiomaRt dataset (e.g. `"hsapiens_gene_ensembl"`)                    |
+| `ensembl_version` | Number of Ensembl release version (e.g. `114`)                                          |
 
 ## Running the pipeline {#running-the-pipeline}
 
 The typical command for running the pipeline is as follows:
 
 ``` bash
-nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --refrence [fasta] --annotation [gtf] --organism [Genus_species] --ensembl_organism_dataset [Gspecies_gene_ensembl] --ensembl_version [release number] -profile [profile: light, medium, large, etc],[executor profile: docker/singularity]
+nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --reference [fasta] --annotation [gtf] --organism [Genus_species] --ensembl_organism_dataset [Gspecies_gene_ensembl] --ensembl_version [release number] -profile [profile: light, medium, large, etc],[executor profile: docker/singularity]
 ```
 
 Note that the pipeline will create the following files in your working directory:
@@ -78,7 +105,8 @@ outdir: './results/'
 <...>
 ```
 
-You can also generate such `YAML`/`JSON` files via [nf-core/launch](https://nf-co.re/launch). We have 2 examples for you: from the [test](../test_data/testing.yml) and the [example run](../examplerun.yml).
+> [!TIP] 
+> Follow the examples from the [test](../test_data/testing.yml) and the [example run](../examplerun.yml).
 
 ### Updating the pipeline
 
@@ -117,10 +145,6 @@ To further assist in reproducbility, you can use share and re-use [parameter fil
 ### `-profile`
 
 Use this parameter to choose a configuration profile. Profiles can give configuration presets for different compute environments.
-
-Several generic profiles are bundled with the pipeline which instruct the pipeline to use software packaged using different methods (Docker, Singularity, Podman, Shifter, Charliecloud, Apptainer, Conda) - see below.
-
-The pipeline also dynamically loads configurations from <https://github.com/nf-core/configs> when it runs, making multiple config profiles for various institutional clusters available at run time. For more information and to see if your system is available in these configs please see the [nf-core/configs documentation](https://github.com/nf-core/configs#documentation).
 
 Note that multiple profiles can be loaded, for example: `-profile test,docker` - the order of arguments is important! They are loaded in sequence, so later profiles can overwrite earlier profiles.
 
@@ -176,14 +200,6 @@ To learn how to provide additional arguments to a particular tool of the pipelin
 In most cases, you will only need to create a custom config as a one-off but if you and others within your organisation are likely to be running nf-core pipelines regularly and need to use the same settings regularly it may be a good idea to request that your custom config file is uploaded to the `nf-core/configs` git repository. Before you do this please can you test that the config file works with your pipeline of choice using the `-c` parameter. You can then create a pull request to the `nf=core/configs` repository with the addition of your config file, associated documentation file (see examples in [nf-core/configs/docs](https://github.com/nf-core/configs/tree/master/docs)), and amending [`nfcore_custom.config`](https://github.com/nf-core/configs/blob/master/nfcore_custom.config) to include your custom profile.
 
 See the main [Nextflow documentation](https://www.nextflow.io/docs/latest/config.html) for more information about creating your own configuration files.
-
-If you have any questions or issues please send us a message on [Slack](https://nf-co.re/join/slack) on the [`#configs` channel](https://nfcore.slack.com/channels/configs).
-
-## Azure Resource Requests
-
-To be used with the `azurebatch` profile by specifying the `-profile azurebatch`. We recommend providing a compute `params.vm_type` of `Standard_D16_v3` VMs by default but these options can be changed if required.
-
-Note that the choice of VM size depends on your quota and the overall workload during the analysis. For a thorough list, please refer the [Azure Sizes for virtual machines in Azure](https://docs.microsoft.com/en-us/azure/virtual-machines/sizes).
 
 ## Running in the background
 

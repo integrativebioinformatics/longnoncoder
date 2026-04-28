@@ -1,24 +1,17 @@
 # always input the full path, relative path to files might fail
 # remember to input the full path to fastq files in the samplesheet CSV before running
-input: "/home/mbarb/longnoncoder/test_data/samplesheet.csv"
-outdir: "/home/mbarb/longnoncoder/test_data/results"
+input: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/samplesheet.csv"
+outdir: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/results"
 
 skip_qc: false
 skip_filtering: false
 skip_alignment: false
-skip_alignment_qc: false
+skip_alignment_qc: true
 skip_class: false
-minqual: 0
-minlen: 300
-maxgc: 1
-mingc: 0
-headcrop: 0
-tailcrop: 0
 
-reference: "/home/mbarb/longnoncoder/test_data/references/Rattus_norvegicus.GRCr8.dna.primary_assembly.1.fa"
+reference: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/references/Rattus_norvegicus.GRCr8.dna.primary_assembly.1.fa"
 
-
-annotation: "/home/mbarb/longnoncoder/test_data/references/Rattus_norvegicus.GRCr8.114.chr1.gtf"
+annotation: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/references/Rattus_norvegicus.GRCr8.114.chr1.gtf"
 # RNAmining does not yet cover for predictions for rat
 # Mouse is the closest compatible organism
 organism: 'Mus_musculus'

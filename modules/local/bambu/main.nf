@@ -3,7 +3,6 @@ process BAMBU {
     label 'process_high_memory'
 
     // Note: the versions here need to match the versions used in the mulled container below and minimap2/index
-    conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
         'docker://lfreitasl/bambu:3.8.0':
         'docker.io/lfreitasl/bambu:3.8.0' }"
@@ -47,18 +46,47 @@ process BAMBU {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        bambu: \$(Rscript -e "packageVersion('bambu')" | sed "s/\\[1\\] ‘\\([0-9.]*\\)’/\\1/")
+        r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
+        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
+        r-ggplot2: \$(Rscript -e "cat(as.character(packageVersion('ggplot2')))")
+        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
+        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
+        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
+        bioconductor-bambu: \$(Rscript -e "cat(as.character(packageVersion('bambu')))")
+        bioconductor-biocparallel: \$(Rscript -e "cat(as.character(packageVersion('BiocParallel')))")
+        bioconductor-rsamtools: \$(Rscript -e "cat(as.character(packageVersion('Rsamtools')))") 
     END_VERSIONS
     """
 
     stub:
 
     """
-    touch $output_file
+    touch heatmap_gene.png
+    touch heatmap_transcript.png
+    touch pca_grouped.png
+    touch pca.png
+    touch BambuOutput_counts_transcript.txt
+    touch BambuOutput_counts_gene.txt
+    touch BambuOutput_CPM_transcript.txt
+    touch BambuOutput_fullLengthCounts_transcript.txt
+    touch BambuOutput_uniqueCounts_transcript.txt
+    touch bambu_novel_transcripts.gtf
+    touch BambuOutput_extended_annotations.gtf
+    touch bambu_output.rds
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        bambu: \$(Rscript -e "packageVersion('bambu')" | sed "s/\\[1\\] ‘\\([0-9.]*\\)’/\\1/")
+        r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
+        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
+        r-ggplot2: \$(Rscript -e "cat(as.character(packageVersion('ggplot2')))")
+        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
+        bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
+        bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
+        bioconductor-bambu: \$(Rscript -e "cat(as.character(packageVersion('bambu')))")
+        bioconductor-biocparallel: \$(Rscript -e "cat(as.character(packageVersion('BiocParallel')))")
+        bioconductor-rsamtools: \$(Rscript -e "cat(as.character(packageVersion('Rsamtools')))") 
     END_VERSIONS
     """
 }

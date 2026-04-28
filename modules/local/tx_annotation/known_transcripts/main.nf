@@ -42,12 +42,14 @@ process KNOWN_TRANSCRIPTS {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        r-base: \$(R --version | head -n1 | sed 's/R version //; s/ .*//')
-        bioconductor-biomart: \$(Rscript -e "cat(as.character(packageVersion('biomaRt')))")
+        r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
+        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
+        r-httr: \$(Rscript -e "cat(as.character(packageVersion('httr')))")
+        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
-        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
-        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        bioconductor-biomart: \$(Rscript -e "cat(as.character(packageVersion('biomaRt')))")
     END_VERSIONS
     """
 
@@ -67,12 +69,14 @@ process KNOWN_TRANSCRIPTS {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        r-base: \$(R --version | head -n1 | sed 's/R version //; s/ .*//')
-        bioconductor-biomart: \$(Rscript -e "cat(as.character(packageVersion('biomaRt')))")
+        r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
+        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
+        r-httr: \$(Rscript -e "cat(as.character(packageVersion('httr')))")
+        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
-        r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
-        r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
+        bioconductor-biomart: \$(Rscript -e "cat(as.character(packageVersion('biomaRt')))")
     END_VERSIONS
     """
 }

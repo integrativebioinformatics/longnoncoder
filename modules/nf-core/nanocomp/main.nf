@@ -107,7 +107,7 @@ process NANOCOMP {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        nanocomp: \$(echo \$(NanoComp --version 2>&1) | sed 's/^.*NanoComp //; s/Using.*\$//' ))
+        nanocomp: \$(echo \$(NanoComp --version 2>&1 | sed 's/^.*NanoComp //; s/Using.*\$//' ))
     END_VERSIONS
     """
 
@@ -135,7 +135,7 @@ process NANOCOMP {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        nanocomp: \$(echo \$(NanoComp --version 2>&1) | sed 's/^.*NanoComp //; s/Using.*\$//' ))
+        nanocomp: \$(echo \$(NanoComp --version 2>&1 | sed 's/^.*NanoComp //; s/Using.*\$//' ))
     END_VERSIONS
     """
 }

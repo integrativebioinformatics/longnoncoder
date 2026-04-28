@@ -12,9 +12,9 @@ process GFFREAD {
     path fasta
 
     output:
-    path "*.gtf"        , emit: gtf         , optional: true
-    path "*.gff3"       , emit: gffread_gff , optional: true
-    path "*.fa"         , emit: gtf_fasta   , optional: true
+    path "*.gtf"        , emit: gtf          , optional: true
+    path "*.gff3"       , emit: gffread_gff  , optional: true
+    path "*.fa"         , emit: gffread_fasta
     path "versions.yml" , emit: versions
 
     when:
@@ -36,4 +36,14 @@ process GFFREAD {
         gffread: \$(gffread --version 2>&1)
     END_VERSIONS
     """
+
+    stub:
+    """
+    touch bambu_novel_transcripts.fa
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        gffread: \$(gffread --version 2>&1)
+    END_VERSIONS
+    """
+
 }

@@ -36,6 +36,9 @@ workflow LONGNONCODER {
     ch_versions             = Channel.empty()
     ch_multiqc_files        = Channel.empty()
     ch_gtf_new_transcripts  = Channel.empty()
+    ch_reads_for_alignment  = ch_samplesheet
+    run_alignment           = !params.skip_alignment
+    run_classification      = run_alignment && !params.skip_class
 
     //
     //Run QC workflow
@@ -44,14 +47,15 @@ workflow LONGNONCODER {
         QC_FILT (
             ch_samplesheet
         )
+        ch_reads_for_alignment = QC_FILT.out.filt_reads
         ch_multiqc_files = ch_multiqc_files.mix(QC_FILT.out.multiqc)
         ch_versions = ch_versions.mix(QC_FILT.out.versions)
     }
     //
     // Run alignment workflow
     //
-    if (!params.skip_alignment){
-        ALIGNMENT(QC_FILT.out.filt_reads)
+    if (run_alignment){
+        ALIGNMENT(ch_reads_for_alignment)
 
         if (!params.skip_alignment_qc){
             ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT.out.multiqc)
@@ -70,14 +74,14 @@ workflow LONGNONCODER {
         ch_versions = ch_versions.mix(TRANSCRIPT_RECONSTRUCTION.out.versions)
     }
 
-    if (!params.skip_class){
+    if (run_classification){
         CLASSIFICATION_POTENTIAL_CODING (
             ch_gtf_new_transcripts,
             params.annotation,
             params.reference
         )
         ch_versions = ch_versions.mix(CLASSIFICATION_POTENTIAL_CODING.out.versions)
-    }
+    
 
     SUBSET_BAMBU_COUNTS (
         TRANSCRIPT_RECONSTRUCTION.out.gene_counts,
@@ -95,6 +99,7 @@ workflow LONGNONCODER {
         SUBSET_BAMBU_COUNTS.out.counts_transcript_filtered,
         SUBSET_BAMBU_COUNTS.out.counts_gene_filtered
     )
+    ch_versions = ch_versions.mix(NOVEL_TRANSCRIPTS.out.versions)
 
     BAMBU_VALIDATE (
         NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
@@ -110,6 +115,7 @@ workflow LONGNONCODER {
         BAMBU_VALIDATE.out.counts_gene_validated,
         TRANSCRIPT_RECONSTRUCTION.out.gtf_all_transcripts
     )
+    ch_versions = ch_versions.mix(KNOWN_TRANSCRIPTS.out.versions)
 
     SUBSET_BAMBU_GTF (
         TRANSCRIPT_RECONSTRUCTION.out.gtf_all_transcripts,
@@ -117,6 +123,8 @@ workflow LONGNONCODER {
         BAMBU_VALIDATE.out.full_length_counts_transcript_validated,
         BAMBU_VALIDATE.out.unique_counts_transcript_validated
     )
+    ch_versions = ch_versions.mix(SUBSET_BAMBU_GTF.out.versions)
+
 
     RENDER_REPORT (
         params.report_template,
@@ -137,6 +145,8 @@ workflow LONGNONCODER {
         TRANSCRIPT_RECONSTRUCTION.out.pca,
         TRANSCRIPT_RECONSTRUCTION.out.pca_grouped
     )
+    ch_versions = ch_versions.mix(RENDER_REPORT.out.versions)
+    }
 
     //
     // Collate and save software versions

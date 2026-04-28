@@ -1,5 +1,8 @@
 ---
 title: "Pipeline Report on Transcriptome Assembly"
+title-block-style: manuscript
+title-block-banner: "#eeeff0"
+title-block-banner-color: "#373a3c"
 date: today
 format:
   html:
@@ -7,51 +10,61 @@ format:
     toc-location: left
     number-sections: true
     smooth-scroll: true
-    theme: cosmo
     embed-resources: true
-    df-print: kable
     page-layout: full
-include-before-body:
-  text: |
-    <div style="background-color: white; width: 100%; display: flex; justify-content: center; margin-bottom: 20px; border-bottom: 1px solid #dee2e6;">
-      <div style="display: flex; justify-content: center; padding: 10px 0;">
-        <img src="https://imgur.com/sSriGSM.png" width="300" height="200">
-      </div>
-    </div>
-    <br>
-include-after-body:
-  text: |
-    <style>
-        .report-footer {
-        text-align: center;
-        margin-top: 25px;
-        padding-top: 25px;
-        padding-bottom: 25px;
-        border-top: 1px solid #dee2e6;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        }
-        .footer-logos {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        gap: 50px; /* space between logos */
-        flex-wrap: wrap;
-        }
-        .footer-logos img {
-        max-height: 120px; /* Adjust height as needed */
-        width: auto;
-        transition: opacity 0.3s ease;
-        }
-            .footer-logos a:hover img {
-        opacity: 0.8;
-        }
-    </style>
+    theme: cosmo
+    include-in-header:
+        text: |
+            <style>
+                .quarto-title-block .quarto-title-banner {
+                background-image: url(https://i.imgur.com/yzRmb91.png) !important;
+                background-size: 180px !important;
+                background-position: left 40px center !important;
+                background-repeat: no-repeat !important;
+                background-origin: content-box;
+                }
+            </style>    
+    include-after-body:
+        text: |
+            <style>
+            #TOC .toc-title, 
+            #TOC > h2, 
+            #TOC > h3 {
+                font-weight: bold !important;
+                display: block;
+            }
+            </style>
 
-    <footer class="report-footer">
-        <div class="footer-logos">
-            <img src="https://imgur.com/Camgx6z.png" alt="Logos">
-        </div>
-    </footer>
+            <style>
+                .report-footer {
+                text-align: center;
+                margin-top: 10px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                border-top: 1px solid #dee2e6;
+                }
+                .footer-logos {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 50px; /* space between logos */
+                flex-wrap: wrap;
+                }
+                .footer-logos img {
+                max-height: 120px; /* Adjust height as needed */
+                width: auto;
+                transition: opacity 0.3s ease;
+                }
+                    .footer-logos a:hover img {
+                opacity: 0.8;
+                }
+            </style>
+
+            <footer class="report-footer">
+                <div class="footer-logos">
+                    <img src="https://imgur.com/Camgx6z.png" alt="Logos">
+                </div>
+            </footer>
 execute:
     echo: false
     warning: false
@@ -75,7 +88,7 @@ params:
     plot_pca: "pca.png"
 ---
 
-# Introduction
+## Introduction
 
 This report provides a detailed analysis of a transcriptome assembled from long-read RNA sequencing data. The primary goal is to identify and characterize both known (annotated) and novel transcripts. These results are organized into three main sections:
 
@@ -98,7 +111,7 @@ library(RColorBrewer)
 library(viridis)
 ```
 
-# Overall Assembly Statistics
+## Overall Assembly Statistics
 
 This section presents a quantitative overview of the transcriptome assembly. We use the output from the **Bambu** [^1] software to summarize the total number of genes and transcripts that were detected and quantified.
 
@@ -239,19 +252,35 @@ tryCatch({
 novel_tx$biotype[novel_tx$prediction == "coding"] <- "novel protein_coding"
 novel_tx$biotype[novel_tx$prediction == "non-coding"] <- "novel lncRNA"
 
+# --- NEW FIX: Separate the raw gene and transcript IDs first ---
+raw_nov_pc_genes <- unique(novel_tx$qry_gene_id[novel_tx$prediction == "coding"])
+raw_nov_lnc_genes <- unique(novel_tx$qry_gene_id[novel_tx$prediction == "non-coding"])
+
+raw_nov_pc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "coding"])
+raw_nov_lnc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "non-coding"])
+
+# PREVENT DOUBLE COUNTING: If a feature has both coding and non-coding predictions,
+# it is classified as protein-coding. Remove these from the lncRNA list.
+raw_nov_lnc_genes <- setdiff(raw_nov_lnc_genes, raw_nov_pc_genes)
+raw_nov_lnc_tx <- setdiff(raw_nov_lnc_tx, raw_nov_pc_tx)
+
 # --- 3. Extract ID vectors for each category ---
 ids <- list(
   # Protein-coding
   ann_pc_genes = unique(ann_txome$ensembl_gene_id[ann_txome$gene_biotype == "protein_coding"]),
   ann_pc_tx = unique(ann_txome$ensembl_transcript_id[ann_txome$gene_biotype == "protein_coding"]),
-  nov_pc_genes = unique(novel_tx$qry_gene_id[novel_tx$prediction == "coding"]),
-  nov_pc_tx = unique(novel_tx$qry_id[novel_tx$prediction == "coding"]),
+  
+  # Filter to only include true novel features (starting with "Bambu")
+  nov_pc_genes = raw_nov_pc_genes[startsWith(raw_nov_pc_genes, "Bambu")],
+  nov_pc_tx = raw_nov_pc_tx[startsWith(raw_nov_pc_tx, "Bambu")],
   
   # lncRNAs
   ann_lnc_genes = unique(ann_txome$ensembl_gene_id[ann_txome$gene_biotype == "lncRNA"]),
   ann_lnc_tx = unique(ann_txome$ensembl_transcript_id[ann_txome$gene_biotype == "lncRNA"]),
-  nov_lnc_genes = unique(novel_tx$qry_gene_id[novel_tx$prediction == "non-coding"]),
-  nov_lnc_tx = unique(novel_tx$qry_id[novel_tx$prediction == "non-coding"])
+  
+  # Filter to only include true novel features (starting with "Bambu")
+  nov_lnc_genes = raw_nov_lnc_genes[startsWith(raw_nov_lnc_genes, "Bambu")],
+  nov_lnc_tx = raw_nov_lnc_tx[startsWith(raw_nov_lnc_tx, "Bambu")]
 )
 
 # --- 4. Read Bambu IDs from the output files ---
@@ -261,7 +290,6 @@ for (name in names(bambu_outputs)) {
     # Only read the first column (IDs)
     data_ids <- read.delim(current_file, header = TRUE, sep = "\t")[[1]]
     bambu_ids[[name]] <- as.character(data_ids)
-
 }
 
 # Helper function to count overlaps between Bambu outputs and our target IDs
@@ -349,7 +377,8 @@ p_genes_bio <- ggplot(bambu_gene_biotype_data, aes(x = Status, y = Count, fill =
   theme_minimal(base_size = 30) +
   theme(
     plot.title = element_text(hjust = 0.5, face = "bold"),
-    strip.text = element_text(size = 30, face = "bold", margin = margin(b = 10))
+    strip.text = element_text(size = 30, face = "bold", margin = margin(b = 10)),
+    plot.margin = margin(1, 1, 1, 1, "cm"), panel.spacing = unit(1.2, "cm")
   )
 
 # Plot B: Transcripts (Used to extract the legend)
@@ -372,9 +401,9 @@ p_tx_bio <- ggplot(bambu_transcript_biotype_data, aes(x = Bambu, y = Count, fill
 # 3. Assemble the cowplot Grid
 
 p_genes_bio <- plot_grid(
-  p_genes_bio, NULL,           
+  p_genes_bio, NULL,
   ncol = 2,                     
-  rel_widths = c(0.6, 0.4)      
+  rel_widths = c(0.8, 0.2)      
 )
 
 # Stack the plots
@@ -440,7 +469,7 @@ knitr::include_graphics(params$plot_pca)
 
 ------------------------------------------------------------------------
 
-# Annotated RNAs Overview
+## Annotated RNAs Overview
 
 In this section, we focus exclusively on the **annotated** portion of the transcriptome. These are transcripts that match known entries in public databases. By analyzing their biotypes, lengths, and exon structures, we can understand the composition of the known transcriptome in our samples and establish a baseline for comparison with novel transcripts. For this crucial step, we utilize the package **biomaRt**[^2].
 
@@ -490,7 +519,7 @@ p7 <- create_plot(Tcell_RNAs, gene_biotype, transcript_biotype, "TCR element RNA
 p8 <- create_plot(IG_RNAs, gene_biotype, transcript_biotype, "Immunoglobulin element RNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
 ```
 
-#### Overview of Major RNA Categories
+### Overview of Major RNA Categories
 
 The plots below summarize the counts of transcripts grouped into four major categories. The y-axis is on a log10 scale to accommodate the wide range of counts.
 
@@ -504,7 +533,7 @@ panel1 <- plot_grid(p1, p2, p3, p4, ncol = 2, rel_widths = c(1.3, 1), labels = "
 panel1
 ```
 
-#### Detailed View of Other RNA Categories
+### Detailed View of Other RNA Categories
 
 This panel provides a more detailed breakdown of the diverse and less common RNA biotypes, including pseudogenes and elements related to the immune system.
 
@@ -520,7 +549,7 @@ panel2 <- plot_grid(top_row_panel2, bottom_row_panel2, nrow = 2, rel_heights = c
 panel2
 ```
 
-#### Gene Biotype Diversity Across Chromosomes
+### Gene Biotype Diversity Across Chromosomes
 
 This visualization maps the distribution of different gene biotypes across all chromosomes, revealing genomic hotspots for certain types of genes.
 
@@ -563,7 +592,7 @@ p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
 p9
 ```
 
-### Transcript Length Analysis
+#### Transcript Length Analysis
 
 Here, we investigate the length of transcripts across different biotypes.
 
@@ -602,7 +631,7 @@ panel3 <- plot_grid(p10, p11, p12, nrow = 3, labels="AUTO", label_size = 14, lab
 panel3
 ```
 
-### Exon Structure Analysis
+#### Exon Structure Analysis
 
 ```{r}
 #| label: prep-exon-data
@@ -623,7 +652,7 @@ p14 <- ggplot(ann_pc_txome, aes(x = gene_biotype, y = num_exons, fill = transcri
 p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across lncRNA transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10() + scale_fill_discrete(labels = paste0(median_lnc_exnum$transcript_biotype, " (", round(median_lnc_exnum$median_exnum, 2), ")"))
 ```
 
-#### Exon Number Comparison
+### Exon Number Comparison
 
 The number of exons per transcript is compared for protein-coding genes versus lncRNAs.
 
@@ -647,7 +676,7 @@ panel4 <- plot_grid(
 panel4
 ```
 
-#### Mono- vs. Multi-exonic Transcripts
+### Mono- vs. Multi-exonic Transcripts
 
 ```{r}
 #| label: plot-mono-multi-exon-analysis
@@ -684,7 +713,7 @@ p16
 p17
 ```
 
-#### Exon Number vs. Transcript Length
+### Exon Number vs. Transcript Length
 
 A 2D density plot helps visualize the relationship between the number of exons in a transcript and its total length for both protein-coding and lncRNA genes.
 
@@ -702,7 +731,7 @@ p18 <- ggplot(ann_pc_lnc_txome, aes(x = num_exons, y = transcript_length)) +
 p18
 ```
 
-#### Individual Exon Length
+### Individual Exon Length
 
 ```{r}
 ann_pc_exon <- read.csv(params$protein_coding_exonlength)
@@ -742,7 +771,7 @@ p19
 
 ------------------------------------------------------------------------
 
-# Novel Protein-Coding and lncRNAs Overview
+## Novel Protein-Coding and lncRNAs Overview
 
 This section focuses on the characterization of newly identified protein-coding and lncRNA transcripts that were not present in the reference annotation.
 
@@ -783,7 +812,7 @@ scale_y_log10()
 p20
 ```
 
-#### Chromosomal Distribution of Novel Transcripts
+### Chromosomal Distribution of Novel Transcripts
 
 ```{r}
 #| label: prep-novel-chr-data
