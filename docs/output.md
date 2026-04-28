@@ -270,7 +270,7 @@ Class_codes description figure below retrieved from the official [documentation]
 | `bambu_annotated_lncRNAs.gtf` | GTF annotation file containing annotated lncRNA isoforms from bambu outputs. |
 | `bambu_annotated_mRNAs.gtf` | GTF annotation file containing annotated mRNA/protein-coding isoforms from bambu outputs. |
 | `bambu_annotated_transcriptome_gene_counts.csv` | Gene-level count matrix for annotated transcriptome features. |
-| `bambu_annotated_transcriptome.gtf` | GTF file for annotated features assembled/quantified by bambu. |
+| `bambu_annotated_transcriptome.gtf` | GTF file for validated annotated features assembled/quantified by bambu. |
 | `bambu_annotated_transcriptome_tx_counts.csv` | Transcript-level count matrix for annotated transcriptome features. |
 | `bambu_novel_pc_lnc_RNA_gene_counts.csv` | Gene-level counts for novel isoform candidates classified as protein-coding or lncRNA. |
 | `bambu_novel_pc_lnc_RNA_tx_counts.csv` | Transcript-level counts for novel isoform candidates classified as protein-coding or lncRNA. |
@@ -282,6 +282,8 @@ Class_codes description figure below retrieved from the official [documentation]
 | `novel_protein-coding.gtf` | GTF file containing novel protein-coding RNA isoform candidates. |
 | `novel_protein-coding_metadata.csv` | Metadata table for novel protein-coding RNA isoform candidates. |
 | `novel_transcripts_metadata.csv` | Metadata table for all novel RNA isoform candidates. |
+| `novel_transcripts.gtf` | GTF file containing only the validated set of novel isoform candidates. |
+
 
 ## `pipeline_info/` (workflow run metadata)
 
