@@ -882,7 +882,7 @@ p24 <- novel_tx %>% filter(biotype == "novel lncRNA") %>%
 ```{r}
 #| label: plot-panel5
 #| fig-cap: "**Figure 17: Length Distribution of Novel Transcripts.** (A) Compares the overall length of novel protein-coding vs. novel lncRNA transcripts. (B) and (C) provide a more detailed view, showing length distributions for each GFFCompare classification within the novel protein-coding and lncRNA categories, respectively."
-#| fig-width: 8
+#| fig-width: 10
 #| fig-height: 10
 
 panel5 <- plot_grid(p22, p23, p24, nrow = 3, labels="AUTO", label_size = 14, label_y = 1)
