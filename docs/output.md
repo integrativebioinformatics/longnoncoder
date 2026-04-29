@@ -193,6 +193,9 @@ This document describes the file-level reference for outputs produced by each pi
 
 ### Rdata
 
+> [!NOTE]
+> You can access Bambu Novel Discovery Rate (NDR) metric by accessing the Summarized Experiment R object `se_multiSample.rds`. It is also output to the module's execution log `.command.log`, stored at the `work/` directory.
+
 | File | Description |
 |--------------------------------|----------------------------------------|
 | `seGene_multiSample.rds` | Serialized R object with gene-level summarized experiment data. |
