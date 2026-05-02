@@ -230,7 +230,7 @@ This document describes the file-level reference for outputs produced by each pi
 
 ## `gffcompare/` (novel transcript comparison)
 
-> \_Check the GffCompare's official [documentation](http://ccb.jhu.edu/software/stringtie/gffcompare.shtml).
+> _Check the GffCompare's official [documentation](http://ccb.jhu.edu/software/stringtie/gffcompare.shtml)._
 
 | File | Description |
 |-------------------------|------------------------------------------------|
