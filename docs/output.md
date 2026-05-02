@@ -189,7 +189,11 @@ This document describes the file-level reference for outputs produced by each pi
 
 #### Spearman correlation coefficients
 
-![SpR_Gene_level](../figures/bambu-gene-level-spR.png) \#### PCA analysis ![PCA](../figures/bambu-pca.png)
+![SpR_Gene_level](../figures/bambu-gene-level-spR.png)
+
+#### PCA analysis 
+
+![PCA](../figures/bambu-pca.png)
 
 ### Rdata
 
