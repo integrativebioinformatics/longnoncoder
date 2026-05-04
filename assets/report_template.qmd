@@ -503,7 +503,7 @@ summary_data
 protein_coding <- summary_data %>% filter(gene_biotype == "protein_coding")
 lncRNAs <- summary_data %>% filter(gene_biotype == "lncRNA")
 pseudogene_RNAs <- summary_data %>% filter(str_detect(gene_biotype, "pseudogene")) %>% mutate(category = "Pseudogene")
-small_RNAs <- summary_data %>% filter(gene_biotype %in% c("snoRNA", "snRNA", "scaRNA", "scRNA", "sRNA", "rRNA", "misc_RNA", "miRNA", "siRNA", "piRNA"))
+small_RNAs <- summary_data %>% filter(gene_biotype %in% c("snoRNA", "snRNA", "scaRNA", "scRNA", "sRNA", "rRNA", "misc_RNA", "miRNA"))
 Tcell_RNAs <- summary_data %>% filter(gene_biotype %in% c("TR_V_gene", "TR_J_gene", "TR_D_gene", "TR_C_gene")) %>% mutate(category = "TCR elements")
 IG_RNAs <- summary_data %>% filter(gene_biotype %in% c("IG_V_gene", "IG_J_gene", "IG_D_gene", "IG_C_gene")) %>% mutate(category = "Immunoglobulin elements")
 other_RNAs_explicit <- summary_data %>% filter(gene_biotype %in% c("vault_RNA", "TEC", "ribozyme", "Mt_tRNA", "Mt_rRNA", "Y_RNA", "artifact")) %>% mutate(category = "Other")
