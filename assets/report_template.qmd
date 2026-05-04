@@ -113,13 +113,66 @@ library(viridis)
 
 ## Overall Assembly Statistics
 
-This section presents a quantitative overview of the transcriptome assembly. We use the output from the **Bambu** [^1] software to summarize the total number of genes and transcripts that were detected and quantified.
+This section presents a quantitative overview of the transcriptome assembly. We use the output from the **Bambu** [^1] software to summarize the results below, and report metadata of genes and transcripts that were detected and quantified.
 
 [^1]: Chen, Ying, et al. "Context-aware transcript quantification from long-read RNA-seq data with Bambu." Nature methods 20.8 (2023): 1187-1195. https://doi.org/10.1038/s41592-023-01908-w
 
-### Transcriptome Assembly Summary
+### Expression Analysis and Sample Correlation (Raw assembly)
 
-The first step is to read the primary output files from Bambu to count the total number of validated genes and transcripts. We categorize these into three groups:
+To assess the quality of the expression data and the relationships between samples, we perform correlation analysis and Principal Component Analysis (PCA).
+
+#### Gene-Level Expression Heatmap
+
+The heatmap below visualizes the **Spearman correlation** of gene expression between all pairs of samples. A high correlation (closer to 1) indicates that the samples have similar gene expression profiles.
+
+```{r}
+#| fig-cap: "**Figure 1: Gene-Level Sample Correlation.** This heatmap shows the Spearman correlation coefficient between samples based on their gene expression profiles. The color scale indicates the strength of the correlation, with warmer colors representing higher similarity."
+knitr::include_graphics(params$plot_heatmap_gene)
+```
+
+#### Transcript-Level Expression Heatmap
+
+Similarly, this heatmap shows the **Spearman correlation** between all pairs of samples based on **transcript-level** expression. This provides a more granular view and can reveal sample differences driven by isoform usage rather than overall gene expression.
+
+```{r}
+#| fig-cap: "**Figure 2: Transcript-Level Sample Correlation.** This heatmap displays the Spearman correlation between samples based on their transcript expression profiles, offering a detailed view of isoform-level similarity."
+knitr::include_graphics(params$plot_heatmap_tcpt)
+```
+
+#### Principal Component Analysis (PCA)
+
+Remember that the plots are generated automatically, which means if you have too many samples and groups, there is a chance that the PCA PNG will not fit the entire plot. You can adjust the sizes of the plots at `bin/bambu.R` from lines `149-170` an rerun the pipeline with the parameter `-resume`. For example: `nextflow run main.nf -c myfile.config -profile large,singularity -resume`.
+
+```{r}
+#| fig-cap:
+#|   - "**Figure 3: PCA of Samples by Group.** This plot shows the principal components of the samples, colored by their experimental group."
+
+knitr::include_graphics(params$plot_pca_grouped)
+```
+
+```{r}
+#| fig-cap:
+#|   - "**Figure 4: PCA of Individual Samples.** This plot shows the same PCA but with each individual sample labeled."
+
+knitr::include_graphics(params$plot_pca)
+```
+
+### Curated transcriptome Assembly Summary
+
+::: callout-note
+Downstream to the assembly, novel transcripts were submitted to coding potential prediction with RNAmining [^2] and were compared to the reference annotations by GffCompare [^3]. The assembly went through validation under the `tx_annotation` submodules. Any transcripts **NOT** matching the following criteria were filtered out:
+
+- Length ≥ 200bp
+
+- Classified as intergenic (`u`), intronic (`i`), antisense (`x`), multi-exonic matching at least 1 reference splice junction (`j`) or intron retention (`m` and `n`) by GffCompare (`class_codes`).
+
+- Assembled according to a known strand direction (+/-).
+:::
+
+[^2]: Ramos, Thaís AR, et al. "RNAmining: A machine learning stand-alone and web server tool for RNA coding potential prediction." F1000Research 10 (2021): 323. https://doi.org/10.12688/f1000research.52350.2
+[^3]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1. 
+
+Now, with these curated datasets, we report the total final number of genes and transcripts. We categorize these into three groups:
 
 -   **Total:** All unique features identified.
 -   **Annotated:** Features that match an existing reference annotation (e.g., Ensembl). These have IDs starting with `ENS`.
@@ -189,7 +242,7 @@ bambu_df$Bambu <- factor(bambu_df$Bambu, levels = rev(c("genes", "transcripts", 
 
 ```{r}
 #| label: plot-bambu-gene-transcript-stats
-#| fig-cap: "**Figure 1: Summary of Assembled Genes and Transcripts.** This figure displays the total counts of genes (A) and various categories of transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
+#| fig-cap: "**Figure 5: Summary of Assembled Genes and Transcripts.** This figure displays the total counts of genes (A) and various categories of transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
 #| fig-width: 14
 #| fig-height: 5
 
@@ -344,7 +397,7 @@ if (length(results_biotype) > 0) {
 
 ```{r}
 #| label: plot-bambu-lnc-pc-stats
-#| fig-cap: "**Figure 1.2: Summary of Assembled Protein-coding and lncRNA Features.** Total counts of lncRNA and protein-coding genes (A), and transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
+#| fig-cap: "**Figure 5.1: Summary of Assembled Protein-coding and lncRNA Features.** Total counts of lncRNA and protein-coding genes (A), and transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
 #| fig-width: 32
 #| fig-height: 22
 
@@ -427,53 +480,13 @@ lnc_pc_bambu_plot <- plot_grid(
 lnc_pc_bambu_plot
 ```
 
-### Expression Analysis and Sample Correlation
-
-To assess the quality of the expression data and the relationships between samples, we perform correlation analysis and Principal Component Analysis (PCA).
-
-#### Gene-Level Expression Heatmap
-
-The heatmap below visualizes the **Spearman correlation** of gene expression between all pairs of samples. A high correlation (closer to 1) indicates that the samples have similar gene expression profiles.
-
-```{r}
-#| fig-cap: "**Figure 2: Gene-Level Sample Correlation.** This heatmap shows the Spearman correlation coefficient between samples based on their gene expression profiles. The color scale indicates the strength of the correlation, with warmer colors representing higher similarity."
-knitr::include_graphics(params$plot_heatmap_gene)
-```
-
-#### Transcript-Level Expression Heatmap
-
-Similarly, this heatmap shows the **Spearman correlation** between all pairs of samples based on **transcript-level** expression. This provides a more granular view and can reveal sample differences driven by isoform usage rather than overall gene expression.
-
-```{r}
-#| fig-cap: "**Figure 3: Transcript-Level Sample Correlation.** This heatmap displays the Spearman correlation between samples based on their transcript expression profiles, offering a detailed view of isoform-level similarity."
-knitr::include_graphics(params$plot_heatmap_tcpt)
-```
-
-#### Principal Component Analysis (PCA)
-
-Remember that the plots are generated automatically, which means if you have too many samples and groups, there is a chance that the PCA PNG will not fit the entire plot. You can adjust the sizes of the plots at `bin/bambu.R` from lines `149-170` an rerun the pipeline with the parameter `-resume`. For example: `nextflow run main.nf -c myfile.config -profile large,singularity -resume`.
-
-```{r}
-#| fig-cap:
-#|   - "**Figure 4: PCA of Samples by Group.** This plot shows the principal components of the samples, colored by their experimental group."
-
-knitr::include_graphics(params$plot_pca_grouped)
-```
-
-```{r}
-#| fig-cap:
-#|   - "**Figure 5: PCA of Individual Samples.** This plot shows the same PCA but with each individual sample labeled."
-
-knitr::include_graphics(params$plot_pca)
-```
-
 ------------------------------------------------------------------------
 
 ## Annotated RNAs Overview
 
-In this section, we focus exclusively on the **annotated** portion of the transcriptome. These are transcripts that match known entries in public databases. By analyzing their biotypes, lengths, and exon structures, we can understand the composition of the known transcriptome in our samples and establish a baseline for comparison with novel transcripts. For this crucial step, we utilize the package **biomaRt**[^2].
+In this section, we focus exclusively on the **annotated** portion of the transcriptome. These are transcripts that match known entries in public databases. By analyzing their biotypes, lengths, and exon structures, we can understand the composition of the known transcriptome in our samples and establish a baseline for comparison with novel transcripts. For this crucial step, we utilize the package **biomaRt**[^4].
 
-[^2]: Durinck, Steffen, et al. "BioMart and Bioconductor: a powerful link between biological databases and microarray data analysis." Bioinformatics 21.16 (2005): 3439-3440. https://doi.org/10.1093/bioinformatics/bti525
+[^4]: Durinck, Steffen, et al. "BioMart and Bioconductor: a powerful link between biological databases and microarray data analysis." Bioinformatics 21.16 (2005): 3439-3440. https://doi.org/10.1093/bioinformatics/bti525
 
 ### Biotype Distribution Analysis
 
@@ -777,13 +790,9 @@ This section focuses on the characterization of newly identified protein-coding 
 
 > **About the Tools:**
 >
-> -   **GFFRead:** [^3] This tool is used to transform the GTF annotation of the novel transcripts into a FASTA file based on a reference annotation.
+> -   **GFFRead:** This tool is used to transform the GTF annotation of the novel transcripts into a FASTA file based on a reference annotation.
 > -   **GFFCompare:** This tool is used to compare the assembled novel transcripts (from Bambu) against a reference annotation file. It classifies each novel transcript based on its relationship to known transcripts (e.g., a novel isoform of a known gene, a transcript in an intergenic region, etc).
-> -   **RNAmining:** [^4] This tool analyzes the sequence of novel transcripts to predict whether they are likely to be protein-coding or non-coding (like lncRNAs).
-
-[^3]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1
-
-[^4]: Ramos, Thaís AR, et al. "RNAmining: A machine learning stand-alone and web server tool for RNA coding potential prediction." F1000Research 10 (2021): 323. https://doi.org/10.12688/f1000research.52350.2
+> -   **RNAmining:** This tool analyzes the sequence of novel transcripts to predict whether they are likely to be protein-coding or non-coding (like lncRNAs).
 
 ### Biotype and Classification of Novel Transcripts
 
