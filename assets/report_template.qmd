@@ -519,7 +519,7 @@ p7 <- create_plot(Tcell_RNAs, gene_biotype, transcript_biotype, "TCR element RNA
 p8 <- create_plot(IG_RNAs, gene_biotype, transcript_biotype, "Immunoglobulin element RNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
 ```
 
-### Overview of Major RNA Categories
+#### Overview of Major RNA Categories
 
 The plots below summarize the counts of transcripts grouped into four major categories. The y-axis is on a log10 scale to accommodate the wide range of counts.
 
@@ -533,7 +533,7 @@ panel1 <- plot_grid(p1, p2, p3, p4, ncol = 2, rel_widths = c(1.3, 1), labels = "
 panel1
 ```
 
-### Detailed View of Other RNA Categories
+**Detailed View of Other RNA Categories**
 
 This panel provides a more detailed breakdown of the diverse and less common RNA biotypes, including pseudogenes and elements related to the immune system.
 
@@ -549,7 +549,7 @@ panel2 <- plot_grid(top_row_panel2, bottom_row_panel2, nrow = 2, rel_heights = c
 panel2
 ```
 
-### Gene Biotype Diversity Across Chromosomes
+#### Gene Biotype Diversity Across Chromosomes
 
 This visualization maps the distribution of different gene biotypes across all chromosomes, revealing genomic hotspots for certain types of genes.
 
@@ -592,7 +592,7 @@ p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
 p9
 ```
 
-#### Transcript Length Analysis
+### Transcript Length Analysis
 
 Here, we investigate the length of transcripts across different biotypes.
 
@@ -631,7 +631,7 @@ panel3 <- plot_grid(p10, p11, p12, nrow = 3, labels="AUTO", label_size = 14, lab
 panel3
 ```
 
-#### Exon Structure Analysis
+### Exon Structure Analysis
 
 ```{r}
 #| label: prep-exon-data
@@ -652,7 +652,7 @@ p14 <- ggplot(ann_pc_txome, aes(x = gene_biotype, y = num_exons, fill = transcri
 p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across lncRNA transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10() + scale_fill_discrete(labels = paste0(median_lnc_exnum$transcript_biotype, " (", round(median_lnc_exnum$median_exnum, 2), ")"))
 ```
 
-### Exon Number Comparison
+#### Exon Number Comparison
 
 The number of exons per transcript is compared for protein-coding genes versus lncRNAs.
 
@@ -676,7 +676,7 @@ panel4 <- plot_grid(
 panel4
 ```
 
-### Mono- vs. Multi-exonic Transcripts
+#### Mono- vs. Multi-exonic Transcripts
 
 ```{r}
 #| label: plot-mono-multi-exon-analysis
@@ -713,7 +713,7 @@ p16
 p17
 ```
 
-### Exon Number vs. Transcript Length
+#### Exon Number vs. Transcript Length
 
 A 2D density plot helps visualize the relationship between the number of exons in a transcript and its total length for both protein-coding and lncRNA genes.
 
@@ -731,7 +731,7 @@ p18 <- ggplot(ann_pc_lnc_txome, aes(x = num_exons, y = transcript_length)) +
 p18
 ```
 
-### Individual Exon Length
+#### Individual Exon Length
 
 ```{r}
 ann_pc_exon <- read.csv(params$protein_coding_exonlength)
@@ -812,7 +812,7 @@ scale_y_log10()
 p20
 ```
 
-### Chromosomal Distribution of Novel Transcripts
+#### Chromosomal Distribution of Novel Transcripts
 
 ```{r}
 #| label: prep-novel-chr-data
@@ -853,7 +853,7 @@ p21 <- ggplot(chr_tb_novel, aes(x = biotype, y = count)) +
 p21
 ```
 
-### Transcript Length and Exon Structure of Novel RNAs
+### Transcript Length Analysis
 
 ```{r}
 #| label: prep-novel-length-exon-data
@@ -877,8 +877,6 @@ p24 <- novel_tx %>% filter(biotype == "novel lncRNA") %>%
   scale_y_log10() + scale_fill_discrete(labels = paste0(median_lnc_novel$classification, " (", round(median_lnc_novel$median_length_novel, 2), ")"))
 ```
 
-#### Transcript Length Analysis
-
 ```{r}
 #| label: plot-panel5
 #| fig-cap: "**Figure 17: Length Distribution of Novel Transcripts.** (A) Compares the overall length of novel protein-coding vs. novel lncRNA transcripts. (B) and (C) provide a more detailed view, showing length distributions for each GFFCompare classification within the novel protein-coding and lncRNA categories, respectively."
@@ -889,7 +887,9 @@ panel5 <- plot_grid(p22, p23, p24, nrow = 3, labels="AUTO", label_size = 14, lab
 panel5
 ```
 
-#### Exon Number and Structure
+### Exon Structure Analysis
+
+#### Exon numbers & Mono- vs. Multi-exonic Transcripts
 
 ```{r}
 #| label: prep-novel-exon-structure
@@ -969,7 +969,7 @@ p26
 
 p27
 ```
-
+#### Length of mono vs multi-exonic transcripts
 ```{r}
 #| fig-cap:
 #|   - "**Figure 21: Length of Mono- vs. Multi-exonic Novel Transcripts.** This plot compares the final transcript length of mono- and multi-exonic novel transcripts."
