@@ -5,7 +5,7 @@
 For more details and further functionality, please refer to the [usage](docs/usage.md) and [output](docs/output.md) documentations.
 
 > [!IMPORTANT]
-> LongNonCoder is compatible Ensembl reference genomes and annotations from the following organisms:
+> LongNonCoder is compatible Ensembl or GENCODE reference genomes and annotations from the following organisms:
 > *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.*
 >
 >  **In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
