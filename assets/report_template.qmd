@@ -113,13 +113,66 @@ library(viridis)
 
 ## Overall Assembly Statistics
 
-This section presents a quantitative overview of the transcriptome assembly. We use the output from the **Bambu** [^1] software to summarize the total number of genes and transcripts that were detected and quantified.
+This section presents a quantitative overview of the transcriptome assembly. We use the output from the **Bambu** [^1] software to summarize the results below, and report metadata of genes and transcripts that were detected and quantified.
 
 [^1]: Chen, Ying, et al. "Context-aware transcript quantification from long-read RNA-seq data with Bambu." Nature methods 20.8 (2023): 1187-1195. https://doi.org/10.1038/s41592-023-01908-w
 
-### Transcriptome Assembly Summary
+### Expression Analysis and Sample Correlation (Raw assembly)
 
-The first step is to read the primary output files from Bambu to count the total number of validated genes and transcripts. We categorize these into three groups:
+To assess the quality of the expression data and the relationships between samples, we perform correlation analysis and Principal Component Analysis (PCA).
+
+#### Gene-Level Expression Heatmap
+
+The heatmap below visualizes the **Spearman correlation** of gene expression between all pairs of samples. A high correlation (closer to 1) indicates that the samples have similar gene expression profiles.
+
+```{r}
+#| fig-cap: "**Figure 1: Gene-Level Sample Correlation.** This heatmap shows the Spearman correlation coefficient between samples based on their gene expression profiles. The color scale indicates the strength of the correlation, with warmer colors representing higher similarity."
+knitr::include_graphics(params$plot_heatmap_gene)
+```
+
+#### Transcript-Level Expression Heatmap
+
+Similarly, this heatmap shows the **Spearman correlation** between all pairs of samples based on **transcript-level** expression. This provides a more granular view and can reveal sample differences driven by isoform usage rather than overall gene expression.
+
+```{r}
+#| fig-cap: "**Figure 2: Transcript-Level Sample Correlation.** This heatmap displays the Spearman correlation between samples based on their transcript expression profiles, offering a detailed view of isoform-level similarity."
+knitr::include_graphics(params$plot_heatmap_tcpt)
+```
+
+#### Principal Component Analysis (PCA)
+
+Remember that the plots are generated automatically, which means if you have too many samples and groups, there is a chance that the PCA PNG will not fit the entire plot. You can adjust the sizes of the plots at `bin/bambu.R` from lines `149-170` an rerun the pipeline with the parameter `-resume`. For example: `nextflow run main.nf -c myfile.config -profile large,singularity -resume`.
+
+```{r}
+#| fig-cap:
+#|   - "**Figure 3: PCA of Samples by Group.** This plot shows the principal components of the samples, colored by their experimental group."
+
+knitr::include_graphics(params$plot_pca_grouped)
+```
+
+```{r}
+#| fig-cap:
+#|   - "**Figure 4: PCA of Individual Samples.** This plot shows the same PCA but with each individual sample labeled."
+
+knitr::include_graphics(params$plot_pca)
+```
+
+### Curated transcriptome Assembly Summary
+
+::: callout-note
+Downstream to the assembly, novel transcripts were submitted to coding potential prediction with RNAmining [^2] and were compared to the reference annotations by GffCompare [^3]. The assembly went through validation under the `tx_annotation` submodules. Any transcripts **NOT** matching the following criteria were filtered out:
+
+- Length ≥ 200bp
+
+- Classified as intergenic (`u`), intronic (`i`), antisense (`x`), multi-exonic matching at least 1 reference splice junction (`j`) or intron retention (`m` and `n`) by GffCompare (`class_codes`).
+
+- Assembled according to a known strand direction (+/-).
+:::
+
+[^2]: Ramos, Thaís AR, et al. "RNAmining: A machine learning stand-alone and web server tool for RNA coding potential prediction." F1000Research 10 (2021): 323. https://doi.org/10.12688/f1000research.52350.2
+[^3]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1. 
+
+Now, with these curated datasets, we report the total final number of genes and transcripts. We categorize these into three groups:
 
 -   **Total:** All unique features identified.
 -   **Annotated:** Features that match an existing reference annotation (e.g., Ensembl). These have IDs starting with `ENS`.
@@ -189,7 +242,7 @@ bambu_df$Bambu <- factor(bambu_df$Bambu, levels = rev(c("genes", "transcripts", 
 
 ```{r}
 #| label: plot-bambu-gene-transcript-stats
-#| fig-cap: "**Figure 1: Summary of Assembled Genes and Transcripts.** This figure displays the total counts of genes (A) and various categories of transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
+#| fig-cap: "**Figure 5: Summary of Assembled Genes and Transcripts.** This figure displays the total counts of genes (A) and various categories of transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
 #| fig-width: 14
 #| fig-height: 5
 
@@ -344,7 +397,7 @@ if (length(results_biotype) > 0) {
 
 ```{r}
 #| label: plot-bambu-lnc-pc-stats
-#| fig-cap: "**Figure 1.2: Summary of Assembled Protein-coding and lncRNA Features.** Total counts of lncRNA and protein-coding genes (A), and transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
+#| fig-cap: "**Figure 5.1: Summary of Assembled Protein-coding and lncRNA Features.** Total counts of lncRNA and protein-coding genes (A), and transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
 #| fig-width: 32
 #| fig-height: 22
 
@@ -427,53 +480,13 @@ lnc_pc_bambu_plot <- plot_grid(
 lnc_pc_bambu_plot
 ```
 
-### Expression Analysis and Sample Correlation
-
-To assess the quality of the expression data and the relationships between samples, we perform correlation analysis and Principal Component Analysis (PCA).
-
-#### Gene-Level Expression Heatmap
-
-The heatmap below visualizes the **Spearman correlation** of gene expression between all pairs of samples. A high correlation (closer to 1) indicates that the samples have similar gene expression profiles.
-
-```{r}
-#| fig-cap: "**Figure 2: Gene-Level Sample Correlation.** This heatmap shows the Spearman correlation coefficient between samples based on their gene expression profiles. The color scale indicates the strength of the correlation, with warmer colors representing higher similarity."
-knitr::include_graphics(params$plot_heatmap_gene)
-```
-
-#### Transcript-Level Expression Heatmap
-
-Similarly, this heatmap shows the **Spearman correlation** between all pairs of samples based on **transcript-level** expression. This provides a more granular view and can reveal sample differences driven by isoform usage rather than overall gene expression.
-
-```{r}
-#| fig-cap: "**Figure 3: Transcript-Level Sample Correlation.** This heatmap displays the Spearman correlation between samples based on their transcript expression profiles, offering a detailed view of isoform-level similarity."
-knitr::include_graphics(params$plot_heatmap_tcpt)
-```
-
-#### Principal Component Analysis (PCA)
-
-Remember that the plots are generated automatically, which means if you have too many samples and groups, there is a chance that the PCA PNG will not fit the entire plot. You can adjust the sizes of the plots at `bin/bambu.R` from lines `149-170` an rerun the pipeline with the parameter `-resume`. For example: `nextflow run main.nf -c myfile.config -profile large,singularity -resume`.
-
-```{r}
-#| fig-cap:
-#|   - "**Figure 4: PCA of Samples by Group.** This plot shows the principal components of the samples, colored by their experimental group."
-
-knitr::include_graphics(params$plot_pca_grouped)
-```
-
-```{r}
-#| fig-cap:
-#|   - "**Figure 5: PCA of Individual Samples.** This plot shows the same PCA but with each individual sample labeled."
-
-knitr::include_graphics(params$plot_pca)
-```
-
 ------------------------------------------------------------------------
 
 ## Annotated RNAs Overview
 
-In this section, we focus exclusively on the **annotated** portion of the transcriptome. These are transcripts that match known entries in public databases. By analyzing their biotypes, lengths, and exon structures, we can understand the composition of the known transcriptome in our samples and establish a baseline for comparison with novel transcripts. For this crucial step, we utilize the package **biomaRt**[^2].
+In this section, we focus exclusively on the **annotated** portion of the transcriptome. These are transcripts that match known entries in public databases. By analyzing their biotypes, lengths, and exon structures, we can understand the composition of the known transcriptome in our samples and establish a baseline for comparison with novel transcripts. For this crucial step, we utilize the package **biomaRt**[^4].
 
-[^2]: Durinck, Steffen, et al. "BioMart and Bioconductor: a powerful link between biological databases and microarray data analysis." Bioinformatics 21.16 (2005): 3439-3440. https://doi.org/10.1093/bioinformatics/bti525
+[^4]: Durinck, Steffen, et al. "BioMart and Bioconductor: a powerful link between biological databases and microarray data analysis." Bioinformatics 21.16 (2005): 3439-3440. https://doi.org/10.1093/bioinformatics/bti525
 
 ### Biotype Distribution Analysis
 
@@ -519,7 +532,7 @@ p7 <- create_plot(Tcell_RNAs, gene_biotype, transcript_biotype, "TCR element RNA
 p8 <- create_plot(IG_RNAs, gene_biotype, transcript_biotype, "Immunoglobulin element RNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
 ```
 
-### Overview of Major RNA Categories
+#### Overview of Major RNA Categories
 
 The plots below summarize the counts of transcripts grouped into four major categories. The y-axis is on a log10 scale to accommodate the wide range of counts.
 
@@ -533,7 +546,7 @@ panel1 <- plot_grid(p1, p2, p3, p4, ncol = 2, rel_widths = c(1.3, 1), labels = "
 panel1
 ```
 
-### Detailed View of Other RNA Categories
+**Detailed View of Other RNA Categories**
 
 This panel provides a more detailed breakdown of the diverse and less common RNA biotypes, including pseudogenes and elements related to the immune system.
 
@@ -549,7 +562,7 @@ panel2 <- plot_grid(top_row_panel2, bottom_row_panel2, nrow = 2, rel_heights = c
 panel2
 ```
 
-### Gene Biotype Diversity Across Chromosomes
+#### Gene Biotype Diversity Across Chromosomes
 
 This visualization maps the distribution of different gene biotypes across all chromosomes, revealing genomic hotspots for certain types of genes.
 
@@ -592,7 +605,7 @@ p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
 p9
 ```
 
-#### Transcript Length Analysis
+### Transcript Length Analysis
 
 Here, we investigate the length of transcripts across different biotypes.
 
@@ -631,7 +644,7 @@ panel3 <- plot_grid(p10, p11, p12, nrow = 3, labels="AUTO", label_size = 14, lab
 panel3
 ```
 
-#### Exon Structure Analysis
+### Exon Structure Analysis
 
 ```{r}
 #| label: prep-exon-data
@@ -652,7 +665,7 @@ p14 <- ggplot(ann_pc_txome, aes(x = gene_biotype, y = num_exons, fill = transcri
 p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across lncRNA transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10() + scale_fill_discrete(labels = paste0(median_lnc_exnum$transcript_biotype, " (", round(median_lnc_exnum$median_exnum, 2), ")"))
 ```
 
-### Exon Number Comparison
+#### Exon Number Comparison
 
 The number of exons per transcript is compared for protein-coding genes versus lncRNAs.
 
@@ -676,7 +689,7 @@ panel4 <- plot_grid(
 panel4
 ```
 
-### Mono- vs. Multi-exonic Transcripts
+#### Mono- vs. Multi-exonic Transcripts
 
 ```{r}
 #| label: plot-mono-multi-exon-analysis
@@ -713,7 +726,7 @@ p16
 p17
 ```
 
-### Exon Number vs. Transcript Length
+#### Exon Number vs. Transcript Length
 
 A 2D density plot helps visualize the relationship between the number of exons in a transcript and its total length for both protein-coding and lncRNA genes.
 
@@ -731,7 +744,7 @@ p18 <- ggplot(ann_pc_lnc_txome, aes(x = num_exons, y = transcript_length)) +
 p18
 ```
 
-### Individual Exon Length
+#### Individual Exon Length
 
 ```{r}
 ann_pc_exon <- read.csv(params$protein_coding_exonlength)
@@ -777,13 +790,9 @@ This section focuses on the characterization of newly identified protein-coding 
 
 > **About the Tools:**
 >
-> -   **GFFRead:** [^3] This tool is used to transform the GTF annotation of the novel transcripts into a FASTA file based on a reference annotation.
+> -   **GFFRead:** This tool is used to transform the GTF annotation of the novel transcripts into a FASTA file based on a reference annotation.
 > -   **GFFCompare:** This tool is used to compare the assembled novel transcripts (from Bambu) against a reference annotation file. It classifies each novel transcript based on its relationship to known transcripts (e.g., a novel isoform of a known gene, a transcript in an intergenic region, etc).
-> -   **RNAmining:** [^4] This tool analyzes the sequence of novel transcripts to predict whether they are likely to be protein-coding or non-coding (like lncRNAs).
-
-[^3]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1
-
-[^4]: Ramos, Thaís AR, et al. "RNAmining: A machine learning stand-alone and web server tool for RNA coding potential prediction." F1000Research 10 (2021): 323. https://doi.org/10.12688/f1000research.52350.2
+> -   **RNAmining:** This tool analyzes the sequence of novel transcripts to predict whether they are likely to be protein-coding or non-coding (like lncRNAs).
 
 ### Biotype and Classification of Novel Transcripts
 
@@ -812,7 +821,7 @@ scale_y_log10()
 p20
 ```
 
-### Chromosomal Distribution of Novel Transcripts
+#### Chromosomal Distribution of Novel Transcripts
 
 ```{r}
 #| label: prep-novel-chr-data
@@ -853,7 +862,7 @@ p21 <- ggplot(chr_tb_novel, aes(x = biotype, y = count)) +
 p21
 ```
 
-### Transcript Length and Exon Structure of Novel RNAs
+### Transcript Length Analysis
 
 ```{r}
 #| label: prep-novel-length-exon-data
@@ -877,8 +886,6 @@ p24 <- novel_tx %>% filter(biotype == "novel lncRNA") %>%
   scale_y_log10() + scale_fill_discrete(labels = paste0(median_lnc_novel$classification, " (", round(median_lnc_novel$median_length_novel, 2), ")"))
 ```
 
-#### Transcript Length Analysis
-
 ```{r}
 #| label: plot-panel5
 #| fig-cap: "**Figure 17: Length Distribution of Novel Transcripts.** (A) Compares the overall length of novel protein-coding vs. novel lncRNA transcripts. (B) and (C) provide a more detailed view, showing length distributions for each GFFCompare classification within the novel protein-coding and lncRNA categories, respectively."
@@ -889,7 +896,9 @@ panel5 <- plot_grid(p22, p23, p24, nrow = 3, labels="AUTO", label_size = 14, lab
 panel5
 ```
 
-#### Exon Number and Structure
+### Exon Structure Analysis
+
+#### Exon numbers & Mono- vs. Multi-exonic Transcripts
 
 ```{r}
 #| label: prep-novel-exon-structure
@@ -969,7 +978,7 @@ p26
 
 p27
 ```
-
+#### Length of mono vs multi-exonic transcripts
 ```{r}
 #| fig-cap:
 #|   - "**Figure 21: Length of Mono- vs. Multi-exonic Novel Transcripts.** This plot compares the final transcript length of mono- and multi-exonic novel transcripts."
