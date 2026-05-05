@@ -929,12 +929,23 @@ p26 <- ggplot(novel_tx, aes(x = biotype, y = num_exons, fill = biotype)) +
   scale_y_log10() + scale_fill_discrete(labels = paste0(median_exnum_novel$biotype, " (", round(median_exnum_novel$median_exnum, 2), ")"))
 
 median_exnum_class_novel <- novel_tx %>% group_by(biotype, classification) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
-p27 <- ggplot(novel_tx, aes(x = classification, y = num_exons, fill = classification)) +
-  geom_boxplot() + facet_wrap(~biotype, nrow=2) + theme(plot.margin = margin(1, 1, 1, 1, "cm"), axis.text.x = element_text(angle = 90, vjust = 0.3, hjust =1)) +
-  labs(title = "Number of exons across novel transcripts within subtypes", x = "Classification", y = "Exon number (log10 scale)", fill = "Classification\n(total median number)") +
+p27 <- ggplot(novel_tx, aes(x = classification, y = num_exons, fill = paste(biotype, classification))) +
+  geom_boxplot() + 
+  facet_wrap(~biotype, nrow = 2, scales = "free_x") + 
+  theme(plot.margin = margin(1, 1, 1, 1, "cm"),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank()) +
+  labs(
+    title = "Number of exons across novel transcripts within subtypes", 
+    x = "Classification", 
+    y = "Exon number (log10 scale)", 
+    fill = "Classification\n(total median number)"
+  ) +
   scale_y_log10() +
-scale_fill_discrete(labels = paste0(median_exnum_class_novel$classification, " (", 
-                                    round(median_exnum_class_novel$median_exnum, 2), ")"))
+  scale_fill_discrete(labels = paste0(
+      median_exnum_class_novel$biotype, " ",
+      median_exnum_class_novel$classification, " (",
+      round(median_exnum_class_novel$median_exnum, 2), ")"))
 
 # plot exon structure class length
 
