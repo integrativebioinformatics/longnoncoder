@@ -34,7 +34,7 @@ include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_long
 //
 // WORKFLOW: Run main analysis pipeline depending on type of input
 //
-workflow NXF_LONGNONCODER {
+workflow RUN {
 
     take:
     samplesheet // channel: samplesheet read in from --input
@@ -78,7 +78,7 @@ workflow {
     //
     // WORKFLOW: Run main workflow
     //
-    NXF_LONGNONCODER (
+    RUN (
         PIPELINE_INITIALISATION.out.samplesheet
     )
 
@@ -88,7 +88,7 @@ workflow {
     PIPELINE_COMPLETION (
         params.outdir,
         params.monochrome_logs,
-        NXF_LONGNONCODER.out.multiqc_report
+        RUN.out.multiqc_report
     )
 }
 
