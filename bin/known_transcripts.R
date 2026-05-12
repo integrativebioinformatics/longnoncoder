@@ -61,25 +61,27 @@ cat("Connecting to Ensembl biomaRt...\n")
 
 ensembl <- useEnsembl(biomart="genes", dataset=organism, version=ensembl_version)
 
-attributes <- c("chromosome_name","ensembl_gene_id", "ensembl_transcript_id",
-                "external_transcript_name","external_gene_name", "strand",
-                "transcript_start", "transcript_end",
-                "transcript_length", "gene_biotype", "transcript_biotype")
-
-filters <- "ensembl_transcript_id"
+attributes <- c(
+    "chromosome_name",
+    "ensembl_gene_id", "ensembl_gene_id_version",
+    "ensembl_transcript_id", "ensembl_transcript_id_version",
+    "external_transcript_name", "external_gene_name",
+    "strand", "transcript_start", "transcript_end",
+    "transcript_length", "gene_biotype", "transcript_biotype"
+)
 
 cat("Retrieving transcript metadata from biomaRt...\n")
 
-# Clean Ensembl transcript IDs (remove version if present)
+# Verify Ensembl transcript IDs
 if (any(grepl("\\.", ens_ids))) {
-  ens_ids_clean <- sub("\\..*$", "", ens_ids)
-  warning("Transcript IDs contained version suffix (e.g., .1, .2). Versions were removed for Ensembl query.")
+    version_suffix <- TRUE
+    filters <- "ensembl_transcript_id_version"
+    ens_tx <- getBM(attributes = attributes, filters = filters, values = ens_ids, mart = ensembl)
 } else {
-  ens_ids_clean <- ens_ids
-  message("Transcript IDs did not contain version suffix. Using as it is.")
+    version_suffix <- FALSE
+    filters <- "ensembl_transcript_id"
+    ens_tx <- getBM(attributes = attributes, filters = filters, values = ens_ids, mart = ensembl)
 }
-
-ens_tx <- getBM(attributes=attributes, filters=filters, values=ens_ids_clean, mart=ensembl)
 
 # Fix strand notation
 ens_tx$strand <- ifelse(ens_tx$strand=="-1", "-", "+")
@@ -91,11 +93,15 @@ cat("Written annotated_transcriptome_metadata.csv\n")
 # Process lncRNAs
 cat("Processing lncRNAs...\n")
 ens_lnc <- ens_tx[ens_tx$gene_biotype=="lncRNA", ]
-ens_lnc_ids <- ens_lnc$ensembl_transcript_id 
+if (version_suffix == TRUE) {
+    ens_lnc_ids <- ens_lnc$ensembl_transcript_id_version
+} else {
+    ens_lnc_ids <- ens_lnc$ensembl_transcript_id
+}
 
 if (length(ens_lnc_ids) > 0) {
     # Get exon information for lncRNAs
-    exon_attributes <- c("chromosome_name","ensembl_transcript_id","ensembl_exon_id", 
+    exon_attributes <- c("chromosome_name", "ensembl_transcript_id", "ensembl_transcript_id_version", "ensembl_exon_id", 
                         "exon_chrom_start", "exon_chrom_end")
     
     exon_ens_lnc <- getBM(attributes=exon_attributes, filters=filters, 
@@ -103,11 +109,11 @@ if (length(ens_lnc_ids) > 0) {
     
     # Calculate the number of exons per transcript
     exon_counts <- exon_ens_lnc %>%
-        group_by(ensembl_transcript_id) %>%
+        group_by(ensembl_transcript_id_version) %>%
         summarize(num_exons = n_distinct(ensembl_exon_id), .groups = 'drop')
     
-    ens_lnc <- merge(ens_lnc, exon_counts, by.x="ensembl_transcript_id", 
-                    by.y="ensembl_transcript_id", all.x=TRUE)
+    ens_lnc <- merge(ens_lnc, exon_counts, by.x="ensembl_transcript_id_version", 
+                    by.y="ensembl_transcript_id_version", all.x=TRUE)
     
     write.csv(ens_lnc, "annotated_lncRNAs_metadata.csv", row.names=FALSE)
     cat("Written annotated_lncRNAs_metadata.csv\n")
@@ -122,6 +128,7 @@ if (length(ens_lnc_ids) > 0) {
         
         exon_lengths <- data.frame(
             ensembl_transcript_id = exons_gr$ensembl_transcript_id,
+            ensembl_transcript_id_version = exons_gr$ensembl_transcript_id_version,
             ensembl_exon_id = exons_gr$ensembl_exon_id,
             width = width(exons_gr)
         ) 
@@ -142,11 +149,15 @@ if (length(ens_lnc_ids) > 0) {
 # Process protein-coding transcripts
 cat("Processing protein-coding transcripts...\n")
 ens_pc <- ens_tx[ens_tx$gene_biotype=="protein_coding", ]
-ens_pc_ids <- ens_pc$ensembl_transcript_id 
+if (version_suffix == TRUE) {
+    ens_pc_ids <- ens_pc$ensembl_transcript_id_version
+} else {
+    ens_pc_ids <- ens_pc$ensembl_transcript_id
+}
 
 if (length(ens_pc_ids) > 0) {
     # Get exon information for protein-coding transcripts
-    exon_attributes <- c("chromosome_name","ensembl_transcript_id","ensembl_exon_id", 
+    exon_attributes <- c("chromosome_name", "ensembl_transcript_id", "ensembl_transcript_id_version", "ensembl_exon_id", 
                         "exon_chrom_start", "exon_chrom_end")
     
     exon_ens_pc <- getBM(attributes=exon_attributes, filters=filters, 
@@ -154,11 +165,11 @@ if (length(ens_pc_ids) > 0) {
     
     # Calculate the number of exons per transcript
     exon_counts_pc <- exon_ens_pc %>%
-        group_by(ensembl_transcript_id) %>%
+        group_by(ensembl_transcript_id_version) %>%
         summarize(num_exons = n_distinct(ensembl_exon_id), .groups = 'drop')
     
-    ens_pc <- merge(ens_pc, exon_counts_pc, by.x="ensembl_transcript_id", 
-                   by.y="ensembl_transcript_id", all.x=TRUE)
+    ens_pc <- merge(ens_pc, exon_counts_pc, by.x="ensembl_transcript_id_version", 
+                   by.y="ensembl_transcript_id_version", all.x=TRUE)
     
     write.csv(ens_pc, "annotated_protein-coding_metadata.csv", row.names=FALSE)
     cat("Written annotated_protein-coding_metadata.csv\n")
@@ -173,6 +184,7 @@ if (length(ens_pc_ids) > 0) {
         
         exon_lengths_pc <- data.frame(
             ensembl_transcript_id = exons_gr_pc$ensembl_transcript_id,
+            ensembl_transcript_id_version = exons_gr_pc$ensembl_transcript_id_version,
             ensembl_exon_id = exons_gr_pc$ensembl_exon_id,
             width = width(exons_gr_pc)
         ) 
@@ -194,21 +206,18 @@ if (length(ens_pc_ids) > 0) {
 cat("Processing GTF files and counts...\n")
 gtf <- import(opt$gtf_file)
 
-# Remover versão de transcript_id e gene_id se existir
-if ("transcript_id" %in% colnames(mcols(gtf))) {
-  gtf$transcript_id <- sub("\\..*$", "", gtf$transcript_id)
-  warning("Transcript IDs in GTF contained version suffix. Versions were removed.")
-}
+# Test not removing version suffixes
 
-if ("gene_id" %in% colnames(mcols(gtf))) {
-  gtf$gene_id <- sub("\\..*$", "", gtf$gene_id)
-  warning("Gene IDs in GTF contained version suffix. Versions were removed.")
+# get the IDs
+if (version_suffix == TRUE) {
+    tx_ids <- ens_tx$ensembl_transcript_id_version
+    lnc_ids <- ens_lnc$ensembl_transcript_id_version
+    pc_ids <- ens_pc$ensembl_transcript_id_version
+} else {
+    tx_ids <- ens_tx$ensembl_transcript_id
+    lnc_ids <- ens_lnc$ensembl_transcript_id
+    pc_ids <- ens_pc$ensembl_transcript_id
 }
-
-# Agora pode continuar normalmente
-tx_ids <- ens_tx$ensembl_transcript_id
-lnc_ids <- ens_lnc$ensembl_transcript_id
-pc_ids <- ens_pc$ensembl_transcript_id
 
 # Export annotated transcriptome GTF
 ann_tx_gtf <- subset(gtf, transcript_id %in% tx_ids)
@@ -245,7 +254,11 @@ if (length(pc_ids) > 0) {
 # Process gene counts
 cat("Processing gene counts...\n")
 gn <- read_table(opt$gene_counts, show_col_types = FALSE)
-gn_ids <- ens_tx$ensembl_gene_id
+if (version_suffix) {
+    gn_ids <- ens_tx$ensembl_gene_id_version
+} else {
+    gn_ids <- ens_tx$ensembl_gene_id
+}
 
 ann_gn_counts <- subset(gn, GENEID %in% gn_ids)
 write.csv(ann_gn_counts, "bambu_annotated_transcriptome_gene_counts.csv", row.names = FALSE)

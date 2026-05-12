@@ -139,11 +139,7 @@ workflow LONGNONCODER {
         KNOWN_TRANSCRIPTS.out.lncrna_exonlength,
         NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
         NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
-        NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
-        TRANSCRIPT_RECONSTRUCTION.out.h_gene,
-        TRANSCRIPT_RECONSTRUCTION.out.h_transcript,
-        TRANSCRIPT_RECONSTRUCTION.out.pca,
-        TRANSCRIPT_RECONSTRUCTION.out.pca_grouped
+        NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths
     )
     ch_versions = ch_versions.mix(RENDER_REPORT.out.versions)
     }

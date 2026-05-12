@@ -62,13 +62,14 @@ format:
 
             <footer class="report-footer">
                 <div class="footer-logos">
-                    <img src="https://imgur.com/Camgx6z.png" alt="Logos">
+                    <img src="https://imgur.com/cbsEIqD.png" alt="Logos">
                 </div>
             </footer>
 execute:
     echo: false
     warning: false
     message: false
+    error: true
 params:
     counts_genes: "BambuOutput_counts_gene_validated.txt"
     counts_transcript: "BambuOutput_counts_transcript_validated.txt"
@@ -82,10 +83,6 @@ params:
     novel_transcriptome_meta: "novel_pc_lnc_RNAs_metadata.csv"
     novel_lncrna_exonlength: "novel_lncRNA_exon_lengths.csv"
     novel_protein_coding_exonlength: "novel_protein-coding_exon_lengths.csv"
-    plot_heatmap_gene: "heatmap_gene.png"
-    plot_heatmap_tcpt: "heatmap_transcript.png"
-    plot_pca_grouped: "pca_grouped.png"
-    plot_pca: "pca.png"
 ---
 
 ## Introduction
@@ -113,67 +110,25 @@ library(viridis)
 
 ## Overall Assembly Statistics
 
-This section presents a quantitative overview of the transcriptome assembly. We use the output from the **Bambu** [^1] software to summarize the results below, and report metadata of genes and transcripts that were detected and quantified.
-
-[^1]: Chen, Ying, et al. "Context-aware transcript quantification from long-read RNA-seq data with Bambu." Nature methods 20.8 (2023): 1187-1195. https://doi.org/10.1038/s41592-023-01908-w
-
-### Expression Analysis and Sample Correlation (Raw assembly)
-
-To assess the quality of the expression data and the relationships between samples, we perform correlation analysis and Principal Component Analysis (PCA).
-
-#### Gene-Level Expression Heatmap
-
-The heatmap below visualizes the **Spearman correlation** of gene expression between all pairs of samples. A high correlation (closer to 1) indicates that the samples have similar gene expression profiles.
-
-```{r}
-#| fig-cap: "**Figure 1: Gene-Level Sample Correlation.** This heatmap shows the Spearman correlation coefficient between samples based on their gene expression profiles. The color scale indicates the strength of the correlation, with warmer colors representing higher similarity."
-knitr::include_graphics(params$plot_heatmap_gene)
-```
-
-#### Transcript-Level Expression Heatmap
-
-Similarly, this heatmap shows the **Spearman correlation** between all pairs of samples based on **transcript-level** expression. This provides a more granular view and can reveal sample differences driven by isoform usage rather than overall gene expression.
-
-```{r}
-#| fig-cap: "**Figure 2: Transcript-Level Sample Correlation.** This heatmap displays the Spearman correlation between samples based on their transcript expression profiles, offering a detailed view of isoform-level similarity."
-knitr::include_graphics(params$plot_heatmap_tcpt)
-```
-
-#### Principal Component Analysis (PCA)
-
-Remember that the plots are generated automatically, which means if you have too many samples and groups, there is a chance that the PCA PNG will not fit the entire plot. You can adjust the sizes of the plots at `bin/bambu.R` from lines `149-170` an rerun the pipeline with the parameter `-resume`. For example: `nextflow run main.nf -c myfile.config -profile large,singularity -resume`.
-
-```{r}
-#| fig-cap:
-#|   - "**Figure 3: PCA of Samples by Group.** This plot shows the principal components of the samples, colored by their experimental group."
-
-knitr::include_graphics(params$plot_pca_grouped)
-```
-
-```{r}
-#| fig-cap:
-#|   - "**Figure 4: PCA of Individual Samples.** This plot shows the same PCA but with each individual sample labeled."
-
-knitr::include_graphics(params$plot_pca)
-```
-
-### Curated transcriptome Assembly Summary
+This section presents a quantitative overview of the transcriptome assembly.
 
 ::: callout-note
-Downstream to the assembly, novel transcripts were submitted to coding potential prediction with RNAmining [^2] and were compared to the reference annotations by GffCompare [^3]. The assembly went through validation under the `tx_annotation` submodules. Any transcripts **NOT** matching the following criteria were filtered out:
+Downstream to the assembly with **Bambu** [^1], novel transcripts were submitted to coding potential prediction with **RNAmining** [^2] and were compared to the reference annotations by **GffCompare** [^3]. The assembly went through validation under the `tx_annotation` submodules. Any transcripts **NOT** matching the following criteria were filtered out:
 
 - Length ≥ 200bp
 
-- Classified as intergenic (`u`), intronic (`i`), antisense (`x`), multi-exonic matching at least 1 reference splice junction (`j`) or intron retention (`m` and `n`) by GffCompare (`class_codes`).
+- Classified as intergenic (`u`), intronic (`i`), antisense (`x`), multi-exonic matching at least 1 reference splice junction (`j`) or intron retained (`m` for all introns and `n` for partial number of introns) by GffCompare (`class_codes`).
 
 - Assembled according to a known strand direction (+/-).
 :::
+
+[^1]: Chen, Ying, et al. "Context-aware transcript quantification from long-read RNA-seq data with Bambu." Nature methods 20.8 (2023): 1187-1195. https://doi.org/10.1038/s41592-023-01908-w
 
 [^2]: Ramos, Thaís AR, et al. "RNAmining: A machine learning stand-alone and web server tool for RNA coding potential prediction." F1000Research 10 (2021): 323. https://doi.org/10.12688/f1000research.52350.2
 
 [^3]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1.
 
-Now, with these curated datasets, we report the total final number of genes and transcripts. We categorize these into three groups:
+Finally, based on the curated subsets from Bambu, we gathered all metadata of genes and transcripts that were detected and quantified. We categorize these into three groups:
 
 - **Total:** All unique features identified.
 - **Annotated:** Features that match an existing reference annotation (e.g., Ensembl). These have IDs starting with `ENS`.
@@ -306,26 +261,11 @@ tryCatch({
 novel_tx$biotype[novel_tx$prediction == "coding"] <- "novel protein_coding"
 novel_tx$biotype[novel_tx$prediction == "non-coding"] <- "novel lncRNA"
 
-# --- NEW FIX: Separate the raw transcript IDs first ---
+# Separate the raw transcript IDs first
 raw_nov_pc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "coding"])
 raw_nov_lnc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "non-coding"])
 
-# --- 3. Extract ID vectors for each category (Transcripts Only) ---
-ids <- list(
-  # Protein-coding
-  ann_pc_tx = unique(ann_txome$ensembl_transcript_id[ann_txome$gene_biotype == "protein_coding"]),
-  
-  # Filter to only include true novel features (starting with "Bambu")
-  nov_pc_tx = raw_nov_pc_tx[startsWith(raw_nov_pc_tx, "Bambu")],
-  
-  # lncRNAs
-  ann_lnc_tx = unique(ann_txome$ensembl_transcript_id[ann_txome$gene_biotype == "lncRNA"]),
-  
-  # Filter to only include true novel features (starting with "Bambu")
-  nov_lnc_tx = raw_nov_lnc_tx[startsWith(raw_nov_lnc_tx, "Bambu")]
-)
-
-# --- 4. Read Bambu IDs from the output files ---
+# --- 3. Read Bambu IDs from the output files ---
 bambu_ids <- list()
 for (name in names(bambu_outputs)) {
   if (name == "genes") next # Skip genes file for this section
@@ -334,6 +274,36 @@ for (name in names(bambu_outputs)) {
     data_ids <- read.delim(current_file, header = TRUE, sep = "\t")[[1]]
     bambu_ids[[name]] <- as.character(data_ids)
 }
+
+# Identify if annotated transcript IDs contain versioning suffix
+if (any(grepl("\\.", bambu_ids$transcripts))) {
+  version_suffix <- TRUE
+} else {
+  version_suffix <- FALSE
+}
+
+# --- 4. Extract ID vectors for each category (Transcripts Only) ---
+ids <- list(
+  # Protein-coding
+  ann_pc_tx = if (version_suffix) {
+    unique(ann_txome$ensembl_transcript_id_version[ann_txome$gene_biotype == "protein_coding"])
+  } else {
+    unique(ann_txome$ensembl_transcript_id[ann_txome$gene_biotype == "protein_coding"])
+  },
+  
+  # lncRNAs
+  ann_lnc_tx = if (version_suffix) {
+    unique(ann_txome$ensembl_transcript_id_version[ann_txome$gene_biotype == "lncRNA"])
+  } else {
+    unique(ann_txome$ensembl_transcript_id[ann_txome$gene_biotype == "lncRNA"])
+  },
+
+  # Filter to only include true novel protein-coding features (starting with "Bambu")
+  nov_pc_tx = raw_nov_pc_tx[startsWith(raw_nov_pc_tx, "Bambu")],
+  
+  # Filter to only include true novel lncRNA features (starting with "Bambu")
+  nov_lnc_tx = raw_nov_lnc_tx[startsWith(raw_nov_lnc_tx, "Bambu")]
+)
 
 # Helper function to count overlaps between Bambu outputs and our target IDs
 count_overlap <- function(bambu_set, target_ids) {
@@ -433,13 +403,13 @@ Biotypes classify RNAs based on their function or characteristics (e.g., `protei
 # Load and prepare data
 summary_data <- ann_txome %>% 
   group_by(gene_biotype, transcript_biotype) %>% 
-  summarise(count = n_distinct(ensembl_transcript_id), .groups = 'drop')
+  summarise(count = n_distinct(ensembl_transcript_id_version), .groups = 'drop')
 
 # Categorize biotypes
 protein_coding <- summary_data %>% filter(gene_biotype == "protein_coding")
 lncRNAs <- summary_data %>% filter(gene_biotype == "lncRNA")
 pseudogene_RNAs <- summary_data %>% filter(str_detect(gene_biotype, "pseudogene")) %>% mutate(category = "Pseudogene")
-small_RNAs <- summary_data %>% filter(gene_biotype %in% c("snoRNA", "snRNA", "scaRNA", "scRNA", "sRNA", "rRNA", "misc_RNA", "miRNA", "siRNA", "piRNA"))
+small_RNAs <- summary_data %>% filter(gene_biotype %in% c("snoRNA", "snRNA", "scaRNA", "sRNA", "rRNA", "misc_RNA", "miRNA"))
 Tcell_RNAs <- summary_data %>% filter(gene_biotype %in% c("TR_V_gene", "TR_J_gene", "TR_D_gene", "TR_C_gene")) %>% mutate(category = "TCR elements")
 IG_RNAs <- summary_data %>% filter(gene_biotype %in% c("IG_V_gene", "IG_J_gene", "IG_D_gene", "IG_C_gene")) %>% mutate(category = "Immunoglobulin elements")
 
@@ -531,11 +501,19 @@ panel2
 
 This visualization maps the distribution of different gene biotypes across all chromosomes, revealing genomic hotspots for certain types of genes.
 
+> This image might render differently according to data. Access `assets/report_template.qmd`, and adjust the `fig-height` and `fig-width` parameters to better fit the plot if needed. The code chunk generating this plot is `plot-gb-across-chr`.
+
 ```{r}
 #| label: prep-chr-data
 #| include: false
 
-chr_gb <- ann_txome %>% mutate(gene_biotype = if_else(str_detect(gene_biotype, "pseudogene"), "pseudogene", gene_biotype)) %>% group_by(chromosome_name, gene_biotype) %>% summarise(count = n(), .groups = 'drop')
+chr_gb <- ann_txome %>%
+  mutate(gene_biotype = if_else(str_detect(gene_biotype, "pseudogene"), "pseudogene", gene_biotype)) %>%
+  mutate(gene_biotype = if_else(gene_biotype %in% c("snoRNA", "snRNA", "scaRNA", "sRNA", "rRNA", "misc_RNA", "miRNA"), "small_RNA", gene_biotype)) %>%
+  mutate(gene_biotype = if_else(gene_biotype != "pseudogene" & gene_biotype != "small_RNA" & gene_biotype != "protein_coding" & gene_biotype != "lncRNA", "other", gene_biotype)) %>%
+  group_by(chromosome_name, gene_biotype) %>%
+  summarise(count = n(), .groups = "drop")
+chr_gb$gene_biotype <- factor(chr_gb$gene_biotype, levels = c("protein_coding", "lncRNA", "small_RNA", "pseudogene", "other"))
 chromosome_names <- unique(chr_gb$chromosome_name)
 numeric_chromosomes <- grep("^[0-9]+$", chromosome_names, value = TRUE)
 non_numeric_chromosomes <- setdiff(chromosome_names, numeric_chromosomes)
@@ -547,14 +525,14 @@ chr_gb$chromosome_name <- factor(chr_gb$chromosome_name, levels = chromosome_ord
 ```{r}
 #| label: plot-gb-across-chr
 #| fig-cap: "**Figure 8: Chromosomal Distribution of Gene Biotypes.** Each panel represents a chromosome, showing the count of transcript isoforms for each biotype found there. This provides a genome-wide view of how different functional classes of genes are organized and transcribed across chromosomes."
-#| fig-height: 45
+#| fig-height: 30
 #| fig-width: 35
 
 p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
   geom_bar(stat = "identity", aes(fill = gene_biotype), alpha = 1, width = 0.8, size = 6) +
   facet_wrap(~ chromosome_name, scales = "free_x", ncol = 5) +
   scale_fill_viridis_d(option = "viridis", guide = "none") +
-  scale_y_log10(labels = scales::comma_format()) +
+  scale_y_log10(labels = scales::comma_format(), expand = expansion(mult = c(0, 0.2))) +
   theme_minimal() +
   theme(
     panel.background = element_rect(fill = "white", color = "grey90"), panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
@@ -566,7 +544,7 @@ p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
     plot.margin = margin(1, 1, 1, 1, "cm"), panel.spacing = unit(1.2, "cm")
   ) +
   labs(title = "Gene Biotype Diversity Across Human Chromosomes", subtitle = "Distribution of different gene types per chromosome (log10 scale)", x = "Gene Biotype", y = "Count (log10 scale)") +
-  geom_text(aes(label = count), vjust = -0.5, size = 5, color = "black")
+  geom_text(aes(label = count), vjust = -0.5, size = 7, color = "black")
 p9
 ```
 
@@ -611,6 +589,8 @@ panel3
 
 ### Exon Structure Analysis
 
+The number and length of exons per transcript is compared for protein-coding versus lncRNAs.
+
 ```{r}
 #| label: prep-exon-data
 #| include: false
@@ -631,8 +611,6 @@ p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcr
 ```
 
 #### Exon Number Comparison
-
-The number of exons per transcript is compared for protein-coding genes versus lncRNAs.
 
 ```{r}
 #| label: plot-panel4
@@ -661,7 +639,7 @@ panel4
 #| include: false
 
 ann_pc_lnc_txome$class_exon <- ifelse(ann_pc_lnc_txome$num_exons == 1, "mono-exonic", "multi-exonic")
-count_momu <- ann_pc_lnc_txome %>% group_by(gene_biotype, transcript_biotype, class_exon) %>% summarise(count = n_distinct(ensembl_transcript_id), .groups = 'drop')
+count_momu <- ann_pc_lnc_txome %>% group_by(gene_biotype, transcript_biotype, class_exon) %>% summarise(count = n_distinct(ensembl_transcript_id_version), .groups = 'drop')
 
 p16 <- ggplot(count_momu, aes(x = transcript_biotype, y = count, fill = transcript_biotype)) +
   geom_bar(stat = "identity") + facet_grid(gene_biotype ~ class_exon, scales = "free_x", space = "free_x") +
@@ -722,8 +700,8 @@ ann_pc_lnc_exon <- rbind(ann_pc_exon, ann_lnc_exon)
 
 ann_pc_lnc_exon <- merge(
   ann_pc_lnc_exon,
-  ann_pc_lnc_txome[, c("ensembl_transcript_id", "class_exon")],
-  by = "ensembl_transcript_id",
+  ann_pc_lnc_txome[, c("ensembl_transcript_id_version", "class_exon")],
+  by = "ensembl_transcript_id_version",
   all.x = TRUE
 )
 ```
@@ -788,6 +766,10 @@ p20
 
 #### Chromosomal Distribution of Novel Transcripts
 
+This visualization maps the distribution of novel protein-coding and lncRNA transcripts across all chromosomes.
+
+> This image might render differently according to data. Access `assets/report_template.qmd`, and adjust the `fig-height` and `fig-width` parameters to better fit the plot if needed. The code chunk generating this plot is `plot-novel-across-chr`.
+
 ```{r}
 #| label: prep-novel-chr-data
 #| include: false
@@ -804,14 +786,14 @@ chr_tb_novel$seqnames <- factor(chr_tb_novel$seqnames, levels = chromosome_order
 ```{r}
 #| label: plot-novel-across-chr
 #| fig-cap: "**Figure 16: Chromosomal Distribution of Novel Transcripts.** Each panel represents a chromosome and shows the number of novel protein-coding and novel lncRNA transcripts discovered there."
-#| fig-width: 20
-#| fig-height: 40
+#| fig-width: 25
+#| fig-height: 30
 
 p21 <- ggplot(chr_tb_novel, aes(x = biotype, y = count)) +
   geom_bar(stat = "identity", aes(fill = biotype), alpha = 1, width = 0.8) +
   facet_wrap(~ seqnames, scales = "free_x", nrow = 5) +
   scale_fill_viridis_d(option = "viridis", guide = "none") +
-  scale_y_log10(labels = scales::comma_format()) +
+  scale_y_log10(labels = scales::comma_format(), expand = expansion(mult = c(0, 0.2))) +
   theme_minimal() +
   theme(
     panel.background = element_rect(fill = "white", color = "grey90"), panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
@@ -823,11 +805,13 @@ p21 <- ggplot(chr_tb_novel, aes(x = biotype, y = count)) +
     plot.margin = margin(1, 1, 1, 1, "cm"), panel.spacing = unit(1.0, "cm"), axis.ticks = element_blank()
   ) +
   labs(title = "Novel RNAs Diversity Across Chromosomes", subtitle = "Distribution of novel RNA biotypes per chromosome (log10 scale)", x = "Biotype", y = "Count (log10 scale)") +
-  geom_text(aes(label = count), vjust = -0.5, size = 4, color = "black")
+  geom_text(aes(label = count), vjust = -0.5, size = 6, color = "black")
 p21
 ```
 
 ### Transcript Length Analysis
+
+Here, we investigate the length of novel protein-coding and lncRNA transcripts across different biotypes.
 
 ```{r}
 #| label: prep-novel-length-exon-data
@@ -862,6 +846,8 @@ panel5
 ```
 
 ### Exon Structure Analysis
+
+The number and length of exons per transcript is compared for protein-coding versus lncRNA novel transcripts.
 
 #### Exon numbers & Mono- vs. Multi-exonic Transcripts
 

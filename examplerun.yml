@@ -31,4 +31,6 @@ organism: "Genus_species" # e.g. "Mus_musculus"
 ensembl_organism_dataset: "organism_gene_ensembl" # e.g. "mmusculus_gene_ensembl"
 
 # set ensembl release version number according to your reference files
+# If using GENCODE, check version compatibility (e.g. GENCODE GRCh38 v48 corresponds to Ensembl release 114)
+# In practical terms, the GENCODE annotation is essentially identical to the Ensembl annotation.
 ensembl_version: 114

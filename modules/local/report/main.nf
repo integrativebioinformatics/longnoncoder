@@ -23,12 +23,6 @@ process RENDER_REPORT {
         path(novel_lncrna_exonlength)
         path(novel_protein_coding_exonlength)
 
-        // plots
-        path(plot_heatmap_gene)
-        path(plot_heatmap_tcpt)
-        path(plot_pca_grouped)
-        path(plot_pca)
-
     output:
         path("*.html")                      , emit: report
         path("Bambu_assembly_summary.csv")  , emit: bambu_assembly_summary
@@ -63,10 +57,6 @@ process RENDER_REPORT {
             -P novel_transcriptome_meta:${novel_transcriptome_meta} \\
             -P novel_lncrna_exonlength:${novel_lncrna_exonlength} \\
             -P novel_protein_coding_exonlength:${novel_protein_coding_exonlength} \\
-            -P plot_heatmap_gene:${plot_heatmap_gene} \\
-            -P plot_heatmap_tcpt:${plot_heatmap_tcpt} \\
-            -P plot_pca_grouped:${plot_pca_grouped} \\
-            -P plot_pca:${plot_pca} \\
             --to html
 
         cat <<-END_VERSIONS > versions.yml

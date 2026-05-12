@@ -5,7 +5,7 @@
 For more details and further functionality, please refer to the [usage](docs/usage.md) and [output](docs/output.md) documentations.
 
 > [!IMPORTANT]
-> LongNonCoder is compatible Ensembl or GENCODE reference genomes and annotations from the following organisms:
+> LongNonCoder is compatible Ensembl or GENCODE reference genomes and annotations, but we use [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining") for protein-coding potential prediction, which is only compatible with the following list of organisms:
 > *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.*
 >
 >  **In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
@@ -20,7 +20,7 @@ We can describe each step of the workflow as follows:
 2.  Filtering and trimming ([chopper](https://github.com/wdecoster/chopper "wdecoster/chopper"))
 3.  Mapping to a genome reference ([minimap2](https://github.com/lh3/minimap2 "lh3/minimap2") and [samtools](https://github.com/samtools/samtools "samtools"))
 4.  Quality control of mapped reads ([NanoComp](https://github.com/wdecoster/nanocomp "wdecoster/nanocomp"))
-5.  Transcriptome Assembly ([Bambu](https://www.bioconductor.org/packages/release/bioc/html/bambu.html)))
+5.  Transcriptome Assembly ([Bambu](https://www.bioconductor.org/packages/release/bioc/html/bambu.html))
 6.  Compare novel transcripts to the annotation reference ([GffCompare](https://github.com/gpertea/gffcompare "gpertea/gffcompare"))
 7.  Convert novel transcripts `GTF` file to `FASTA` ([GffRead](https://github.com/gpertea/gffread "gpertea/gffread"))
 8.  Predict transcripts as protein-coding or non-coding ([RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining"))
@@ -34,7 +34,7 @@ We can describe each step of the workflow as follows:
 > If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
 
 > [!WARNING]
-> You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development.
+> You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development of the local modules.
 
 You can run an example test by following the instructions:
 
