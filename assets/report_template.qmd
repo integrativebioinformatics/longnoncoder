@@ -198,7 +198,7 @@ bambu_df$Bambu <- factor(bambu_df$Bambu, levels = rev(c("genes", "transcripts", 
 
 ```{r}
 #| label: plot-bambu-gene-transcript-stats
-#| fig-cap: "**Figure 5: Summary of Assembled Genes and Transcripts.** This figure displays the total counts of genes (A) and various categories of transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
+#| fig-cap: "**Figure 1: Summary of Assembled Genes and Transcripts.** This figure displays the total counts of genes (A) and various categories of transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
 #| fig-width: 14
 #| fig-height: 5
 
@@ -347,7 +347,7 @@ if (length(results_biotype) > 0) {
 
 ```{r}
 #| label: plot-bambu-lnc-pc-stats
-#| fig-cap: "**Figure 5.1: Summary of Assembled Protein-coding and lncRNA Transcripts.** Total counts of lncRNA and protein-coding transcripts identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
+#| fig-cap: "**Figure 1.1: Summary of Assembled Protein-coding and lncRNA Transcripts.** Total counts of lncRNA and protein-coding transcripts identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
 #| fig-width: 14
 #| fig-height: 5
 
@@ -473,7 +473,7 @@ The plots below summarize the counts of transcripts grouped into four major cate
 
 ```{r}
 #| label: plot-panel-1
-#| fig-cap: "**Figure 6: Transcript Counts for Major RNA Categories.** This panel shows the distribution of transcript biotypes within four main gene biotype categories: (A) Protein-coding RNAs, (B) Long non-coding RNAs (lncRNAs), (C) Small RNAs, and (D) a consolidated group of all other RNA types."
+#| fig-cap: "**Figure 2: Transcript Counts for Major RNA Categories.** This panel shows the distribution of transcript biotypes within four main gene biotype categories: (A) Protein-coding RNAs, (B) Long non-coding RNAs (lncRNAs), (C) Small RNAs, and (D) a consolidated group of all other RNA types."
 #| fig-width: 16
 #| fig-height: 12
 
@@ -487,7 +487,7 @@ This panel provides a more detailed breakdown of the diverse and less common RNA
 
 ```{r}
 #| label: plot-panel-2
-#| fig-cap: "**Figure 7: Detailed Breakdown of Other RNA Categories.** This figure provides a closer look at specific RNA families: (A) diversity within Pseudogene RNAs, (B) T-cell receptor (TCR) elements, (C) Immunoglobulin (IG) elements, and (D) other variety of RNA types."
+#| fig-cap: "**Figure 3: Detailed Breakdown of Other RNA Categories.** This figure provides a closer look at specific RNA families: (A) diversity within Pseudogene RNAs, (B) T-cell receptor (TCR) elements, (C) Immunoglobulin (IG) elements, and (D) other variety of RNA types."
 #| fig-width: 16
 #| fig-height: 12
 
@@ -524,7 +524,7 @@ chr_gb$chromosome_name <- factor(chr_gb$chromosome_name, levels = chromosome_ord
 
 ```{r}
 #| label: plot-gb-across-chr
-#| fig-cap: "**Figure 8: Chromosomal Distribution of Gene Biotypes.** Each panel represents a chromosome, showing the count of transcript isoforms for each biotype found there. This provides a genome-wide view of how different functional classes of genes are organized and transcribed across chromosomes."
+#| fig-cap: "**Figure 4: Chromosomal Distribution of Gene Biotypes.** Each panel represents a chromosome, showing the count of transcript isoforms for each biotype found there. This provides a genome-wide view of how different functional classes of genes are organized and transcribed across chromosomes."
 #| fig-height: 30
 #| fig-width: 35
 
@@ -579,7 +579,7 @@ p12 <- selected_tx %>% filter(gene_biotype == "lncRNA") %>%
 
 ```{r}
 #| label: plot-panel3
-#| fig-cap: "**Figure 9: Transcript Length Distributions.** This panel of boxplots compares transcript lengths (on a log10 scale) across different biotypes. (A) Compares major gene biotypes. (B) Details the lengths of different transcript types within the protein-coding category. (C) Does the same for lncRNAs. Median lengths for each category are shown in the legend."
+#| fig-cap: "**Figure 5: Transcript Length Distributions.** This panel of boxplots compares transcript lengths (on a log10 scale) across different biotypes. (A) Compares major gene biotypes. (B) Details the lengths of different transcript types within the protein-coding category. (C) Does the same for lncRNAs. Median lengths for each category are shown in the legend."
 #| fig-width: 8
 #| fig-height: 10
 
@@ -614,7 +614,7 @@ p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcr
 
 ```{r}
 #| label: plot-panel4
-#| fig-cap: "**Figure 10: Exon Number Distributions.** This panel examines the number of exons per transcript. (A) A direct comparison between protein-coding and lncRNA gene biotypes. (B) A detailed view of exon numbers for different protein-coding transcript types. (C) A similar detailed view for lncRNA transcript types."
+#| fig-cap: "**Figure 6: Exon Number Distributions.** This panel examines the number of exons per transcript. (A) A direct comparison between protein-coding and lncRNA gene biotypes. (B) A detailed view of exon numbers for different protein-coding transcript types. (C) A similar detailed view for lncRNA transcript types."
 #| fig-width: 8
 #| fig-height: 12
 
@@ -655,7 +655,7 @@ p17 <- ggplot(ann_pc_lnc_txome, aes(x = gene_biotype, y = transcript_length, fil
 
 ```{r}
 #| fig-cap:
-#|   - "**Figure 11: Counts of Mono- vs. Multi-exonic Transcripts.** This plot shows the number of mono- and multi-exonic transcripts for each transcript biotype, separated by protein-coding and lncRNA gene categories."
+#|   - "**Figure 7: Counts of Mono- vs. Multi-exonic Transcripts.** This plot shows the number of mono- and multi-exonic transcripts for each transcript biotype, separated by protein-coding and lncRNA gene categories."
 #| fig-width: 15
 #| fig-height: 12 
 
@@ -664,7 +664,7 @@ p16
 
 ```{r}
 #| fig-cap:
-#|   - "**Figure 12: Length of Mono- vs. Multi-exonic Transcripts.** This boxplot compares the final transcript length of mono- and multi-exonic transcripts within the protein-coding and lncRNA categories."
+#|   - "**Figure 8: Length of Mono- vs. Multi-exonic Transcripts.** This boxplot compares the final transcript length of mono- and multi-exonic transcripts within the protein-coding and lncRNA categories."
 
 p17
 ```
@@ -675,7 +675,7 @@ A 2D density plot helps visualize the relationship between the number of exons i
 
 ```{r}
 #| label: plot-density
-#| fig-cap: "**Figure 13: Relationship Between Exon Count and Transcript Length.** This plot shows the density of transcripts based on their exon count (x-axis) and total length (y-axis). Higher density (brighter color) indicates a common combination of exon number and length. The analysis is shown separately for protein-coding genes and lncRNAs."
+#| fig-cap: "**Figure 9: Relationship Between Exon Count and Transcript Length.** This plot shows the density of transcripts based on their exon count (x-axis) and total length (y-axis). Higher density (brighter color) indicates a common combination of exon number and length. The analysis is shown separately for protein-coding genes and lncRNAs."
 #| fig-width: 8
 #| fig-height: 6
 
@@ -708,7 +708,7 @@ ann_pc_lnc_exon <- merge(
 
 ```{r}
 #| label: plot-indiv-exlen
-#| fig-cap: "**Figure 14: Length of individual exons.** This boxplot compares the individual exon length of protein-coding and lncRNA transcripts, separeted by mono and multi-exonic structures."
+#| fig-cap: "**Figure 10: Length of individual exons.** This boxplot compares the individual exon length of protein-coding and lncRNA transcripts, separeted by mono and multi-exonic structures."
 #| fig-width: 8
 #| fig-height: 6
 
@@ -748,7 +748,7 @@ class_counts <- novel_tx %>% group_by(biotype, classification) %>% summarise(cou
 
 ```{r}
 #| label: plot-novel-biotypes-and-classes
-#| fig-cap: "**Figure 15: GFFCompare Classification of Novel Transcripts.** This bar chart shows the counts of novel protein-coding and lncRNA transcripts according to their GFFCompare classification code."
+#| fig-cap: "**Figure 11: GFFCompare Classification of Novel Transcripts.** This bar chart shows the counts of novel protein-coding and lncRNA transcripts according to their GFFCompare classification code."
 #| fig-width: 10
 #| fig-height: 8
 
@@ -785,7 +785,7 @@ chr_tb_novel$seqnames <- factor(chr_tb_novel$seqnames, levels = chromosome_order
 
 ```{r}
 #| label: plot-novel-across-chr
-#| fig-cap: "**Figure 16: Chromosomal Distribution of Novel Transcripts.** Each panel represents a chromosome and shows the number of novel protein-coding and novel lncRNA transcripts discovered there."
+#| fig-cap: "**Figure 12: Chromosomal Distribution of Novel Transcripts.** Each panel represents a chromosome and shows the number of novel protein-coding and novel lncRNA transcripts discovered there."
 #| fig-width: 25
 #| fig-height: 30
 
@@ -837,7 +837,7 @@ p24 <- novel_tx %>% filter(biotype == "novel lncRNA") %>%
 
 ```{r}
 #| label: plot-panel5
-#| fig-cap: "**Figure 17: Length Distribution of Novel Transcripts.** (A) Compares the overall length of novel protein-coding vs. novel lncRNA transcripts. (B) and (C) provide a more detailed view, showing length distributions for each GFFCompare classification within the novel protein-coding and lncRNA categories, respectively."
+#| fig-cap: "**Figure 13: Length Distribution of Novel Transcripts.** (A) Compares the overall length of novel protein-coding vs. novel lncRNA transcripts. (B) and (C) provide a more detailed view, showing length distributions for each GFFCompare classification within the novel protein-coding and lncRNA categories, respectively."
 #| fig-width: 10
 #| fig-height: 10
 
@@ -917,7 +917,7 @@ p29 <- ggplot(novel_tx, aes(x = classification, y = len, fill = classification))
 
 ```{r}
 #| fig-cap:
-#|   - "**Figure 18: Distribution of mono and multi-exonic structures in Novel Transcripts within its subtypes.** This barplot compares the distribution of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
+#|   - "**Figure 14: Distribution of mono and multi-exonic structures in Novel Transcripts within its subtypes.** This barplot compares the distribution of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
 #| fig-width: 10
 #| fig-height: 10
 
@@ -926,7 +926,7 @@ p25
 
 ```{r}
 #| fig-cap:
-#|   - "**Figure 19: Exon Number in Novel Transcripts.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA biotypes."
+#|   - "**Figure 15: Exon Number in Novel Transcripts.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA biotypes."
 
 
 p26
@@ -934,7 +934,7 @@ p26
 
 ```{r}
 #| fig-cap:
-#|   - "**Figure 20: Exon Number in Novel Transcripts within subtypes.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA subtypes."
+#|   - "**Figure 16: Exon Number in Novel Transcripts within subtypes.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA subtypes."
 #| fig-width: 10
 #| fig-height: 8
 
@@ -945,14 +945,14 @@ p27
 
 ```{r}
 #| fig-cap:
-#|   - "**Figure 21: Length of Mono- vs. Multi-exonic Novel Transcripts.** This plot compares the final transcript length of mono- and multi-exonic novel transcripts."
+#|   - "**Figure 17: Length of Mono- vs. Multi-exonic Novel Transcripts.** This plot compares the final transcript length of mono- and multi-exonic novel transcripts."
 
 p28
 ```
 
 ```{r}
 #| fig-cap:
-#|   - "**Figure 22: Length of mono and multi-exonic structures in Novel Transcripts within subtypes.** This boxplot compares the length of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
+#|   - "**Figure 18: Length of mono and multi-exonic structures in Novel Transcripts within subtypes.** This boxplot compares the length of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
 #| fig-width: 12
 #| fig-height: 8
 
@@ -965,7 +965,7 @@ A 2D density plot helps visualize the relationship between the number of exons i
 
 ```{r}
 #| label: plot-density-novel
-#| fig-cap: "**Figure 23: Exon Count vs. Transcript Length for Novel RNAs.** Similar to Figure 13, this 2D density plot shows the relationship between exon number and transcript length, but this time for the set of newly discovered transcripts."
+#| fig-cap: "**Figure 19: Exon Count vs. Transcript Length for Novel RNAs.** Similar to Figure 13, this 2D density plot shows the relationship between exon number and transcript length, but this time for the set of newly discovered transcripts."
 #| fig-width: 8
 #| fig-height: 6
 
@@ -1000,7 +1000,7 @@ exlen_novel <- merge(
 
 ```{r}
 #| label: plot-exlen-novel
-#| fig-cap: "**Figure 25: Length of individual exons across novel transcripts.** This boxplot compares the individual exon length of protein-coding and lncRNA novel transcripts, separated by mono and multi-exonic structures."
+#| fig-cap: "**Figure 20: Length of individual exons across novel transcripts.** This boxplot compares the individual exon length of protein-coding and lncRNA novel transcripts, separated by mono and multi-exonic structures."
 #| fig-width: 8
 #| fig-height: 6
 
