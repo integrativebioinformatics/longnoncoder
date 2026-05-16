@@ -1,5 +1,5 @@
 process NOVEL_TRANSCRIPTS {
-    tag "Report_Generation"
+    tag "Process Novel Transcripts"
     label 'process_single'
 
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
