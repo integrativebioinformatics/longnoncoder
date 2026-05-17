@@ -12,7 +12,7 @@ For more details and further functionality, please refer to the [usage](docs/usa
 
 **The workflow**
 
-![longnoncoder workflow](figures/LongNonCoder.drawio.png)
+![longnoncoder workflow](figures/LongNonCoder.drawio.svg)
 
 We can describe each step of the workflow as follows:
 
