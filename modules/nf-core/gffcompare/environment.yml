@@ -4,4 +4,4 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - "bioconda::rnamining=1.0.4"
+  - bioconda::gffcompare=0.12.6

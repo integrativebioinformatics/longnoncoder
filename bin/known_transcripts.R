@@ -14,7 +14,7 @@ suppressPackageStartupMessages({
     library(GenomicRanges)
     library(rtracklayer)
     library(optparse)
-    library(httr)	
+    library(httr2)	
 })
 
 # Define command line options

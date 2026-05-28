@@ -278,12 +278,12 @@
         "ensembl_version": {
             "type": "integer"
         },
-        "report_template": {
-            "type": "string",
-            "default": "${projectDir}/assets/report_template.qmd"
-        },
         "maxlen": {
             "type": "integer"
+        },
+        "ndr": {
+            "type": "number",
+            "description": "Bambu Novel Discovery Rate (NDR) threshold for novel transcript classification."
         }
     }
 }

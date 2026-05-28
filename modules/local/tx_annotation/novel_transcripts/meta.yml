@@ -1,0 +1,103 @@
+name: "novel_transcripts"
+description: Classify and annotate novel transcripts identified by Bambu using GFFcompare classification codes and RNAmining coding potential predictions.
+keywords:
+  - novel-transcripts
+  - lncRNA
+  - coding-potential
+  - transcript-classification
+  - annotation
+tools:
+  - r-base:
+      description: The R Project for Statistical Computing.
+      homepage: https://www.r-project.org/
+      documentation: https://cran.r-project.org/manuals.html
+      licence: ["GPL-2.0-or-later"]
+  - bioconductor-rtracklayer:
+      description: R interface to genome annotation files and the UCSC genome browser.
+      homepage: https://bioconductor.org/packages/release/bioc/html/rtracklayer.html
+      licence: ["Artistic-2.0"]
+
+input:
+  - bambu_gtf:
+      type: file
+      description: GTF file with novel transcripts from Bambu.
+      pattern: "*.gtf"
+  - compared_gtf:
+      type: file
+      description: Annotated GTF from GFFcompare.
+      pattern: "*.annotated.gtf"
+  - tmap_file:
+      type: file
+      description: GFFcompare tmap file mapping query to reference transcripts.
+      pattern: "*.tmap"
+  - rnamining_predictions:
+      type: file
+      description: Coding potential predictions from RNAmining.
+      pattern: "*.txt"
+  - tx_counts:
+      type: file
+      description: Transcript-level read counts from Bambu.
+      pattern: "*.txt"
+  - gene_counts:
+      type: file
+      description: Gene-level read counts from Bambu.
+      pattern: "*.txt"
+
+output:
+  - novel_transcripts_metadata:
+      type: file
+      description: Metadata CSV for all novel transcripts.
+      pattern: "novel_transcripts_metadata.csv"
+  - novel_lncrnas_metadata:
+      type: file
+      description: Metadata CSV for novel lncRNA transcripts.
+      pattern: "novel_lncRNAs_metadata.csv"
+  - novel_mrnas_metadata:
+      type: file
+      description: Metadata CSV for novel protein-coding transcripts.
+      pattern: "novel_protein-coding_metadata.csv"
+  - novel_combined_metadata:
+      type: file
+      description: Combined metadata CSV for novel lncRNAs and protein-coding transcripts.
+      pattern: "novel_pc_lnc_RNAs_metadata.csv"
+  - novel_lncrnas_gtf:
+      type: file
+      description: GTF containing novel lncRNA transcripts.
+      pattern: "novel_lncRNAs.gtf"
+  - novel_mrnas_gtf:
+      type: file
+      description: GTF containing novel protein-coding transcripts.
+      pattern: "novel_protein-coding.gtf"
+  - novel_gtf:
+      type: file
+      description: GTF containing all novel transcripts.
+      pattern: "novel_transcripts.gtf"
+  - novel_lncrna_exon_lengths:
+      type: file
+      description: Exon length distribution for novel lncRNA transcripts.
+      pattern: "novel_lncRNA_exon_lengths.csv"
+  - novel_mrna_exon_lengths:
+      type: file
+      description: Exon length distribution for novel protein-coding transcripts.
+      pattern: "novel_protein-coding_exon_lengths.csv"
+  - novel_tx_counts:
+      type: file
+      description: Transcript-level counts for novel lncRNAs and protein-coding transcripts.
+      pattern: "novel_pc_lnc_RNA_tx_counts.csv"
+  - novel_gene_counts:
+      type: file
+      description: Gene-level counts for novel lncRNAs and protein-coding transcripts.
+      pattern: "novel_pc_lnc_RNA_gene_counts.csv"
+  - versions:
+      type: file
+      description: File containing software versions.
+      pattern: "versions.yml"
+
+authors:
+  - "@borgessbarbara"
+  - "@gleisonm"
+  - "@lfreitasl"
+maintainers:
+  - "@borgessbarbara"
+  - "@gleisonm"
+  - "@lfreitasl"

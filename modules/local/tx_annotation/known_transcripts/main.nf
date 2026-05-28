@@ -2,9 +2,9 @@ process KNOWN_TRANSCRIPTS {
     tag "Processing_Known_Transcripts"
     label 'process_single'
 
-    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'docker://lfreitasl/bambu:3.8.0':
-        'docker.io/lfreitasl/bambu:3.8.0' }"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        'docker://itsiaguara/longnoncoder:test':
+        'docker.io/itsiaguara/longnoncoder:test' }"
 
     input:
     path transcript_counts
@@ -72,7 +72,7 @@ process KNOWN_TRANSCRIPTS {
         r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
         r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
-        r-httr: \$(Rscript -e "cat(as.character(packageVersion('httr')))")
+        r-httr2: \$(Rscript -e "cat(as.character(packageVersion('httr2')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")

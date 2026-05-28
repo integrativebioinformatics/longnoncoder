@@ -12,17 +12,17 @@ include { RNAMINING              } from '../../modules/local/rnamining/main'
 */
 
 workflow CLASSIFICATION_POTENTIAL_CODING {
-   take:
-       gtf
-       annotation 
-       reference    
-    
-   main:
-    ch_versions       = Channel.empty()
-    ch_annotated_gtf  = Channel.empty()
-    ch_tmap           = Channel.empty()
-    ch_predictions    = Channel.empty()
-    ch_fasta          = Channel.empty()
+    take:
+    gtf
+    annotation
+    reference
+
+    main:
+    ch_versions       = channel.empty()
+    ch_annotated_gtf  = channel.empty()
+    ch_tmap           = channel.empty()
+    ch_predictions    = channel.empty()
+    ch_fasta          = channel.empty()
 
     // Classification and potential coding of transcripts in the resulting GTF
 
@@ -39,7 +39,7 @@ workflow CLASSIFICATION_POTENTIAL_CODING {
         gtf,
         reference
     )
-    
+
     ch_gffread_fasta = ch_fasta.mix(GFFREAD.out.gffread_fasta)
     ch_versions = ch_versions.mix(GFFREAD.out.versions)
 
@@ -49,7 +49,7 @@ workflow CLASSIFICATION_POTENTIAL_CODING {
     ch_predictions = ch_predictions.mix(RNAMINING.out.preds)
     ch_versions = ch_versions.mix(RNAMINING.out.versions)
 
-   emit:
+    emit:
     annotated_gtf  = ch_annotated_gtf
     tmap           = ch_tmap
     gffread_fasta  = ch_gffread_fasta

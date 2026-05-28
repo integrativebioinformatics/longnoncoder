@@ -2,70 +2,56 @@ include { BAMBU } from '../../modules/local/bambu/main'
 
 workflow TRANSCRIPT_RECONSTRUCTION {
     take:
-        bams
-        reference
-        annotation
+    bams
+    reference
+    annotation
 
     main:
-    ch_versions              = Channel.empty()
-    ch_bamlist               = Channel.empty()
-    ch_samp_info             = Channel.empty()
-    ch_reference             = Channel.empty()
-    ch_annotation            = Channel.empty()
-    ch_assembled_new_gtf     = Channel.empty()
-    ch_assembled_all_gtf     = Channel.empty()
-    ch_unique_counts         = Channel.empty()
-    ch_tx_counts             = Channel.empty()
-    ch_gene_counts           = Channel.empty()
-    ch_CPM                   = Channel.empty()
-    ch_full_length           = Channel.empty()
-    ch_pca                   = Channel.empty()
-    ch_pca_grouped           = Channel.empty()
-    ch_h_transcript          = Channel.empty()
-    ch_h_gene                = Channel.empty()
-    ch_multiqc_all           = Channel.empty()
-
-    
+    ch_versions              = channel.empty()
+    ch_bamlist               = channel.empty()
+    ch_samp_info             = channel.empty()
+    ch_reference             = channel.empty()
+    ch_annotation            = channel.empty()
+    ch_assembled_new_gtf     = channel.empty()
+    ch_assembled_all_gtf     = channel.empty()
+    ch_unique_counts         = channel.empty()
+    ch_tx_counts             = channel.empty()
+    ch_gene_counts           = channel.empty()
+    ch_CPM                   = channel.empty()
+    ch_full_length           = channel.empty()
+    ch_pca                   = channel.empty()
+    ch_pca_grouped           = channel.empty()
+    ch_h_transcript          = channel.empty()
+    ch_h_gene                = channel.empty()
+    ch_multiqc_all           = channel.empty()
 
     // Setting channel for the reference
-    ch_reference  = Channel.fromPath(reference, checkIfExists: true)
-    ch_annotation = Channel.fromPath(annotation, checkIfExists: true)
-
-     
-    //Channel
-    //.fromPath(reference) // Replace with your file pattern
-    //.set {ch_reference}
-
-    // Setting channel for the annotation
-    //Channel
-    //.fromPath(annotation) // Replace with your file pattern
-    //.set {ch_annotation}
+    ch_reference  = channel.fromPath(reference, checkIfExists: true)
+    ch_annotation = channel.fromPath(annotation, checkIfExists: true)
 
     // Setting TSV file with sample information
     bams
         .map { meta, path -> [meta.group, path.getName()] }
         .collectFile(newLine: true) { item ->
-            [ "${item[0]}.txt", item[0] + '\t' + item[1] ]
+            ["${item[0]}.txt", item[0] + '\t' + item[1]]
         }
         .collectFile(name: 'sampinfo_samplesheet.tsv')
         .set { ch_samp_info }
-
 
     // Setting up the BAM list
     bams
         .map { meta, path -> [meta.group, path.toString()] }
         .collectFile(newLine: true) { item ->
-        ["${item[0]}.txt", item[1]]
+            ["${item[0]}.txt", item[1]]
         }
         .collectFile(name: 'bamlist.txt')
         .set { ch_bamlist }
-
 
     BAMBU (
         ch_bamlist,
         ch_reference,
         ch_annotation,
-        ch_samp_info
+        ch_samp_info,
     )
 
     BAMBU.out.gtf_new_transcripts
@@ -79,16 +65,16 @@ workflow TRANSCRIPT_RECONSTRUCTION {
 
     BAMBU.out.tx_counts
         .set { ch_tx_counts }
-    
+
     BAMBU.out.CPM
         .set { ch_CPM }
-    
+
     BAMBU.out.full_length
         .set { ch_full_length }
 
     BAMBU.out.unique_counts
         .set { ch_unique_counts }
-    
+
     BAMBU.out.h_gene
         .set { ch_h_gene }
 
@@ -103,9 +89,7 @@ workflow TRANSCRIPT_RECONSTRUCTION {
 
     ch_versions = ch_versions.mix(BAMBU.out.versions.ifEmpty(null))
 
-
     emit:
-    //multiqc = ch_multiqc_all
     versions            = ch_versions
     pca                 = ch_pca
     pca_grouped         = ch_pca_grouped

@@ -1,0 +1,105 @@
+name: "bambu"
+description: Transcript discovery and quantification from long-read RNA-seq using Bambu
+keywords:
+  - long-read
+  - transcriptomics
+  - transcript-discovery
+  - quantification
+  - nanopore
+tools:
+  - bambu:
+      description: Reference-guided transcript discovery and quantification for long read RNA-Seq data
+      homepage: https://github.com/GoekeLab/bambu
+      documentation: https://bioconductor.org/packages/release/bioc/html/bambu.html
+      doi: 10.1038/s41592-023-01908-w
+      licence: ["GPL-3.0-or-later"]
+
+input:
+  - - bam_list:
+        type: file
+        description: Text file containing paths to BAM files
+  - - reference:
+        type: file
+        description: Reference genome FASTA file
+        pattern: "*.{fa,fasta}"
+  - - annotation:
+        type: file
+        description: Reference annotation GTF file
+        pattern: "*.gtf"
+  - - sample_info:
+        type: file
+        description: TSV file with sample group information
+
+output:
+  - h_gene:
+      - path: "heatmap_gene.png"
+        type: file
+        description: Gene-level expression heatmap
+        pattern: "heatmap_gene.png"
+  - h_transcript:
+      - path: "heatmap_transcript.png"
+        type: file
+        description: Transcript-level expression heatmap
+        pattern: "heatmap_transcript.png"
+  - pca_grouped:
+      - path: "pca_grouped.png"
+        type: file
+        description: PCA plot coloured by sample group
+        pattern: "pca_grouped.png"
+  - pca:
+      - path: "pca.png"
+        type: file
+        description: PCA plot of all samples
+        pattern: "pca.png"
+  - tx_counts:
+      - path: "BambuOutput_counts_transcript.txt"
+        type: file
+        description: Transcript-level read counts
+        pattern: "BambuOutput_counts_transcript.txt"
+  - gene_counts:
+      - path: "BambuOutput_counts_gene.txt"
+        type: file
+        description: Gene-level read counts
+        pattern: "BambuOutput_counts_gene.txt"
+  - CPM:
+      - path: "BambuOutput_CPM_transcript.txt"
+        type: file
+        description: Transcript-level CPM values
+        pattern: "BambuOutput_CPM_transcript.txt"
+  - full_length:
+      - path: "BambuOutput_fullLengthCounts_transcript.txt"
+        type: file
+        description: Full-length transcript counts
+        pattern: "BambuOutput_fullLengthCounts_transcript.txt"
+  - unique_counts:
+      - path: "BambuOutput_uniqueCounts_transcript.txt"
+        type: file
+        description: Unique read counts per transcript
+        pattern: "BambuOutput_uniqueCounts_transcript.txt"
+  - gtf_new_transcripts:
+      - path: "bambu_novel_transcripts.gtf"
+        type: file
+        description: GTF containing novel transcripts discovered by Bambu
+        pattern: "bambu_novel_transcripts.gtf"
+  - gtf_all_transcripts:
+      - path: "BambuOutput_extended_annotations.gtf"
+        type: file
+        description: GTF containing all transcripts (known + novel)
+        pattern: "BambuOutput_extended_annotations.gtf"
+  - rds:
+      - path: "*.rds"
+        type: file
+        description: Bambu R object output
+        pattern: "*.rds"
+  - versions:
+      - path: "versions.yml"
+        type: file
+        description: File containing software versions
+        pattern: "versions.yml"
+
+authors:
+  - "@borgessbarbara"
+  - "@lfreitasl"
+maintainers:
+  - "@borgessbarbara"
+  - "@lfreitasl"

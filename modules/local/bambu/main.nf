@@ -2,10 +2,9 @@ process BAMBU {
     tag "Running Bambu"
     label 'process_high_memory'
 
-    // Note: the versions here need to match the versions used in the mulled container below and minimap2/index
-    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'docker://lfreitasl/bambu:3.8.0':
-        'docker.io/lfreitasl/bambu:3.8.0' }"
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
+        'docker://itsiaguara/longnoncoder:test':
+        'docker.io/itsiaguara/longnoncoder:test' }"
 
     input:
     val bam_list
@@ -33,7 +32,7 @@ process BAMBU {
     task.ext.when == null || task.ext.when
 
     script:
-
+    def args     = task.ext.args ? task.ext.args : "--ndr ${params.ndr}"
     """
     bambu.R \\
         -g $reference \\
@@ -41,7 +40,8 @@ process BAMBU {
         -b $bam_list \\
         -n $task.cpus \\
         -s $sample_info \\
-        -o .
+        -o . \\
+        $args
 
 
     cat <<-END_VERSIONS > versions.yml
@@ -60,7 +60,7 @@ process BAMBU {
     """
 
     stub:
-
+    def args     = task.ext.args ? task.ext.args : "--ndr ${params.ndr}"
     """
     touch heatmap_gene.png
     touch heatmap_transcript.png

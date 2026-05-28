@@ -2,8 +2,7 @@ process GFFCOMPARE {
     tag "Comparing_Gtfs"
     label 'process_low'
 
-    conda "${moduleDir}/environment.yml"
-    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
+    container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'https://depot.galaxyproject.org/singularity/gffcompare:0.12.6--h9f5acd7_0' :
         'biocontainers/gffcompare:0.12.6--h9f5acd7_0' }"
 

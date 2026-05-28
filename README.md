@@ -4,12 +4,6 @@
 
 For more details and further functionality, please refer to the [usage](docs/usage.md) and [output](docs/output.md) documentations.
 
-> [!IMPORTANT]
-> LongNonCoder is compatible Ensembl or GENCODE reference genomes and annotations, but we use [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining") for protein-coding potential prediction, which is only compatible with the following list of organisms:
-> *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.*
->
->  **In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
-
 **The workflow**
 
 ![longnoncoder workflow](figures/LongNonCoder.drawio.svg)
@@ -30,11 +24,18 @@ We can describe each step of the workflow as follows:
 
 ## Usage
 
-> [!NOTE]
-> If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
+LongNonCoder is compatible Ensembl or GENCODE reference genomes and annotations, and protein-coding potential prediction with [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining") only supports the following list of organisms:
+> *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.*
+
+**In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
 
 > [!WARNING]
-> You might be able to customize the modules and configuration to run the pipeline with Conda, although this is NOT recommended nor was evaluated during development of the local modules.
+> LongNonCoder is transitioning to the current strict syntax (version 26.04). Make sure to setup appropriate configuration. See the current documentation at [Seqera Docs](https://docs.seqera.io/nextflow/strict-syntax).
+
+### Nextflow setup and testing the pipeline
+
+> [!NOTE]
+> If you are new to Nextflow and nf-core, please refer to [this page](https://nf-co.re/docs/usage/installation) on how to set-up Nextflow. Make sure to [test your setup](https://nf-co.re/docs/usage/introduction#how-to-run-a-pipeline) with `-profile test` before running the workflow on actual data. The pipeline is compatible with Docker and Singularity/Apptainer.
 
 You can run an example test by following the instructions:
 
@@ -46,7 +47,7 @@ cd test_data
 
 Download and unzip the reference `FASTA` and `GTF` files, and also download the fastq.gz files:
 
-Make the file executable!!
+Make the file executable
 
 ``` bash
 chmod +x download-ref-fastq.sh
@@ -62,23 +63,29 @@ Add YOUR full path for the samples in the `samplesheet.csv` ([file](test_data/sa
 
 `home/user/longnoncoder/test_data/thesample.fastq.gz`
 
-Go back to the main directory and execute the test!
+Go back to the main directory and execute the test with appropriate container runtime!
 
 ``` bash
 cd ..
 ```
 
 ``` bash
-nextflow run main.nf -profile test,singularity -params-file test_data/testing.yml
+nextflow run main.nf -profile test,[container runtime] -params-file test_data/testing.yml
 ```
 
+Set the container runtime profile to `docker`, `singularity` or `apptainer`, according to your resources. LongNonCoder does **NOT** support nor recommend execution with `conda` environments for the local modules.
+
+In some cases, depending on your system's permissions and configuration regarding containers, you might need to set specific configurations before running. In that case, follow the instructions available at [Seqera Docs](https://docs.seqera.io/nextflow/reference/config).
+
+> *As long as you use the supported container runtimes and do not modify the pipeline architecture, LongNonCoder ensures ***reproducibility*** independently of your system's specific setup.*
+
 > [!WARNING]
-> Please provide pipeline parameters via the CLI or Nextflow `-params-file` option and input a `yaml` parameters file. Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
+> Please provide pipeline parameters via the CLI or input a `yaml` or `json`parameters file  via the Nextflow `-params-file` option (most recommended). Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration, ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
+
+
+LongNonCoder is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. If LongNonCoder presents any errors, this configuration allows you to restart the pipeline execution from the last successfull step by using the `-resume` parameter. The `work/` directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
 
 > [!TIP]
-> LongNonCoder is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. This directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
-
-> [!NOTE]
 > Copying large datasets can significantly take a long time to complete or occupy a large amount of disk space. If you require other setup to optimize resource usage, follow the instructions from the [Nextflow documentation](https://docs.seqera.io/nextflow/reference/process#publishdir) to change the `publishDir` setting in the [`nextflow.config`](nextflow.config) file.
 
 ## Citations

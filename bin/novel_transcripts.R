@@ -7,6 +7,7 @@ suppressPackageStartupMessages({
     library(rtracklayer)
     library(GenomicRanges)
     library(optparse)
+
 })
 
 # Define command line options
@@ -143,7 +144,7 @@ novel_tx_gtf <- subset(gtf, type == "transcript" & transcript_id %in% new_mRNA_l
 novel_exon_gtf <- subset(gtf, type == "exon" & transcript_id %in% new_mRNA_lncRNA$qry_id)
 novel_gtf <- c(novel_tx_gtf, novel_exon_gtf)
 novel_gtf <- novel_gtf[order(novel_gtf$transcript_id, novel_gtf$type == "transcript", decreasing = TRUE)]
-export(novel_gtf, "novel_transcripts.gtf")
+export(novel_gtf, "novel_transcripts_validated.gtf")
 
 # Get exon lengths
 cat("Calculating exon lengths...\n")
