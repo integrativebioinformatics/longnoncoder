@@ -15,7 +15,7 @@ include { QC_FILT                           } from '../subworkflows/local/qc'
 include { ALIGNMENT                         } from '../subworkflows/local/alignment'
 include { TRANSCRIPT_RECONSTRUCTION         } from '../subworkflows/local/transcript_reconstruction'
 include { CLASSIFICATION_POTENTIAL_CODING   } from '../subworkflows/local/classification_codingpotential.nf'
-include { paramsSummaryMap                  } from 'plugin/nf-validation'
+include { paramsSummaryMap                  } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc              } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML            } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { methodsDescriptionText            } from '../subworkflows/local/utils_nfcore_longnoncoder_pipeline'
@@ -155,7 +155,7 @@ workflow LONGNONCODER {
     def ch_multiqc_config                     = channel.fromPath("$projectDir/assets/multiqc_config.yml", checkIfExists: true)
     def ch_multiqc_custom_config              = params.multiqc_config ? channel.fromPath(params.multiqc_config, checkIfExists: true) : channel.empty()
     def ch_multiqc_logo                       = params.multiqc_logo ? channel.fromPath(params.multiqc_logo, checkIfExists: true) : channel.empty()
-    def summary_params                        = paramsSummaryMap(workflow, parameters_schema: "nextflow_schema.json")
+    def summary_params = paramsSummaryMap(workflow)
     def ch_workflow_summary                   = channel.value(paramsSummaryMultiqc(summary_params))
     def ch_multiqc_custom_methods_description = params.multiqc_methods_description ? file(params.multiqc_methods_description, checkIfExists: true) : file("$projectDir/assets/methods_description_template.yml", checkIfExists: true)
     def ch_methods_description                = channel.value(methodsDescriptionText(ch_multiqc_custom_methods_description))
