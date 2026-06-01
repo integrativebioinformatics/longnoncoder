@@ -3,8 +3,8 @@ process SUBSET_BAMBU_COUNTS {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test':
-        'docker.io/itsiaguara/longnoncoder:test' }"
+        'docker://itsiaguara/longnoncoder:test3':
+        'docker.io/itsiaguara/longnoncoder:test3' }"
 
     input:
     path counts_gene
@@ -14,11 +14,11 @@ process SUBSET_BAMBU_COUNTS {
     path unique_counts_transcript
 
     output:
-    path "BambuOutput_counts_gene_filtered.txt"                 , emit: counts_gene_filtered
-    path "BambuOutput_counts_transcript_filtered.txt"           , emit: counts_transcript_filtered
-    path "BambuOutput_CPM_transcript_filtered.txt"              , emit: cpm_transcript_filtered
-    path "BambuOutput_fullLengthCounts_transcript_filtered.txt" , emit: full_length_counts_transcript_filtered
-    path "BambuOutput_uniqueCounts_transcript_filtered.txt"     , emit: unique_counts_transcript_filtered
+    path "BambuOutput_counts_gene_subset.txt"                 , emit: counts_gene_subset
+    path "BambuOutput_counts_transcript_subset.txt"           , emit: counts_transcript_subset
+    path "BambuOutput_CPM_transcript_subset.txt"              , emit: cpm_transcript_subset
+    path "BambuOutput_fullLengthCounts_transcript_subset.txt" , emit: full_length_counts_transcript_subset
+    path "BambuOutput_uniqueCounts_transcript_subset.txt"     , emit: unique_counts_transcript_subset
     path "versions.yml"                                         , emit: versions
 
     when:
@@ -33,25 +33,26 @@ process SUBSET_BAMBU_COUNTS {
         --cpm_transcript ${cpm_transcript} \\
         --full_length ${full_length_counts_transcript} \\
         --unique ${unique_counts_transcript}
+        $args
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
+        mawk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
         bash: \$(bash --version | head -n1 | sed 's/GNU bash, version //; s/ .*//')
     END_VERSIONS
     """
 
     stub:
     """
-    touch BambuOutput_counts_gene_filtered.txt
-    touch BambuOutput_counts_transcript_filtered.txt
-    touch BambuOutput_CPM_transcript_filtered.txt
-    touch BambuOutput_fullLengthCounts_transcript_filtered.txt
-    touch BambuOutput_uniqueCounts_transcript_filtered.txt
+    touch BambuOutput_counts_gene_subset.txt
+    touch BambuOutput_counts_transcript_subset.txt
+    touch BambuOutput_CPM_transcript_subset.txt
+    touch BambuOutput_fullLengthCounts_transcript_subset.txt
+    touch BambuOutput_uniqueCounts_transcript_subset.txt
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
+        mawk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
         bash: \$(bash --version | head -n1 | sed 's/GNU bash, version //; s/ .*//')
     END_VERSIONS
     """

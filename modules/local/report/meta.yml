@@ -68,6 +68,10 @@ input:
       type: file
       description: Exon length distribution for novel protein-coding transcripts.
       pattern: "*.csv"
+  - qmd_report:
+      type: file
+      description: Quarto markdown report template file.
+      pattern: "*.qmd"
 
 output:
   - report:

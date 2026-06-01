@@ -1,12 +1,13 @@
-## integrativebioinformatics/longnoncoder <img src="figures/logo.svg" align=right height="200px"/>
+## integrativebioinformatics/pulposeq <img src="figures/logo.svg" align=right height="200px"/>
+[![Open in GitHub Codespaces](https://img.shields.io/badge/Open_In_GitHub_Codespaces-black?labelColor=grey&logo=github)](https://github.com/codespaces/new/integrativebioinformatics/pulposeq) [![Nextflow](https://img.shields.io/badge/version-%E2%89%A525.10.4-green?style=flat&logo=nextflow&logoColor=white&color=%230DC09D&link=https%3A%2F%2Fnextflow.io)](https://www.nextflow.io/) [![nf-core template version](https://img.shields.io/badge/nf--core_template-4.0.2-green?style=flat&logo=nfcore&logoColor=white&color=%2324B064&link=https%3A%2F%2Fnf-co.re)](https://github.com/nf-core/tools/releases/tag/4.0.2) [![run with docker](https://img.shields.io/badge/run%20with-docker-0db7ed?labelColor=000000&logo=docker)](https://www.docker.com/) [![run with singularity](https://img.shields.io/badge/run%20with-singularity-1d355c.svg?labelColor=000000)](https://sylabs.io/docs/)
 
-`LongNonCoder` is a Nextflow pipeline designed for isoform-level lncRNA discovery and characterization from long-read RNA-seq data. The workflow encompasses QC, mapping, transcriptome assembly and quantification, followed by a detailed final characterization of the entire transcriptome with particular emphasis on lncRNA structure and isoforms across known annotations and novel candidates.
+`pulposeq` is a Nextflow pipeline designed for isoform-level lncRNA discovery and characterization from long-read RNA-seq data. The workflow encompasses QC, mapping, transcriptome assembly and quantification, followed by a detailed final characterization of the entire transcriptome with particular emphasis on lncRNA structure and isoforms across known annotations and novel candidates.
 
 For more details and further functionality, please refer to the [usage](docs/usage.md) and [output](docs/output.md) documentations.
 
 **The workflow**
 
-![longnoncoder workflow](figures/LongNonCoder.drawio.svg)
+![pulposeq workflow](figures/pulposeq.drawio.svg)
 
 We can describe each step of the workflow as follows:
 
@@ -24,13 +25,13 @@ We can describe each step of the workflow as follows:
 
 ## Usage
 
-LongNonCoder is compatible Ensembl or GENCODE reference genomes and annotations, and protein-coding potential prediction with [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining") only supports the following list of organisms:
+pulposeq is compatible with Ensembl or GENCODE reference genomes and annotations, and protein-coding potential prediction with [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining") only supports the following list of organisms:
 > *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.*
 
 **In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
 
 > [!WARNING]
-> LongNonCoder is transitioning to the current strict syntax (version 26.04). Make sure to setup appropriate configuration. See the current documentation at [Seqera Docs](https://docs.seqera.io/nextflow/strict-syntax).
+> pulposeq is transitioning to the current strict syntax (version 26.04). Make sure to setup appropriate configuration. See the current documentation at [Seqera Docs](https://docs.seqera.io/nextflow/strict-syntax).
 
 ### Nextflow setup and testing the pipeline
 
@@ -61,7 +62,7 @@ Execute the script
 
 Add YOUR full path for the samples in the `samplesheet.csv` ([file](test_data/samplesheet.csv)). For example, your full path for a sample could be:
 
-`home/user/longnoncoder/test_data/thesample.fastq.gz`
+`home/user/pulposeq/test_data/thesample.fastq.gz`
 
 Go back to the main directory and execute the test with appropriate container runtime!
 
@@ -73,24 +74,24 @@ cd ..
 nextflow run main.nf -profile test,[container runtime] -params-file test_data/testing.yml
 ```
 
-Set the container runtime profile to `docker`, `singularity` or `apptainer`, according to your resources. LongNonCoder does **NOT** support nor recommend execution with `conda` environments for the local modules.
+Set the container runtime profile to `docker`, `singularity` or `apptainer`, according to your resources. pulposeq does **NOT** support nor recommend execution with `conda` environments for the local modules.
 
 In some cases, depending on your system's permissions and configuration regarding containers, you might need to set specific configurations before running. In that case, follow the instructions available at [Seqera Docs](https://docs.seqera.io/nextflow/reference/config).
 
-> *As long as you use the supported container runtimes and do not modify the pipeline architecture, LongNonCoder ensures ***reproducibility*** independently of your system's specific setup.*
+> *As long as you use the supported container runtimes and do not modify the pipeline architecture, pulposeq ensures ***reproducibility*** independently of your system's specific setup.*
 
 > [!WARNING]
 > Please provide pipeline parameters via the CLI or input a `yaml` or `json`parameters file  via the Nextflow `-params-file` option (most recommended). Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration, ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
 
 
-LongNonCoder is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. If LongNonCoder presents any errors, this configuration allows you to restart the pipeline execution from the last successfull step by using the `-resume` parameter. The `work/` directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
+pulposeq is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. If pulposeq presents any errors, this configuration allows you to restart the pipeline execution from the last successfull step by using the `-resume` parameter. The `work/` directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
 
 > [!TIP]
 > Copying large datasets can significantly take a long time to complete or occupy a large amount of disk space. If you require other setup to optimize resource usage, follow the instructions from the [Nextflow documentation](https://docs.seqera.io/nextflow/reference/process#publishdir) to change the `publishDir` setting in the [`nextflow.config`](nextflow.config) file.
 
 ## Citations
 
-If you use LongNonCoder in your research, please consider citing it.
+If you use pulposeq in your research, please consider citing it.
 
 This pipeline uses code and infrastructure developed and maintained by the [nf-core](https://nf-co.re) initative, and reused here under the [MIT license](https://github.com/nf-core/tools/blob/master/LICENSE).
 
@@ -106,7 +107,7 @@ An extensive list of references for the tools incorporated by the pipeline can b
 
 #### Development & Contributions
 
-The `LongNonCoder` pipeline was originally developed by **Bárbara Borges** ([\@borgessbarbara](https://github.com/borgessbarbara)). We extend our sincere thanks to **Lucas Freitas** ([\@lfreitasl](https://github.com/lfreitasl)), **Gleison Azevedo** ([\@gleisonm](https://github.com/gleisonm)) and **João Cavalcante** ([\@jvfe](https://github.com/jvfe)) for their significant contributions and assistance during development.
+The `pulposeq` pipeline was originally developed by **Bárbara Borges** ([\@borgessbarbara](https://github.com/borgessbarbara)). We extend our sincere thanks to **Lucas Freitas** ([\@lfreitasl](https://github.com/lfreitasl)), **Gleison Azevedo** ([\@gleisonm](https://github.com/gleisonm)) and **João Cavalcante** ([\@jvfe](https://github.com/jvfe)) for their significant contributions and assistance during development.
 
 #### Supervision & Collaborations
 

@@ -23,7 +23,6 @@ workflow TRANSCRIPT_RECONSTRUCTION {
     ch_pca_grouped           = channel.empty()
     ch_h_transcript          = channel.empty()
     ch_h_gene                = channel.empty()
-    ch_multiqc_all           = channel.empty()
 
     // Setting channel for the reference
     ch_reference  = channel.fromPath(reference, checkIfExists: true)

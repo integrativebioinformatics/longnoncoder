@@ -41,15 +41,15 @@ workflow CLASSIFICATION_POTENTIAL_CODING {
     )
 
     // Extract bare paths from tuple outputs for downstream compatibility
-    ch_annotated_gtf = GFFCOMPARE.out.annotated_gtf.map { meta, f -> f }
-    ch_tmap          = GFFCOMPARE.out.tmap.map { meta, f -> f }
+    ch_annotated_gtf = GFFCOMPARE.out.annotated_gtf.map { _meta, f -> f }
+    ch_tmap          = GFFCOMPARE.out.tmap.map { _meta, f -> f }
 
     //
     // Prepare inputs for nf-core/gffread
     // nf-core module expects: tuple(meta, gff), path(fasta)
     //
     def ch_gffread_input = gtf.map { gtf_file ->
-        [ [id: 'gffread'], gtf_file ]
+        [ [id: gtf_file.baseName], gtf_file ]
     }
 
     GFFREAD(
@@ -58,7 +58,7 @@ workflow CLASSIFICATION_POTENTIAL_CODING {
     )
 
     // Extract bare fasta path for downstream compatibility
-    ch_gffread_fasta = GFFREAD.out.gffread_fasta.map { meta, f -> f }
+    ch_gffread_fasta = GFFREAD.out.gffread_fasta.map { _meta, f -> f }
 
     //
     // RNAMINING: coding potential prediction

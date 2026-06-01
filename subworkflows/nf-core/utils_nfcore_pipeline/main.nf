@@ -126,7 +126,7 @@ def paramsSummaryMultiqc(summary_params) {
 
     def yaml_file_text = "id: '${workflow.manifest.name.replace('/', '-')}-summary'\n" as String
     yaml_file_text     += "description: ' - this information is collected when the pipeline is started.'\n"
-    yaml_file_text     += "section_name: '${workflow.manifest.name} Workflow Summary'\n"
+    yaml_file_text     += "section_name: 'Workflow Summary: ${workflow.manifest.name}'\n"
     yaml_file_text     += "section_href: 'https://github.com/${workflow.manifest.name}'\n"
     yaml_file_text     += "plot_type: 'html'\n"
     yaml_file_text     += "data: |\n"
@@ -221,6 +221,119 @@ def getSingleReport(multiqc_reports) {
     } else {
         return null
     }
+}
+
+//
+// Construct and send completion email
+//
+def completionEmail(summary_params, email, email_on_fail, plaintext_email, outdir, monochrome_logs=true, multiqc_report=null) {
+
+    // Set up the e-mail variables
+    def subject = "[${workflow.manifest.name}] Successful: ${workflow.runName}"
+    if (!workflow.success) {
+        subject = "[${workflow.manifest.name}] FAILED: ${workflow.runName}"
+    }
+
+    def summary = [:]
+    summary_params
+        .keySet()
+        .sort()
+        .each { group ->
+            summary << summary_params[group]
+        }
+
+    def misc_fields = [:]
+    misc_fields['Date Started']              = workflow.start
+    misc_fields['Date Completed']            = workflow.complete
+    misc_fields['Pipeline script file path'] = workflow.scriptFile
+    misc_fields['Pipeline script hash ID']   = workflow.scriptId
+    if (workflow.repository) {
+        misc_fields['Pipeline repository Git URL']    = workflow.repository
+    }
+    if (workflow.commitId) {
+        misc_fields['Pipeline repository Git Commit'] = workflow.commitId
+    }
+    if (workflow.revision) {
+        misc_fields['Pipeline Git branch/tag']        = workflow.revision
+    }
+    misc_fields['Nextflow Version']          = workflow.nextflow.version
+    misc_fields['Nextflow Build']            = workflow.nextflow.build
+    misc_fields['Nextflow Compile Timestamp'] = workflow.nextflow.timestamp
+
+    def email_fields = [:]
+    email_fields['version']      = getWorkflowVersion()
+    email_fields['runName']      = workflow.runName
+    email_fields['success']      = workflow.success
+    email_fields['dateComplete'] = workflow.complete
+    email_fields['duration']     = workflow.duration
+    email_fields['exitStatus']   = workflow.exitStatus
+    email_fields['errorMessage'] = (workflow.errorMessage ?: 'None')
+    email_fields['errorReport']  = (workflow.errorReport ?: 'None')
+    email_fields['commandLine']  = workflow.commandLine
+    email_fields['projectDir']   = workflow.projectDir
+    email_fields['summary']      = summary << misc_fields
+
+    // On success try attach the multiqc report
+    def mqc_report = getSingleReport(multiqc_report)
+
+    // Check if we are only sending emails on failure
+    def email_address = email
+    if (!email && email_on_fail && !workflow.success) {
+        email_address = email_on_fail
+    }
+
+    // Render the TXT template
+    def engine       = new groovy.text.GStringTemplateEngine()
+    def tf           = new File("${workflow.projectDir}/assets/email_template.txt")
+    def txt_template = engine.createTemplate(tf).make(email_fields)
+    def email_txt    = txt_template.toString()
+
+    // Render the HTML template
+    def hf            = new File("${workflow.projectDir}/assets/email_template.html")
+    def html_template = engine.createTemplate(hf).make(email_fields)
+    def email_html    = html_template.toString()
+
+    // Render the sendmail template
+    def max_multiqc_email_size = (params.containsKey('max_multiqc_email_size') ? params.max_multiqc_email_size : 0) as MemoryUnit
+    def smail_fields           = [email: email_address, subject: subject, email_txt: email_txt, email_html: email_html, projectDir: "${workflow.projectDir}", mqcFile: mqc_report, mqcMaxSize: max_multiqc_email_size.toBytes()]
+    def sf                     = new File("${workflow.projectDir}/assets/sendmail_template.txt")
+    def sendmail_template      = engine.createTemplate(sf).make(smail_fields)
+    def sendmail_html          = sendmail_template.toString()
+
+    // Send the HTML e-mail
+    def colors = logColours(monochrome_logs) as Map
+    if (email_address) {
+        try {
+            if (plaintext_email) {
+                new org.codehaus.groovy.GroovyException('Send plaintext e-mail, not HTML')
+            }
+            // Try to send HTML e-mail using sendmail
+            def sendmail_tf = new File(workflow.launchDir.toString(), ".sendmail_tmp.html")
+            sendmail_tf.withWriter { w -> w << sendmail_html }
+            ['sendmail', '-t'].execute() << sendmail_html
+            log.info("-${colors.purple}[${workflow.manifest.name}]${colors.green} Sent summary e-mail to ${email_address} (sendmail)-")
+        }
+        catch (Exception msg) {
+            log.debug(msg.toString())
+            log.debug("Trying with mail instead of sendmail")
+            // Catch failures and try with plaintext
+            def mail_cmd = ['mail', '-s', subject, '--content-type=text/html', email_address]
+            mail_cmd.execute() << email_html
+            log.info("-${colors.purple}[${workflow.manifest.name}]${colors.green} Sent summary e-mail to ${email_address} (mail)-")
+        }
+    }
+
+    // Write summary e-mail HTML to a file
+    def output_hf = new File(workflow.launchDir.toString(), ".pipeline_report.html")
+    output_hf.withWriter { w -> w << email_html }
+    nextflow.extension.FilesEx.copyTo(output_hf.toPath(), "${outdir}/pipeline_info/pipeline_report.html")
+    output_hf.delete()
+
+    // Write summary e-mail TXT to a file
+    def output_tf = new File(workflow.launchDir.toString(), ".pipeline_report.txt")
+    output_tf.withWriter { w -> w << email_txt }
+    nextflow.extension.FilesEx.copyTo(output_tf.toPath(), "${outdir}/pipeline_info/pipeline_report.txt")
+    output_tf.delete()
 }
 
 //

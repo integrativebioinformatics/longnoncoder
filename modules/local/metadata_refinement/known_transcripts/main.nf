@@ -3,13 +3,14 @@ process KNOWN_TRANSCRIPTS {
     label 'process_single'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test':
-        'docker.io/itsiaguara/longnoncoder:test' }"
+        'docker://itsiaguara/longnoncoder:test3':
+        'docker.io/itsiaguara/longnoncoder:test3' }"
 
     input:
     path transcript_counts
     path gene_counts
     path gtf_file
+    path r_script // <- ADDED: The R script is now a formal input
 
     output:
     path "annotated_transcriptome_metadata.csv"          , emit: transcriptome_metadata
@@ -30,11 +31,8 @@ process KNOWN_TRANSCRIPTS {
     script:
     def args     = task.ext.args ? task.ext.args : "--ensembl_organism_dataset '${params.ensembl_organism_dataset}' --ensembl_version ${params.ensembl_version}"
     """
-    # Copy the R script to the working directory
-    cp ${projectDir}/bin/known_transcripts.R ./
-
-    # Run the R script
-    Rscript known_transcripts.R \\
+    # Run the R script directly using the input path variable
+    Rscript $r_script \\
         --transcript_counts ${transcript_counts} \\
         --gene_counts ${gene_counts} \\
         --gtf_file ${gtf_file} \\
@@ -54,7 +52,7 @@ process KNOWN_TRANSCRIPTS {
     """
 
     stub:
-    def args     = task.ext.args ? task.ext.args : "--ensembl_organism_dataset '${params.ensembl_organism_dataset}' --ensembl_version ${params.ensembl_version}"
+    // REMOVED the unused 'def args' line from here
     """
     touch annotated_transcriptome_metadata.csv
     touch annotated_lncRNAs_metadata.csv

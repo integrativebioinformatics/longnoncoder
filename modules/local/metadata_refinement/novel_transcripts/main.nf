@@ -3,8 +3,8 @@ process NOVEL_TRANSCRIPTS {
     label 'process_single'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test':
-        'docker.io/itsiaguara/longnoncoder:test' }"
+        'docker://itsiaguara/longnoncoder:test3':
+        'docker.io/itsiaguara/longnoncoder:test3' }"
 
     input:
     path bambu_gtf
@@ -13,6 +13,7 @@ process NOVEL_TRANSCRIPTS {
     path rnamining_predictions
     path tx_counts
     path gene_counts
+    path r_script // <- ADDED: The R script is now a formal input
 
     output:
     path "novel_transcripts_metadata.csv"          , emit: novel_transcripts_metadata
@@ -24,8 +25,8 @@ process NOVEL_TRANSCRIPTS {
     path "novel_transcripts_validated.gtf"         , emit: novel_gtf
     path "novel_lncRNA_exon_lengths.csv"           , emit: novel_lncrna_exon_lengths
     path "novel_protein-coding_exon_lengths.csv"   , emit: novel_mrna_exon_lengths
-    path "novel_pc_lnc_RNA_tx_counts.csv"          , emit: novel_tx_counts
-    path "novel_pc_lnc_RNA_gene_counts.csv"        , emit: novel_gene_counts
+    path "bambu_novel_pc_lnc_RNA_tx_counts.csv"          , emit: novel_tx_counts
+    path "bambu_novel_pc_lnc_RNA_gene_counts.csv"        , emit: novel_gene_counts
     path "versions.yml"                            , emit: versions
 
     when:
@@ -34,10 +35,8 @@ process NOVEL_TRANSCRIPTS {
     script:
     def args = task.ext.args ?: ''
     """
-    # Copy the R script to the working directory
-    cp ${projectDir}/bin/novel_transcripts.R ./
-
-    Rscript novel_transcripts.R \\
+    # Run the R script directly using the input path variable
+    Rscript $r_script \\
         --bambu_gtf ${bambu_gtf} \\
         --compared_gtf ${compared_gtf} \\
         --tmap_file ${tmap_file} \\
@@ -58,7 +57,7 @@ process NOVEL_TRANSCRIPTS {
     """
 
     stub:
-    def args = task.ext.args ?: ''
+    // REMOVED the unused 'def args' line from here
     """
     touch novel_transcripts_metadata.csv
     touch novel_lncRNAs_metadata.csv
@@ -69,8 +68,8 @@ process NOVEL_TRANSCRIPTS {
     touch novel_transcripts_validated.gtf
     touch novel_lncRNA_exon_lengths.csv
     touch novel_protein-coding_exon_lengths.csv
-    touch novel_pc_lnc_RNA_tx_counts.csv
-    touch novel_pc_lnc_RNA_gene_counts.csv
+    touch bambu_novel_pc_lnc_RNA_tx_counts.csv
+    touch bambu_novel_pc_lnc_RNA_gene_counts.csv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

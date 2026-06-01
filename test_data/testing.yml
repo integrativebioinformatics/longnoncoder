@@ -1,5 +1,5 @@
-input: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/samplesheet.csv"
-outdir: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/results"
+input: "/full/path/to/test_data/samplesheet.csv"
+outdir: "/full/path/to/longnoncoder/test_data/results"
 
 skip_qc: false
 skip_filtering: false
@@ -7,9 +7,9 @@ skip_alignment: false
 skip_alignment_qc: false
 skip_class: false
 
-reference: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/references/Homo_sapiens.GRCh38.dna.chromosome.1.fa"
+reference: "/full/path/to/longnoncoder/test_data/references/Homo_sapiens.GRCh38.dna.chromosome.1.fa"
 
-annotation: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/references/Homo_sapiens.GRCh38.114.chr1.gtf"
+annotation: "/full/path/to/longnoncoder/test_data/references/Homo_sapiens.GRCh38.114.chr1.gtf"
 
 organism: 'Homo_sapiens'
 ensembl_organism_dataset: 'hsapiens_gene_ensembl'

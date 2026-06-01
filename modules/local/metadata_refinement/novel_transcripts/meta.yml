@@ -42,6 +42,10 @@ input:
       type: file
       description: Gene-level read counts from Bambu.
       pattern: "*.txt"
+  - r_script:
+      type: file
+      description: Executable R script for novel transcripts processing.
+      pattern: "*.R"
 
 output:
   - novel_transcripts_metadata:
@@ -83,11 +87,11 @@ output:
   - novel_tx_counts:
       type: file
       description: Transcript-level counts for novel lncRNAs and protein-coding transcripts.
-      pattern: "novel_pc_lnc_RNA_tx_counts.csv"
+      pattern: "bambu_novel_pc_lnc_RNA_tx_counts.csv"
   - novel_gene_counts:
       type: file
       description: Gene-level counts for novel lncRNAs and protein-coding transcripts.
-      pattern: "novel_pc_lnc_RNA_gene_counts.csv"
+      pattern: "bambu_novel_pc_lnc_RNA_gene_counts.csv"
   - versions:
       type: file
       description: File containing software versions.

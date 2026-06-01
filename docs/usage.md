@@ -76,7 +76,7 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 
   [1]: https://www.gencodegenes.org/pages/faq.html
 
-By convention, Ensembl IDs are structured of a species index (e.g. "ENS" for human and "ENSMUS" for mouse) followed by a feature type indicator ("G" for gene, "T" for transcript, "E" for exon, "P" for translation) and an 11-number figure. In order to generate metadatasets for annotated transcripts, LongNonCoder queries biomaRt according to species dataset informed by the `ensembl_organism_dataset` parameter, and searches attributes based on IDs presenting the `ENS` suffix.
+By convention, Ensembl IDs are structured of a species index (e.g. "ENS" for human and "ENSMUS" for mouse) followed by a feature type indicator ("G" for gene, "T" for transcript, "E" for exon, "P" for translation) and an 11-number figure. In order to generate metadatasets for annotated transcripts, pulposeq queries biomaRt according to species dataset informed by the `ensembl_organism_dataset` parameter, and searches attributes based on IDs presenting the `ENS` suffix.
 
 The only exception regarding GENCODE was until release 43 (Ensembl 109), in the case of the pseudoautosomal regions (PAR) of chromosome Y. The gene annotation in these regions is identical between chromosomes X and Y, but Ensembl did not provide different feature ids for both chromosomes until release 110 (equivalent to GENCODE release 44). Additionally, the GENCODE GTF contains a number of attributes not present in the Ensembl GTF, but that does not interfere with the pipeline execution nor is required.
 
@@ -132,7 +132,7 @@ outdir: './results/'
 ### Updating the pipeline
 
 ``` bash
-git clone https://github.com/integrativebioinformatics/longnoncoder.git
+git clone https://github.com/integrativebioinformatics/pulposeq.git
 ```
 
 When you run the above command, Git automatically clones the pipeline code from GitHub and stores it. When running the pipeline after this, it will always use this version if available - even if the pipeline has been updated since. To make sure that you're running the latest version of the pipeline, make sure that you regularly update the commits in the pipeline:
@@ -149,9 +149,9 @@ git pull origin main
 
 IIt is a good idea to specify the pipeline version when running the pipeline on your data. This ensures that a specific version of the pipeline code and software are used when you run your pipeline. If you keep using the same tag, you'll be running the same version of the pipeline, even if there have been changes to the code since.
 
-First, go to the [integrativebioinformatics/longnoncoder releases page] and find the latest pipeline version - numeric only (eg. `1.3.1`). Then specify this when running the pipeline with `-r` (one hyphen) - eg. `-r 1.3.1`. Of course, you can switch to another version by changing the number after the `-r` flag.
+First, go to the [integrativebioinformatics/pulposeq releases page] and find the latest pipeline version - numeric only (eg. `1.3.1`). Then specify this when running the pipeline with `-r` (one hyphen) - eg. `-r 1.3.1`. Of course, you can switch to another version by changing the number after the `-r` flag.
 
-  [integrativebioinformatics/longnoncoder releases page]: https://github.com/integrativebioinformatics/longnoncoder/releases
+  [integrativebioinformatics/pulposeq releases page]: https://github.com/integrativebioinformatics/pulposeq/releases
 
 This version number will be logged in reports when you run the pipeline, so that you'll know what you used when you look back in the future. For example, at the bottom of the MultiQC reports.
 
@@ -187,9 +187,8 @@ Several generic profiles are bundled with the pipeline which instruct the pipeli
   - A generic configuration profile to be used with [Singularity](https://sylabs.io/docs/)
 - `apptainer`
   - A generic configuration profile to be used with [Apptainer](https://apptainer.org/)
-- - `conda`
-  - A generic configuration profile to be used with [Conda](https://conda.io/docs/). Please only use Conda as a last resort i.e. when it's not possible to run the pipeline with Docker, Singularity, or Apptainer. Note that LongNonCoder does not support conda for local modules.
 
+Please only use [Conda](https://conda.io/docs/) as a last resort i.e. when it's not possible to run the pipeline with Docker, Singularity, or Apptainer. Note that pulposeq does not support conda for local modules.
 
 ### `-resume`
 

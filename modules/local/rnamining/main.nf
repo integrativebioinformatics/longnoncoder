@@ -20,8 +20,6 @@ process RNAMINING {
 
     script:
     def args     = task.ext.args ? task.ext.args : "-organism_name ${params.organism} -prediction_type coding_prediction"
-    def prefix   = task.ext.prefix ?: "Coding_Potential"
-
     """
     rnamining \\
             -f $fasta \\

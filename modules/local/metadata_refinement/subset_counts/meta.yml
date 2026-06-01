@@ -39,26 +39,26 @@ input:
       pattern: "*.txt"
 
 output:
-  - counts_gene_filtered:
+  - counts_gene_subset:
       type: file
       description: Gene-level counts with zero-count rows removed.
-      pattern: "BambuOutput_counts_gene_filtered.txt"
-  - counts_transcript_filtered:
+      pattern: "BambuOutput_counts_gene_subset.txt"
+  - counts_transcript_subset:
       type: file
       description: Transcript-level counts with zero-count rows removed.
-      pattern: "BambuOutput_counts_transcript_filtered.txt"
-  - cpm_transcript_filtered:
+      pattern: "BambuOutput_counts_transcript_subset.txt"
+  - cpm_transcript_subset:
       type: file
       description: Transcript-level CPM with zero-count rows removed.
-      pattern: "BambuOutput_CPM_transcript_filtered.txt"
-  - full_length_counts_transcript_filtered:
+      pattern: "BambuOutput_CPM_transcript_subset.txt"
+  - full_length_counts_transcript_subset:
       type: file
       description: Full-length transcript counts with zero-count rows removed.
-      pattern: "BambuOutput_fullLengthCounts_transcript_filtered.txt"
-  - unique_counts_transcript_filtered:
+      pattern: "BambuOutput_fullLengthCounts_transcript_subset.txt"
+  - unique_counts_transcript_subset:
       type: file
       description: Unique transcript counts with zero-count rows removed.
-      pattern: "BambuOutput_uniqueCounts_transcript_filtered.txt"
+      pattern: "BambuOutput_uniqueCounts_transcript_subset.txt"
   - versions:
       type: file
       description: File containing software versions.

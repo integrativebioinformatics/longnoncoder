@@ -1,5 +1,5 @@
 //
-// MODULE: Local to the pipeline
+// MODULES: MINIMAP2_ALIGN and NANOCOMP
 //
 include { MINIMAP2_ALIGN                  } from '../../modules/nf-core/minimap2/align/main'
 include { NANOCOMP as NANOCOMP_MAPPING    } from '../../modules/nf-core/nanocomp/main'
@@ -44,8 +44,6 @@ workflow ALIGNMENT {
 
     MINIMAP2_ALIGN.out.bam
         .set { ch_bam }
-
-    ch_versions = ch_versions.mix(MINIMAP2_ALIGN.out.versions.ifEmpty(null))
 
     if (!params.skip_alignment_qc) {
 

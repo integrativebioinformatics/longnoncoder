@@ -1,61 +1,75 @@
----
 # yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/modules/meta-schema.json
 name: "rnamining"
-## TODO nf-core: Add a description of the module and list keywords
-description: Predict coding potential from transcript FASTA sequences using RNAmining.
+description: "Predict coding potential from transcript FASTA sequences using RNAmining."
 keywords:
-  - coding-potential
-  - lncRNA
-  - transcript-classification
+  - "coding-potential"
+  - "lncRNA"
+  - "transcript-classification"
 tools:
   - "rnamining":
-      ## TODO nf-core: Add a description and other details for the software below
       description: "Package to predict potential coding of RNA sequences provided in fasta format"
       homepage: "https://gitlab.com/integrativebioinformatics/RNAmining"
       documentation: "https://rnamining.integrativebioinformatics.me/"
       tool_dev_url: "https://gitlab.com/integrativebioinformatics/RNAmining"
       doi: "10.12688/f1000research.52350.2"
-      licence: ['MIT']
-      identifier: biotools:rnamining
+      licence: ["MIT"]
+      identifier: "biotools:rnamining"
 
-## TODO nf-core: Add a description of all of the variables used as input
 input:
-  #
-  ## TODO nf-core: Delete / customise this example input
+  - - meta:
+        type: map
+        description: |
+          Groovy Map containing sample information
+          e.g. [ id:'test', single_end:false ]
     - fasta:
         type: file
         description: Transcript FASTA file with sequences to classify.
         pattern: "*.{fa,fasta,fna}"
         ontologies:
           - edam: "http://edamontology.org/format_1929"
-        
-## TODO nf-core: Add a description of all of the variables used as output
+
 output:
-  - codings:
-  #
-  ## TODO nf-core: Delete / customise this example output
-    - "codings.txt":
-        type: file
-        description: Predicted coding transcripts.
-        pattern: "*.txt"
-        ontologies:
-          - edam: "http://edamontology.org/data_2044"
-  - noncodings:
-    - "noncodings.txt":
-        type: file
-        description: Predicted non-coding transcripts.
-        pattern: "*.txt"
-        ontologies:
-          - edam: "http://edamontology.org/data_2044"
-  - predictions:
-    - "predictions.txt":
-        type: file
-        description: Combined coding potential predictions.
-        pattern: "*.txt"
-        ontologies:
-          - edam: "http://edamontology.org/data_2044"
-  - versions:
-    - "versions.yml":
+  codings:
+    - - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'test', single_end:false ]
+      - codings_txt:
+          type: file
+          description: Predicted coding transcripts.
+          pattern: "*.txt"
+          ontologies:
+            - edam: "http://edamontology.org/data_2044"
+            
+  noncodings:
+    - - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'test', single_end:false ]
+      - noncodings_txt:
+          type: file
+          description: Predicted non-coding transcripts.
+          pattern: "*.txt"
+          ontologies:
+            - edam: "http://edamontology.org/data_2044"
+            
+  predictions:
+    - - meta:
+          type: map
+          description: |
+            Groovy Map containing sample information
+            e.g. [ id:'test', single_end:false ]
+      - predictions_txt:
+          type: file
+          description: Combined coding potential predictions.
+          pattern: "*.txt"
+          ontologies:
+            - edam: "http://edamontology.org/data_2044"
+            
+  versions:
+    - versions_yml:
         type: file
         description: File containing software versions
         pattern: "versions.yml"

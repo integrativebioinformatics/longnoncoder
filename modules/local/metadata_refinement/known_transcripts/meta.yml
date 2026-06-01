@@ -35,6 +35,10 @@ input:
       type: file
       description: GTF file with all transcripts (known + novel) from Bambu.
       pattern: "*.gtf"
+  - r_script:
+      type: file
+      description: Executable R script for known transcripts annotation.
+      pattern: "*.R"
 
 output:
   - transcriptome_metadata:

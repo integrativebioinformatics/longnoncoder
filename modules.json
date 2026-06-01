@@ -1,6 +1,6 @@
 {
-    "name": "integrativebioinformatics/longnoncoder",
-    "homePage": "https://github.com/integrativebioinformatics/longnoncoder",
+    "name": "integrativebioinformatics/pulposeq",
+    "homePage": "https://github.com/integrativebioinformatics/pulposeq",
     "repos": {
         "https://github.com/nf-core/modules.git": {
             "modules": {

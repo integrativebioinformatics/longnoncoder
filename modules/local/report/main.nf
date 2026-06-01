@@ -3,31 +3,35 @@ process RENDER_REPORT {
     label 'process_single'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test':
-        'docker.io/itsiaguara/longnoncoder:test' }"
+        'docker://itsiaguara/longnoncoder:test3':
+        'docker.io/itsiaguara/longnoncoder:test3' }"
 
     input:
     // bambu outputs
-    path(counts_genes)
-    path(counts_transcript)
-    path(fl_counts_transcript)
-    path(u_counts_transcript)
+    path counts_genes
+    path counts_transcript
+    path fl_counts_transcript
+    path u_counts_transcript
 
     // metadata csv tables
-    path(transcriptome_meta)
-    path(protein_coding_meta)
-    path(lncrna_meta)
-    path(protein_coding_exonlength)
-    path(lncrna_exonlength)
-    path(novel_transcriptome_meta)
-    path(novel_lncrna_exonlength)
-    path(novel_protein_coding_exonlength)
+    path transcriptome_meta
+    path protein_coding_meta
+    path lncrna_meta
+    path protein_coding_exonlength
+    path lncrna_exonlength
+    path novel_transcriptome_meta
+    path novel_lncrna_exonlength
+    path novel_protein_coding_exonlength
+    
+    // quarto template
+    path qmd_report // <- ADDED: The .qmd file is now a formal input
 
     output:
-    path("*.html")                      , emit: report
-    path("Bambu_assembly_summary.csv")  , emit: bambu_assembly_summary
-    path("Bambu_lncRNA_PC_summary.csv") , emit: bambu_lncRNA_PC_summary
-    path("versions.yml")                , emit: versions
+    path "*.html"                      , emit: report
+    path "Bambu_assembly_summary.csv"  , emit: bambu_assembly_summary
+    path "Bambu_lncRNA_PC_summary.csv" , emit: bambu_lncRNA_PC_summary
+    path "versions.yml"                , emit: versions
+    
     when:
     task.ext.when == null || task.ext.when
 
@@ -36,9 +40,8 @@ process RENDER_REPORT {
     export XDG_CACHE_HOME=/tmp/quarto_cache_home
     export XDG_DATA_HOME=/tmp/quarto_data_home
 
-    cp ${projectDir}/bin/report.qmd ./
-
-    quarto render report.qmd \\
+    # Render the input file directly
+    quarto render $qmd_report \\
         -P counts_genes:${counts_genes} \\
         -P counts_transcript:${counts_transcript} \\
         -P fl_counts_transcript:${fl_counts_transcript} \\
@@ -81,5 +84,4 @@ process RENDER_REPORT {
         r-viridis: \$(Rscript -e "cat(as.character(packageVersion('viridis')))")
     END_VERSIONS
     """
-
 }

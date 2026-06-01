@@ -3,8 +3,8 @@ process SUBSET_BAMBU_GTF {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test':
-        'docker.io/itsiaguara/longnoncoder:test' }"
+        'docker://itsiaguara/longnoncoder:test3':
+        'docker.io/itsiaguara/longnoncoder:test3' }"
 
     input:
     path gtf_file
@@ -26,14 +26,15 @@ process SUBSET_BAMBU_GTF {
     """
     subset_bambu_gtf.sh \\
         --gtf ${gtf_file} \\
-        --awk_script \$(which subset_gtf.awk) \\
+        --awk_script "\$(which subset_gtf.awk)" \\
         --counts ${counts_transcript} \\
         --full_length ${full_length_counts_transcript} \\
-        --unique ${unique_counts_transcript}
+        --unique ${unique_counts_transcript} \\
+        $args
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
+        mawk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
         bash: \$(bash --version | head -n1 | sed 's/GNU bash, version //; s/ .*//')
     END_VERSIONS
     """
@@ -46,7 +47,7 @@ process SUBSET_BAMBU_GTF {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
+        mawk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
         bash: \$(bash --version | head -n1 | sed 's/GNU bash, version //; s/ .*//')
     END_VERSIONS
     """

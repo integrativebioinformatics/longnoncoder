@@ -3,8 +3,8 @@ process BAMBU {
     label 'process_high_memory'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test':
-        'docker.io/itsiaguara/longnoncoder:test' }"
+        'docker://itsiaguara/longnoncoder:test3':
+        'docker.io/itsiaguara/longnoncoder:test3' }"
 
     input:
     val bam_list
@@ -60,7 +60,7 @@ process BAMBU {
     """
 
     stub:
-    def args     = task.ext.args ? task.ext.args : "--ndr ${params.ndr}"
+    // REMOVED the unused 'def args' line from here
     """
     touch heatmap_gene.png
     touch heatmap_transcript.png

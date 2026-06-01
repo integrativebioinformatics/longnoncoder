@@ -35,10 +35,11 @@ process BAMBU_VALIDATE {
         --cpm_transcript ${cpm_transcript} \\
         --full_length ${full_length_counts_transcript} \\
         --unique ${unique_counts_transcript}
+        $args
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk --version | head -n1 | sed 's/GNU Awk //; s/,.*//')
+        mawk: \$(awk --version | head -n1 | sed 's/GNU Awk //; s/,.*//')
         bash: \$(bash --version | head -n1 | sed 's/GNU bash, version //; s/ .*//')
     END_VERSIONS
     """
@@ -53,7 +54,7 @@ process BAMBU_VALIDATE {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        awk: \$(awk --version | head -n1 | sed 's/GNU Awk //; s/,.*//')
+        mawk: \$(awk --version | head -n1 | sed 's/GNU Awk //; s/,.*//')
         bash: \$(bash --version | head -n1 | sed 's/GNU bash, version //; s/ .*//')
     END_VERSIONS
     """

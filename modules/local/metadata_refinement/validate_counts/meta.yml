@@ -23,23 +23,23 @@ input:
       pattern: "*.csv"
   - counts_gene:
       type: file
-      description: Filtered gene-level read counts from Bambu.
+      description: subset gene-level read counts from Bambu.
       pattern: "*.txt"
   - counts_transcript:
       type: file
-      description: Filtered transcript-level read counts from Bambu.
+      description: subset transcript-level read counts from Bambu.
       pattern: "*.txt"
   - cpm_transcript:
       type: file
-      description: Filtered transcript-level CPM values from Bambu.
+      description: subset transcript-level CPM values from Bambu.
       pattern: "*.txt"
   - full_length_counts_transcript:
       type: file
-      description: Filtered full-length transcript counts from Bambu.
+      description: subset full-length transcript counts from Bambu.
       pattern: "*.txt"
   - unique_counts_transcript:
       type: file
-      description: Filtered unique read counts per transcript from Bambu.
+      description: subset unique read counts per transcript from Bambu.
       pattern: "*.txt"
 
 output:

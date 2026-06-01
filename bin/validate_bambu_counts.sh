@@ -146,7 +146,7 @@ for input_file in "${TX_INPUT_FILES[@]}"; do
     fi
 
     # Generate output filename
-    base_name=$(basename "$input_file" _filtered.txt)
+    base_name=$(basename "$input_file" _subset.txt)
     output_file="${SCRIPT_DIR}/${base_name}_validated.txt"
 
     # Prevent overwriting the input file
@@ -182,7 +182,7 @@ if [ -f "$tx_validated_file" ] && [ -s "$tx_validated_file" ]; then
                 continue
             fi
 
-            base_name=$(basename "$input_file" _filtered.txt)
+            base_name=$(basename "$input_file" _subset.txt)
             output_file="${SCRIPT_DIR}/${base_name}_validated.txt"
 
             if [ "$(realpath "$input_file")" == "$(realpath "$output_file")" ]; then
@@ -219,14 +219,14 @@ echo "Validation and subsetting process completed."
 echo ""
 echo "Generated files:"
 for input_file in "${TX_INPUT_FILES[@]}"; do
-    base_name=$(basename "$input_file" _filtered.txt)
+    base_name=$(basename "$input_file" _subset.txt)
     output_file="${SCRIPT_DIR}/${base_name}_validated.txt"
     if [ -f "$output_file" ]; then
         echo "  - $(basename "$output_file")"
     fi
 done
 for input_file in "${GENE_INPUT_FILES[@]}"; do
-    base_name=$(basename "$input_file" _filtered.txt)
+    base_name=$(basename "$input_file" _subset.txt)
     output_file="${SCRIPT_DIR}/${base_name}_validated.txt"
     if [ -f "$output_file" ]; then
         echo "  - $(basename "$output_file")"

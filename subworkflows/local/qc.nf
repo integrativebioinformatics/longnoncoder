@@ -47,7 +47,9 @@ workflow QC_FILT {
 
         CHOPPER(ch_reads, [])
 
-        ch_versions = ch_versions.mix(CHOPPER.out.versions)
+        // Removed the broken CHOPPER.out.versions line entirely
+
+        // Running quality check in filtered reads
 
         // Running quality check in filtered reads
         CHOPPER.out.fastq

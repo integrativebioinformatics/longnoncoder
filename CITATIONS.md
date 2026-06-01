@@ -1,4 +1,4 @@
-# integrativebioinformatics/longnoncoder: Citations
+# integrativebioinformatics/pulposeq: Citations
 
 ## Nextflow & nf-core community
 > Di Tommaso P, Chatzou M, Floden EW, Barja PP, Palumbo E, Notredame C. Nextflow enables reproducible computational workflows. Nat Biotechnol. 2017 Apr 11;35(4):316-319. doi: [10.1038/nbt.3820](https://pubmed.ncbi.nlm.nih.gov/28398311/). PubMed PMID: 28398311.
@@ -51,6 +51,7 @@
 - [Bioconda](https://pubmed.ncbi.nlm.nih.gov/29967506/)
 
   > Grüning B, Dale R, Sjödin A, Chapman BA, Rowe J, Tomkins-Tinch CH, Valieris R, Köster J; Bioconda Team. Bioconda: sustainable and comprehensive software distribution for the life sciences. Nat Methods. 2018 Jul;15(7):475-476. doi: 10.1038/s41592-018-0046-7. PubMed PMID: 29967506.
+
 
 - [BioContainers](https://pubmed.ncbi.nlm.nih.gov/28379341/)
 
