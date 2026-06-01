@@ -1,3 +1,4 @@
+
 .nextflow*
 work/
 data/
@@ -7,3 +8,7 @@ testing/
 testing*
 *.pyc
 bin/
+.nf-test/
+ro-crate-metadata.json
+modules/nf-core/
+subworkflows/nf-core/

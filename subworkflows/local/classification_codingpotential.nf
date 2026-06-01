@@ -1,9 +1,13 @@
 //
+// MODULE: nf-core modules
+//
+include { GFFCOMPARE } from '../../modules/nf-core/gffcompare/main'
+include { GFFREAD    } from '../../modules/nf-core/gffread/main'
+
+//
 // MODULE: Local to the pipeline
 //
-include { GFFCOMPARE             } from '../../modules/local/gffcompare/main'
-include { GFFREAD                } from '../../modules/local/gffread/main'
-include { RNAMINING              } from '../../modules/local/rnamining/main'
+include { RNAMINING  } from '../../modules/local/rnamining/main'
 
 /*
 ========================================================================================
@@ -12,47 +16,63 @@ include { RNAMINING              } from '../../modules/local/rnamining/main'
 */
 
 workflow CLASSIFICATION_POTENTIAL_CODING {
-   take:
-       gtf
-       annotation 
-       reference    
-    
-   main:
-    ch_versions       = Channel.empty()
-    ch_annotated_gtf  = Channel.empty()
-    ch_tmap           = Channel.empty()
-    ch_predictions    = Channel.empty()
-    ch_fasta          = Channel.empty()
+    take:
+    gtf         // path: GTF from transcript reconstruction
+    annotation  // path/string: reference annotation GTF (params.annotation)
+    reference   // path/string: reference genome FASTA (params.reference)
 
-    // Classification and potential coding of transcripts in the resulting GTF
+    main:
+    ch_versions = channel.empty()
+
+    //
+    // Prepare inputs for nf-core/gffcompare
+    // nf-core module expects: tuple(meta, gtfs), tuple(meta2, fasta, fai), tuple(meta3, reference_gtf)
+    //
+    def ch_gffcompare_gtf = gtf.map { gtf_file ->
+        [ [id: 'gffcompare'], gtf_file ]
+    }
+    def ch_gffcompare_fasta = [ [id: 'genome'], [], [] ]  // not using fasta input
+    def ch_gffcompare_ref   = [ [id: 'reference'], file(annotation) ]
 
     GFFCOMPARE(
-        gtf,
-        annotation
+        ch_gffcompare_gtf,
+        ch_gffcompare_fasta,
+        ch_gffcompare_ref
     )
 
-    ch_annotated_gtf = ch_annotated_gtf.mix(GFFCOMPARE.out.annotated_gtf)
-    ch_tmap          = ch_tmap.mix(GFFCOMPARE.out.tmap)
-    ch_versions      = ch_versions.mix(GFFCOMPARE.out.versions)
+    // Extract bare paths from tuple outputs for downstream compatibility
+    ch_annotated_gtf = GFFCOMPARE.out.annotated_gtf.map { _meta, f -> f }
+    ch_tmap          = GFFCOMPARE.out.tmap.map { _meta, f -> f }
+
+    //
+    // Prepare inputs for nf-core/gffread
+    // nf-core module expects: tuple(meta, gff), path(fasta)
+    //
+    def ch_gffread_input = gtf.map { gtf_file ->
+        [ [id: gtf_file.baseName], gtf_file ]
+    }
 
     GFFREAD(
-        gtf,
+        ch_gffread_input,
         reference
     )
-    
-    ch_gffread_fasta = ch_fasta.mix(GFFREAD.out.gffread_fasta)
-    ch_versions = ch_versions.mix(GFFREAD.out.versions)
 
+    // Extract bare fasta path for downstream compatibility
+    ch_gffread_fasta = GFFREAD.out.gffread_fasta.map { _meta, f -> f }
+
+    //
+    // RNAMINING: coding potential prediction
+    //
     RNAMINING(
-        GFFREAD.out.gffread_fasta
+        ch_gffread_fasta
     )
-    ch_predictions = ch_predictions.mix(RNAMINING.out.preds)
-    ch_versions = ch_versions.mix(RNAMINING.out.versions)
 
-   emit:
-    annotated_gtf  = ch_annotated_gtf
-    tmap           = ch_tmap
-    gffread_fasta  = ch_gffread_fasta
-    predictions    = ch_predictions
-    versions       = ch_versions
+    ch_predictions = RNAMINING.out.preds
+
+    emit:
+    annotated_gtf = ch_annotated_gtf
+    tmap          = ch_tmap
+    gffread_fasta = ch_gffread_fasta
+    predictions   = ch_predictions
+    versions      = ch_versions
 }

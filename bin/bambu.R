@@ -23,6 +23,8 @@ option_list <- list(
               help = "Path to the sample information Excel file", metavar = "character"),
   make_option(c("-n", "--ncores"), type = "numeric", default = 1,
               help = "Number of cores to use for parallel processing", metavar = "numeric"),
+  make_option(c("-d", "--ndr"), type = "character", default = NULL,
+              help = "Novel Discovery Rate cut-off (optional)", metavar = "character"),
   make_option(c("-o", "--outdir"), type = "character", default = "output",
               help = "Output directory", metavar = "character")
 )
@@ -45,6 +47,13 @@ sample_info_file <- opt$sampleinfo
 output_dir <- opt$outdir
 ncores <- opt$ncores  # Use the specified number of cores
 
+# Parse ndr parameter: convert "null" string to NULL, otherwise to numeric
+if (is.null(opt$ndr) || opt$ndr == "null") {
+  ndr_cutoff <- NULL
+} else {
+  ndr_cutoff <- as.numeric(opt$ndr)
+}
+
 # Create output directory if it doesn't exist
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -64,12 +73,23 @@ totalData <- tryCatch({
 
 # --- Run bambu ---
 se.multiSample <- tryCatch({
-  bambu(ncore = ncores,  # Use the specified number of cores
-        reads = totalData,
-        annotations = annotation,
-        genome = genomeSequence,
-        trackReads = TRUE,
-        opt.discovery = list(min.txScore.singleExon = 0))
+  # Build bambu parameters
+  bambu_params <- list(
+    ncore = ncores,
+    reads = totalData,
+    annotations = annotation,
+    genome = genomeSequence,
+    trackReads = TRUE,
+    opt.discovery = list(min.txScore.singleExon = 0)
+  )
+  
+  # Only add NDR if it's not NULL
+  if (!is.null(ndr_cutoff)) {
+    bambu_params$NDR <- ndr_cutoff
+  }
+  
+  # Call bambu with the constructed parameters
+  do.call(bambu, bambu_params)
 }, error = function(e) {
   stop(paste("Error running bambu:", e$message))
 })

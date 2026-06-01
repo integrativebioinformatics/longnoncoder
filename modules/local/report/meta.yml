@@ -1,0 +1,99 @@
+name: "render_report"
+description: Render an interactive HTML report summarising transcript reconstruction, coding potential classification, and expression quantification results using Quarto.
+keywords:
+  - report
+  - quarto
+  - lncRNA
+  - visualisation
+  - summary
+tools:
+  - quarto:
+      description: Open-source scientific and technical publishing system built on Pandoc.
+      homepage: https://quarto.org
+      documentation: https://quarto.org/docs/guide/
+      tool_dev_url: https://github.com/quarto-dev/quarto-cli
+      licence: ["GPL-2.0-or-later"]
+  - r-base:
+      description: The R Project for Statistical Computing.
+      homepage: https://www.r-project.org/
+      documentation: https://cran.r-project.org/manuals.html
+      licence: ["GPL-2.0-or-later"]
+
+input:
+  - counts_genes:
+      type: file
+      description: Gene-level read counts from Bambu.
+      pattern: "*.txt"
+  - counts_transcript:
+      type: file
+      description: Transcript-level read counts from Bambu.
+      pattern: "*.txt"
+  - fl_counts_transcript:
+      type: file
+      description: Full-length transcript counts from Bambu.
+      pattern: "*.txt"
+  - u_counts_transcript:
+      type: file
+      description: Unique read counts per transcript from Bambu.
+      pattern: "*.txt"
+  - transcriptome_meta:
+      type: file
+      description: Metadata CSV for the full transcriptome.
+      pattern: "*.csv"
+  - protein_coding_meta:
+      type: file
+      description: Metadata CSV for protein-coding transcripts.
+      pattern: "*.csv"
+  - lncrna_meta:
+      type: file
+      description: Metadata CSV for lncRNA transcripts.
+      pattern: "*.csv"
+  - protein_coding_exonlength:
+      type: file
+      description: Exon length distribution for protein-coding transcripts.
+      pattern: "*.csv"
+  - lncrna_exonlength:
+      type: file
+      description: Exon length distribution for lncRNA transcripts.
+      pattern: "*.csv"
+  - novel_transcriptome_meta:
+      type: file
+      description: Metadata CSV for novel transcripts.
+      pattern: "*.csv"
+  - novel_lncrna_exonlength:
+      type: file
+      description: Exon length distribution for novel lncRNA transcripts.
+      pattern: "*.csv"
+  - novel_protein_coding_exonlength:
+      type: file
+      description: Exon length distribution for novel protein-coding transcripts.
+      pattern: "*.csv"
+  - qmd_report:
+      type: file
+      description: Quarto markdown report template file.
+      pattern: "*.qmd"
+
+output:
+  - report:
+      type: file
+      description: Interactive HTML report.
+      pattern: "*.html"
+  - bambu_assembly_summary:
+      type: file
+      description: Summary CSV of transcript assembly yield.
+      pattern: "Bambu_assembly_summary.csv"
+  - bambu_lncRNA_PC_summary:
+      type: file
+      description: Summary CSV of lncRNA and protein-coding yield.
+      pattern: "Bambu_lncRNA_PC_summary.csv"
+  - versions:
+      type: file
+      description: File containing software versions.
+      pattern: "versions.yml"
+
+authors:
+  - "@borgessbarbara"
+  - "@jvfe"
+maintainers:
+  - "@borgessbarbara"
+  - "@jvfe"

@@ -1,1 +1,77 @@
 repository_type: pipeline
+
+nf_core_version: 4.0.2
+
+lint:
+  files_unchanged:
+    - .prettierignore
+    - .github/PULL_REQUEST_TEMPLATE.md
+    - .prettierignore
+    - assets/sendmail_template.txt
+    - CODE_OF_CONDUCT.md
+    - assets/nf-core-pulposeq_logo_light.png
+    - docs/images/nf-core-pulposeq_logo_light.png
+    - docs/images/nf-core-pulposeq_logo_dark.png
+    - .github/ISSUE_TEMPLATE/bug_report.yml
+    - .github/PULL_REQUEST_TEMPLATE.md
+    - assets/email_template.txt
+    - docs/README.md
+  nextflow_config: false
+  nf_test_content: false
+  multiqc_config: false
+  files_exist:
+    - assets/email_template.html
+    - assets/sendmail_template.txt
+    - assets/email_template.txt
+    - .github/workflows/branch.yml
+    - .github/workflows/nf-test.yml
+    - .github/actions/get-shards/action.yml
+    - .github/actions/nf-test/action.yml
+    - .github/workflows/linting_comment.yml
+    - .github/workflows/linting.yml
+    - conf/igenomes.config
+    - .github/workflows/nf-test.yml
+    - .github/actions/get-shards/action.yml
+    - .github/actions/nf-test/action.yml
+    - nf-test.config
+    - tests/default.nf.test
+    - conf/igenomes.config
+    - conf/igenomes_ignored.config
+    - conf/test.config
+    - conf/test_full.config
+    - .github/workflows/nf-test.yml
+    - .github/actions/get-shards/action.yml
+    - .github/actions/nf-test/action.yml
+    - assets/multiqc_config.yml
+    - CODE_OF_CONDUCT.md
+    - assets/nf-core-pulposeq_logo_light.png
+    - docs/images/nf-core-pulposeq_logo_light.png
+    - docs/images/nf-core-pulposeq_logo_dark.png
+    - .github/ISSUE_TEMPLATE/config.yml
+    - .github/workflows/awstest.yml
+    - .github/workflows/awsfulltest.yml
+  included_configs: false
+
+template:
+  org: integrativebioinformatics
+  name: pulposeq
+  description: A pipeline for isoform-level transcriptome assembly and lncRNA discovery
+    from long-reads
+  author: Bárbara Borges
+  version: 1.0.0
+  force: false
+  outdir: .
+  skip_features:
+    - igenomes
+    - multiqc
+    - fastqc
+    - slackreport
+    - email
+    - is_nfcore
+    - ci
+    - test_config
+    - nf_core_configs
+    - nf-test
+    - rocrate
+    - gpu
+  is_nfcore: false

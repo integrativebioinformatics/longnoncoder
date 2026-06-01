@@ -22,6 +22,9 @@ tailcrop: 0
 reference: "/your/path/to/references/dna.primary_assembly.fa"
 annotation: "/your/path/to/references/ensembl_annotation.release.chr.gtf" 
 
+# set the NDR threshold for Bambu (optional, default is NULL for autoadjustment)
+ndr: null # e.g. 0.2
+
 # set organism scientific name for ncRNA prediction by RNAmining (check the list of available organisms)
 organism: "Genus_species" # e.g. "Mus_musculus"
 

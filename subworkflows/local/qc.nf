@@ -15,62 +15,60 @@ include { CHOPPER                           } from '../../modules/nf-core/choppe
 
 workflow QC_FILT {
     take:
-        reads
+    reads
 
     main:
-     ch_versions          = Channel.empty()
-     ch_multiqc_raw       = Channel.empty()
-     ch_multiqc_filt      = Channel.empty()
-     ch_multiqc_all       = Channel.empty()
-     ch_combined_raw      = Channel.empty()
-     ch_combined_filtered = Channel.empty()
-     ch_reads             = reads
+    ch_versions          = channel.empty()
+    ch_multiqc_raw       = channel.empty()
+    ch_multiqc_filt      = channel.empty()
+    ch_multiqc_all       = channel.empty()
+    ch_combined_raw      = channel.empty()
+    ch_combined_filtered = channel.empty()
+    ch_reads             = reads
 
     // Running nanocomp on raw reads
 
-     ch_reads
-             .collect {it[1]}
-             .map {filelist -> [[id:"All"],filelist]}
-             .set {ch_combined_raw}
+    ch_reads
+        .collect { item -> item[1] }
+        .map { filelist -> [[id: "All"], filelist] }
+        .set { ch_combined_raw }
 
-     NANOCOMP_RAW(ch_combined_raw)
+    NANOCOMP_RAW(ch_combined_raw)
 
-
-     ch_versions = ch_versions.mix(NANOCOMP_RAW.out.versions)
+    ch_versions = ch_versions.mix(NANOCOMP_RAW.out.versions)
 
     // Generating a multiqc file for raw reads report
-
-    // ch_multiqc_raw = ch_multiqc_raw.mix(RAW_NANOCOMP.out.zip.collect{it[1]}.ifEmpty([]))
-    ch_multiqc_raw = ch_multiqc_raw.mix(NANOCOMP_RAW.out.stats_txt.collect{it[1]}.ifEmpty([]))
+    ch_multiqc_raw = ch_multiqc_raw.mix(NANOCOMP_RAW.out.stats_txt.collect { item -> item[1] }.ifEmpty([]))
 
     ch_multiqc_all = ch_multiqc_all.mix(ch_multiqc_raw.ifEmpty([]))
 
-    //Putting conditional to whether fun filtering on samples
-    if (!params.skip_filtering){
+    // Putting conditional to whether run filtering on samples
+    if (!params.skip_filtering) {
 
-    CHOPPER(ch_reads, [])
+        CHOPPER(ch_reads, [])
 
-    ch_versions = ch_versions.mix(CHOPPER.out.versions)
+        // Removed the broken CHOPPER.out.versions line entirely
 
-    //Running quality check in filtered reads
-    CHOPPER.out.fastq
-             .collect {it[1]}
-             .map {filelist -> [[id:"All"],filelist]}
-             .set {ch_combined_filtered}
+        // Running quality check in filtered reads
 
-    NANOCOMP_FILT(ch_combined_filtered)
+        // Running quality check in filtered reads
+        CHOPPER.out.fastq
+            .collect { item -> item[1] }
+            .map { filelist -> [[id: "All"], filelist] }
+            .set { ch_combined_filtered }
 
-    //ch_multiqc_filt = ch_multiqc_filt.mix(FILT_NANOCOMP.out.zip.collect{it[1]}.ifEmpty([]))
-    ch_multiqc_filt = ch_multiqc_filt.mix(NANOCOMP_FILT.out.stats_txt.collect{it[1]}.ifEmpty([]))
+        NANOCOMP_FILT(ch_combined_filtered)
 
-    ch_multiqc_all = ch_multiqc_all.mix(ch_multiqc_filt.ifEmpty([]))
+        ch_multiqc_filt = ch_multiqc_filt.mix(NANOCOMP_FILT.out.stats_txt.collect { item -> item[1] }.ifEmpty([]))
 
-    // Putting the output of nano filt as new ch_reads
-    ch_reads = CHOPPER.out.fastq
+        ch_multiqc_all = ch_multiqc_all.mix(ch_multiqc_filt.ifEmpty([]))
+
+        // Putting the output of chopper as new ch_reads
+        ch_reads = CHOPPER.out.fastq
     }
 
     emit:
     filt_reads = ch_reads
-    multiqc = ch_multiqc_all
-    versions = ch_versions
+    multiqc    = ch_multiqc_all
+    versions   = ch_versions
 }

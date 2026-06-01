@@ -22,7 +22,7 @@ This document describes the file-level reference for outputs produced by each pi
 
 ### Report interface
 
-![longnoncoder-report](../figures/longnoncoder-report-interface.gif)
+![pulposeq-report](../figures/pulposeq-report-interface.gif)
 
 ## `chopper/` (read filtering and trimming)
 

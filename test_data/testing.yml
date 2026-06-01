@@ -1,19 +1,16 @@
-# always input the full path, relative path to files might fail
-# remember to input the full path to fastq files in the samplesheet CSV before running
-input: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/samplesheet.csv"
-outdir: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/results"
+input: "/full/path/to/test_data/samplesheet.csv"
+outdir: "/full/path/to/longnoncoder/test_data/results"
 
 skip_qc: false
 skip_filtering: false
 skip_alignment: false
-skip_alignment_qc: true
+skip_alignment_qc: false
 skip_class: false
 
-reference: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/references/Rattus_norvegicus.GRCr8.dna.primary_assembly.1.fa"
+reference: "/full/path/to/longnoncoder/test_data/references/Homo_sapiens.GRCh38.dna.chromosome.1.fa"
 
-annotation: "/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/references/Rattus_norvegicus.GRCr8.114.chr1.gtf"
-# RNAmining does not yet cover for predictions for rat
-# Mouse is the closest compatible organism
-organism: 'Mus_musculus'
-ensembl_organism_dataset: 'rnorvegicus_gene_ensembl'
+annotation: "/full/path/to/longnoncoder/test_data/references/Homo_sapiens.GRCh38.114.chr1.gtf"
+
+organism: 'Homo_sapiens'
+ensembl_organism_dataset: 'hsapiens_gene_ensembl'
 ensembl_version: 114
