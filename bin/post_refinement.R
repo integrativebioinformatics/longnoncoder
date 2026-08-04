@@ -107,10 +107,10 @@ saveRDS(seGene_filtered, file = file.path(output_dir, "seGene_multiSample_valida
 # Mirrors the plotBambu calls in bambu.R so the post-refinement figures are
 # directly comparable with the raw ones.
 plots <- list(
-  postrefinement_heatmap_transcript = plotBambu(se_filtered, type = "heatmap", group.variable = "groupVar"),
-  postrefinement_heatmap_gene       = plotBambu(seGene_filtered, type = "heatmap", group.variable = "groupVar"),
-  postrefinement_pca                = plotBambu(se_filtered, type = "pca"),
-  postrefinement_pca_grouped        = plotBambu(se_filtered, type = "pca", group.variable = "groupVar")
+  heatmap_transcript_validated = plotBambu(se_filtered, type = "heatmap", group.variable = "groupVar"),
+  heatmap_gene_validated       = plotBambu(seGene_filtered, type = "heatmap", group.variable = "groupVar"),
+  pca_validated                = plotBambu(se_filtered, type = "pca"),
+  pca_grouped_validated        = plotBambu(se_filtered, type = "pca", group.variable = "groupVar")
 )
 
 lapply(names(plots), function(x) {

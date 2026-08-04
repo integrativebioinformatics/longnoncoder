@@ -14,13 +14,13 @@ process POST_REFINEMENT {
     path r_script
 
     output:
-    path "postrefinement_pca.png"                , emit: pca
-    path "postrefinement_pca_grouped.png"        , emit: pca_grouped
-    path "postrefinement_heatmap_gene.png"       , emit: h_gene
-    path "postrefinement_heatmap_transcript.png" , emit: h_transcript
-    path "se_multiSample_validated.rds"          , emit: rds_transcript
-    path "seGene_multiSample_validated.rds"      , emit: rds_gene
-    path "versions.yml"                          , emit: versions
+    path "pca_validated.png"                , emit: pca
+    path "pca_grouped_validated.png"        , emit: pca_grouped
+    path "heatmap_gene_validated.png"       , emit: h_gene
+    path "heatmap_transcript_validated.png" , emit: h_transcript
+    path "se_multiSample_validated.rds"     , emit: rds_transcript
+    path "seGene_multiSample_validated.rds" , emit: rds_gene
+    path "versions.yml"                     , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -48,10 +48,10 @@ process POST_REFINEMENT {
 
     stub:
     """
-    touch postrefinement_pca.png
-    touch postrefinement_pca_grouped.png
-    touch postrefinement_heatmap_gene.png
-    touch postrefinement_heatmap_transcript.png
+    touch pca_validated.png
+    touch pca_grouped_validated.png
+    touch heatmap_gene_validated.png
+    touch heatmap_transcript_validated.png
     touch se_multiSample_validated.rds
     touch seGene_multiSample_validated.rds
 

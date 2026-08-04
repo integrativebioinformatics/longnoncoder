@@ -87,10 +87,10 @@ params:
     raw_pca_grouped: "pca_grouped.png"
     raw_heatmap_gene: "heatmap_gene.png"
     raw_heatmap_transcript: "heatmap_transcript.png"
-    post_pca: "postrefinement_pca.png"
-    post_pca_grouped: "postrefinement_pca_grouped.png"
-    post_heatmap_gene: "postrefinement_heatmap_gene.png"
-    post_heatmap_transcript: "postrefinement_heatmap_transcript.png"
+    post_pca: "pca_validated.png"
+    post_pca_grouped: "pca_grouped_validated.png"
+    post_heatmap_gene: "heatmap_gene_validated.png"
+    post_heatmap_transcript: "heatmap_transcript_validated.png"
 knitr:
   opts_chunk:
     fig.showtext: true
