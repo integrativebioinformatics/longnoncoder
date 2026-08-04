@@ -152,6 +152,18 @@ def validateInputParameters() {
         if (!params.annotation) {
             error("--annotation must be provided when alignment is not skipped (skip_alignment = false)")
         }
+
+        // Library type drives the minimap2 preset and Bambu strandedness
+        def valid_libraries = ['ONT_cDNA', 'ONT_DRS', 'PacBio']
+        if (!params.library) {
+            error("--library must be provided when alignment is not skipped (skip_alignment = false). Valid values: ${valid_libraries.join(', ')}")
+        }
+        if (!(params.library in valid_libraries)) {
+            error("--library '${params.library}' is not valid. Valid values: ${valid_libraries.join(', ')}")
+        }
+        if (params.library in ['ONT_DRS', 'PacBio'] && params.stranded_library?.toString()?.toLowerCase() != 'true') {
+            log.warn("--library ${params.library} is always stranded; --stranded_library false will be ignored.")
+        }
     }
 
     // Coding prediction requires organism

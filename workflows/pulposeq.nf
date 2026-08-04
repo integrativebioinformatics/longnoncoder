@@ -10,6 +10,7 @@ include { SUBSET_BAMBU_COUNTS               } from '../modules/local/metadata_re
 include { SUBSET_BAMBU_GTF                  } from '../modules/local/metadata_refinement/subset_bambu_gtf/main'
 include { BAMBU_VALIDATE                    } from '../modules/local/metadata_refinement/validate_counts/main'
 include { KNOWN_TRANSCRIPTS                 } from '../modules/local/metadata_refinement/known_transcripts/main'
+include { POST_REFINEMENT                   } from '../modules/local/post_refinement/main'
 include { RENDER_REPORT                     } from '../modules/local/report/main'
 include { QC_FILT                           } from '../subworkflows/local/qc'
 include { ALIGNMENT                         } from '../subworkflows/local/alignment'
@@ -128,6 +129,18 @@ workflow PULPOSEQ {
         )
         ch_versions = ch_versions.mix(SUBSET_BAMBU_GTF.out.versions)
 
+        //
+        // Regenerate the Bambu PCA and heatmaps from the validated transcriptome
+        //
+        POST_REFINEMENT (
+            TRANSCRIPT_RECONSTRUCTION.out.rds_transcript,
+            TRANSCRIPT_RECONSTRUCTION.out.rds_gene,
+            BAMBU_VALIDATE.out.counts_transcript_validated,
+            BAMBU_VALIDATE.out.counts_gene_validated,
+            file("${projectDir}/bin/post_refinement.R", checkIfExists: true)
+        )
+        ch_versions = ch_versions.mix(POST_REFINEMENT.out.versions)
+
         RENDER_REPORT (
             BAMBU_VALIDATE.out.counts_gene_validated,
             BAMBU_VALIDATE.out.counts_transcript_validated,
@@ -141,6 +154,14 @@ workflow PULPOSEQ {
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
             NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
+            TRANSCRIPT_RECONSTRUCTION.out.pca,
+            TRANSCRIPT_RECONSTRUCTION.out.pca_grouped,
+            TRANSCRIPT_RECONSTRUCTION.out.h_gene,
+            TRANSCRIPT_RECONSTRUCTION.out.h_transcript,
+            POST_REFINEMENT.out.pca,
+            POST_REFINEMENT.out.pca_grouped,
+            POST_REFINEMENT.out.h_gene,
+            POST_REFINEMENT.out.h_transcript,
             file("${projectDir}/bin/report.qmd", checkIfExists: true) // <- ADDED SCRIPT PATH
         )
         ch_versions = ch_versions.mix(RENDER_REPORT.out.versions)

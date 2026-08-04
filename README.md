@@ -83,6 +83,8 @@ In some cases, depending on your system's permissions and configuration regardin
 > [!WARNING]
 > Please provide pipeline parameters via the CLI or input a `yaml` or `json`parameters file  via the Nextflow `-params-file` option (most recommended). Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration, ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
 
+You must declare your sequencing library chemistry with the `library` (`ONT_cDNA`, `ONT_DRS` or `PacBio`) and `stranded_library` (`true`/`false`) parameters. These set the `minimap2` alignment preset and Bambu's strandedness together, and a single execution must use one library type. PacBio libraries are expected to have been processed and stranded beforehand by PacBio's own standard workflows, and ONT cDNA libraries need re-orienting outside the pipeline or must be treated as unstranded. See [Library type and strandedness](docs/usage.md#library-type-and-strandedness) for the full details.
+
 
 pulposeq is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. If pulposeq presents any errors, this configuration allows you to restart the pipeline execution from the last successfull step by using the `-resume` parameter. The `work/` directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
 

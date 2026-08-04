@@ -25,6 +25,8 @@ option_list <- list(
               help = "Number of cores to use for parallel processing", metavar = "numeric"),
   make_option(c("-d", "--ndr"), type = "character", default = NULL,
               help = "Novel Discovery Rate cut-off (optional)", metavar = "character"),
+  make_option(c("-t", "--stranded"), type = "character", default = "false",
+              help = "Whether the library is stranded (true/false)", metavar = "character"),
   make_option(c("-o", "--outdir"), type = "character", default = "output",
               help = "Output directory", metavar = "character")
 )
@@ -54,6 +56,9 @@ if (is.null(opt$ndr) || opt$ndr == "null") {
   ndr_cutoff <- as.numeric(opt$ndr)
 }
 
+# Parse stranded parameter: accept the usual truthy spellings
+stranded_flag <- tolower(opt$stranded) %in% c("true", "t", "yes", "1")
+
 # Create output directory if it doesn't exist
 dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -79,6 +84,7 @@ se.multiSample <- tryCatch({
     reads = totalData,
     annotations = annotation,
     genome = genomeSequence,
+    stranded = stranded_flag,
     trackReads = TRUE,
     opt.discovery = list(min.txScore.singleExon = 0)
   )

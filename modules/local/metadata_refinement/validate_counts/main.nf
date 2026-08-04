@@ -3,8 +3,8 @@ process BAMBU_VALIDATE {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test':
-        'docker.io/itsiaguara/longnoncoder:test' }"
+        'docker://itsiaguara/longnoncoder:test3':
+        'docker.io/itsiaguara/longnoncoder:test3' }"
 
     input:
     path metadata_csv
@@ -34,7 +34,7 @@ process BAMBU_VALIDATE {
         --counts_transcript ${counts_transcript} \\
         --cpm_transcript ${cpm_transcript} \\
         --full_length ${full_length_counts_transcript} \\
-        --unique ${unique_counts_transcript}
+        --unique ${unique_counts_transcript} \\
         $args
 
     cat <<-END_VERSIONS > versions.yml

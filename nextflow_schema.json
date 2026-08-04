@@ -158,6 +158,17 @@
             "type": "string",
             "description": "Reference genome used for assembly"
         },
+        "library": {
+            "type": "string",
+            "enum": ["ONT_cDNA", "ONT_DRS", "PacBio"],
+            "description": "Sequencing library type. Determines the minimap2 preset and Bambu strandedness.",
+            "help_text": "ONT_cDNA covers both PCR-cDNA and direct-cDNA protocols. ONT_DRS and PacBio are always treated as stranded."
+        },
+        "stranded_library": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether the library is stranded. Forced to true for ONT_DRS and PacBio; only meaningful for ONT_cDNA."
+        },
         "bam_format": {
             "type": "boolean"
         },
@@ -192,7 +203,8 @@
             "type": "integer"
         },
         "maxlen": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Maximum read length (bp). Reads longer than this are discarded by chopper. Unset by default (no upper limit)."
         },
         "ndr": {
             "type": "number",

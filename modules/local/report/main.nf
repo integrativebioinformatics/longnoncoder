@@ -22,7 +22,19 @@ process RENDER_REPORT {
     path novel_transcriptome_meta
     path novel_lncrna_exonlength
     path novel_protein_coding_exonlength
-    
+
+    // raw bambu plots (pre-refinement assembly)
+    path raw_pca
+    path raw_pca_grouped
+    path raw_heatmap_gene
+    path raw_heatmap_transcript
+
+    // regenerated plots from the validated transcriptome
+    path post_pca
+    path post_pca_grouped
+    path post_heatmap_gene
+    path post_heatmap_transcript
+
     // quarto template
     path qmd_report // <- ADDED: The .qmd file is now a formal input
 
@@ -54,6 +66,14 @@ process RENDER_REPORT {
         -P novel_transcriptome_meta:${novel_transcriptome_meta} \\
         -P novel_lncrna_exonlength:${novel_lncrna_exonlength} \\
         -P novel_protein_coding_exonlength:${novel_protein_coding_exonlength} \\
+        -P raw_pca:${raw_pca} \\
+        -P raw_pca_grouped:${raw_pca_grouped} \\
+        -P raw_heatmap_gene:${raw_heatmap_gene} \\
+        -P raw_heatmap_transcript:${raw_heatmap_transcript} \\
+        -P post_pca:${post_pca} \\
+        -P post_pca_grouped:${post_pca_grouped} \\
+        -P post_heatmap_gene:${post_heatmap_gene} \\
+        -P post_heatmap_transcript:${post_heatmap_transcript} \\
         --to html
 
     cat <<-END_VERSIONS > versions.yml

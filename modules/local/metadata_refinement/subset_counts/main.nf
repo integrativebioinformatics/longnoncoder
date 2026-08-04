@@ -32,7 +32,7 @@ process SUBSET_BAMBU_COUNTS {
         --counts_transcript ${counts_transcript} \\
         --cpm_transcript ${cpm_transcript} \\
         --full_length ${full_length_counts_transcript} \\
-        --unique ${unique_counts_transcript}
+        --unique ${unique_counts_transcript} \\
         $args
 
     cat <<-END_VERSIONS > versions.yml

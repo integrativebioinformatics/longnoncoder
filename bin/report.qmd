@@ -83,6 +83,14 @@ params:
     novel_transcriptome_meta: "novel_pc_lnc_RNAs_metadata.csv"
     novel_lncrna_exonlength: "novel_lncRNA_exon_lengths.csv"
     novel_protein_coding_exonlength: "novel_protein-coding_exon_lengths.csv"
+    raw_pca: "pca.png"
+    raw_pca_grouped: "pca_grouped.png"
+    raw_heatmap_gene: "heatmap_gene.png"
+    raw_heatmap_transcript: "heatmap_transcript.png"
+    post_pca: "postrefinement_pca.png"
+    post_pca_grouped: "postrefinement_pca_grouped.png"
+    post_heatmap_gene: "postrefinement_heatmap_gene.png"
+    post_heatmap_transcript: "postrefinement_heatmap_transcript.png"
 knitr:
   opts_chunk:
     fig.showtext: true
@@ -428,6 +436,81 @@ lnc_pc_bambu_plot <- ggplot(bambu_transcript_biotype_data, aes(x = Bambu, y = Co
 
 # Final Output
 lnc_pc_bambu_plot
+```
+
+------------------------------------------------------------------------
+
+## Sample-level Expression Overview
+
+Bambu produces a PCA and expression heatmaps summarising how samples relate to one another. The figures below are shown twice: once for the **raw assembly**, exactly as Bambu produced it, and once after the transcriptome has been **validated and curated** by the metadata refinement steps. The raw assembly still contains novel transcript calls that were later discarded, so differences between the two views show how much those discarded calls were influencing the sample-level signal.
+
+```{r}
+#| label: plot-availability
+#| include: false
+
+plot_params <- list(
+  raw_pca                 = params$raw_pca,
+  raw_pca_grouped         = params$raw_pca_grouped,
+  raw_heatmap_gene        = params$raw_heatmap_gene,
+  raw_heatmap_transcript  = params$raw_heatmap_transcript,
+  post_pca                = params$post_pca,
+  post_pca_grouped        = params$post_pca_grouped,
+  post_heatmap_gene       = params$post_heatmap_gene,
+  post_heatmap_transcript = params$post_heatmap_transcript
+)
+
+# A plot is only embedded if the file is present and non-empty, so a stub run or
+# a partially completed execution does not break the render.
+plot_available <- vapply(plot_params, function(p) {
+  !is.null(p) && file.exists(p) && file.info(p)$size > 0
+}, logical(1))
+
+# include_graphics must be handed a vector: called inside a loop it would not be
+# auto-printed and nothing would be embedded.
+show_plots <- function(keys) {
+  paths <- unlist(plot_params[keys][plot_available[keys]], use.names = FALSE)
+  if (length(paths) > 0) knitr::include_graphics(paths) else NULL
+}
+```
+
+### Principal Component Analysis
+
+```{r}
+#| label: fig-pca
+#| echo: false
+#| fig-cap: "Sample PCA before (left) and after (right) validation and curation."
+#| layout-ncol: 2
+
+show_plots(c("raw_pca", "post_pca"))
+```
+
+```{r}
+#| label: fig-pca-grouped
+#| echo: false
+#| fig-cap: "Sample PCA coloured by group, before (left) and after (right) validation and curation."
+#| layout-ncol: 2
+
+show_plots(c("raw_pca_grouped", "post_pca_grouped"))
+```
+
+### Expression Heatmaps
+
+```{r}
+#| label: fig-heatmap-transcript
+#| echo: false
+#| fig-cap: "Transcript-level expression heatmap, before (left) and after (right) validation and curation."
+#| layout-ncol: 2
+
+show_plots(c("raw_heatmap_transcript", "post_heatmap_transcript"))
+```
+
+```{r}
+#| label: fig-heatmap-gene
+#| echo: false
+#| fig-cap: "Gene-level expression heatmap, before (left) and after (right) validation and curation."
+#| layout-ncol: 2
+
+show_plots(c("raw_heatmap_gene", "post_heatmap_gene"))
 ```
 
 ------------------------------------------------------------------------

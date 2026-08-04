@@ -25,6 +25,8 @@ process BAMBU {
     path "BambuOutput_uniqueCounts_transcript.txt"       , emit: unique_counts
     path "bambu_novel_transcripts.gtf"                   , emit: gtf_new_transcripts
     path "BambuOutput_extended_annotations.gtf"          , emit: gtf_all_transcripts
+    path "se_multiSample.rds"                            , emit: rds_transcript
+    path "seGene_multiSample.rds"                        , emit: rds_gene
     path "*.rds"                                         , emit: rds
     path "versions.yml"                                  , emit: versions
 
@@ -32,7 +34,7 @@ process BAMBU {
     task.ext.when == null || task.ext.when
 
     script:
-    def args     = task.ext.args ? task.ext.args : "--ndr ${params.ndr}"
+    def args     = task.ext.args ?: ''
     """
     bambu.R \\
         -g $reference \\
@@ -73,7 +75,8 @@ process BAMBU {
     touch BambuOutput_uniqueCounts_transcript.txt
     touch bambu_novel_transcripts.gtf
     touch BambuOutput_extended_annotations.gtf
-    touch bambu_output.rds
+    touch se_multiSample.rds
+    touch seGene_multiSample.rds
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

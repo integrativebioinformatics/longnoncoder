@@ -23,6 +23,8 @@ workflow TRANSCRIPT_RECONSTRUCTION {
     ch_pca_grouped           = channel.empty()
     ch_h_transcript          = channel.empty()
     ch_h_gene                = channel.empty()
+    ch_rds_transcript        = channel.empty()
+    ch_rds_gene              = channel.empty()
 
     // Setting channel for the reference
     ch_reference  = channel.fromPath(reference, checkIfExists: true)
@@ -30,20 +32,14 @@ workflow TRANSCRIPT_RECONSTRUCTION {
 
     // Setting TSV file with sample information
     bams
-        .map { meta, path -> [meta.group, path.getName()] }
-        .collectFile(newLine: true) { item ->
-            ["${item[0]}.txt", item[0] + '\t' + item[1]]
-        }
-        .collectFile(name: 'sampinfo_samplesheet.tsv')
+        .map { meta, path -> meta.group + '\t' + path.getName() }
+        .collectFile(name: 'sampinfo_samplesheet.tsv', newLine: true, sort: true)
         .set { ch_samp_info }
 
     // Setting up the BAM list
     bams
-        .map { meta, path -> [meta.group, path.toString()] }
-        .collectFile(newLine: true) { item ->
-            ["${item[0]}.txt", item[1]]
-        }
-        .collectFile(name: 'bamlist.txt')
+        .map { _meta, path -> path.toString() }
+        .collectFile(name: 'bamlist.txt', newLine: true, sort: true)
         .set { ch_bamlist }
 
     BAMBU (
@@ -86,12 +82,20 @@ workflow TRANSCRIPT_RECONSTRUCTION {
     BAMBU.out.pca_grouped
         .set { ch_pca_grouped }
 
+    BAMBU.out.rds_transcript
+        .set { ch_rds_transcript }
+
+    BAMBU.out.rds_gene
+        .set { ch_rds_gene }
+
     ch_versions = ch_versions.mix(BAMBU.out.versions.ifEmpty(null))
 
     emit:
     versions            = ch_versions
     pca                 = ch_pca
     pca_grouped         = ch_pca_grouped
+    rds_transcript      = ch_rds_transcript
+    rds_gene            = ch_rds_gene
     h_gene              = ch_h_gene
     h_transcript        = ch_h_transcript
     CPM                 = ch_CPM

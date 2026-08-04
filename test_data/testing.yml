@@ -7,6 +7,12 @@ skip_alignment: false
 skip_alignment_qc: false
 skip_class: false
 
+# ENCODE CapTrap cDNA heart samples sequenced with ONT
+library: "ONT_cDNA"
+
+# treated as unstranded, as the reads are not re-oriented before entering the pipeline
+stranded_library: false
+
 reference: "/full/path/to/longnoncoder/test_data/references/Homo_sapiens.GRCh38.dna.chromosome.1.fa"
 
 annotation: "/full/path/to/longnoncoder/test_data/references/Homo_sapiens.GRCh38.114.chr1.gtf"

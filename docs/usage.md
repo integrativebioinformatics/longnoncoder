@@ -56,6 +56,7 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `skip_filtering` | Skip filtering with `chopper`, just perform `NanoComp` reporting |
 | `minqual` | Minimum read average Phred-score quality cut-off |
 | `minlen` | Minimum read length (bp) |
+| `maxlen` | Maximum read length (bp), optional — leave unset for no upper limit |
 | `maxgc` | Maximum GC content (%) |
 | `mingc` | Minimum GC content (%) |
 | `headcrop` | Cut `x` number of bases from the beginning of the reads |
@@ -64,10 +65,32 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `skip_alignment_qc` | Skip mapping/alignment QC (might reduce resource usage and speed up execution when running large datasets) |
 | `reference` | Full path to a reference genome `FASTA` file from Ensembl |
 | `annotation` | Full path to a reference annotation `GTF` file from Ensembl |
+| `library` | Sequencing library type: `ONT_cDNA`, `ONT_DRS` or `PacBio` |
+| `stranded_library` | Whether the library is stranded (`true`/`false`) |
 | `skip_class` | Skip transcriptome characterization (runs MultiQC, then finishes pipeline execution) |
 | `organism` | Organism scientific name (e.g. `"Homo_sapiens"`) |
 | `ensembl_organism_dataset` | Reference species-specific BiomaRt dataset (e.g. `"hsapiens_gene_ensembl"`) |
 | `ensembl_version` | Number of Ensembl release version (e.g. `114`) |
+
+### Library type and strandedness
+
+The `library` and `stranded_library` parameters are **required** whenever alignment is not skipped. Together they set the `minimap2` alignment preset and Bambu's `stranded` argument — the two are deliberately driven from a single declaration of library chemistry, so they cannot be configured independently.
+
+| `library` | `stranded_library` | `minimap2` preset |
+|--------------|-----------------------|----------------------------|
+| `ONT_DRS` | automatically `true` | `-ax splice -uf -k14` |
+| `PacBio` | automatically `true` | `-ax splice:hq -uf` |
+| `ONT_cDNA` | `true` | `-ax splice -uf` |
+| `ONT_cDNA` | `false` | `-ax splice` |
+
+> [!IMPORTANT]
+> A single execution must use one library type. Running PacBio and ONT samples together in the same run is not supported, as the difference in error profiles and library chemistry makes joint assembly difficult to interpret.
+
+**PacBio.** The pipeline requires PacBio reads that have already been processed and stranded by PacBio's own independent standard workflows. pulposeq does not perform that preprocessing, and assumes it has already been done.
+
+**ONT_DRS.** Direct RNA sequencing reads the native RNA molecule, so these libraries are considered automatically stranded. Setting `stranded_library: false` for `ONT_DRS` is ignored, and the pipeline emits a warning.
+
+**ONT_cDNA.** This covers both PCR-cDNA and direct-cDNA protocols. Standard ONT cDNA library preparation protocols can sequence either the first or second cDNA strand, leaving read direction mixed or unaligned to the original mRNA's 5'-to-3' orientation. Such libraries must either go through a manual orienting process outside the pipeline, or be treated as unstranded by setting `stranded_library: false`. Tools like [Pychopper](https://github.com/epi2me-labs/pychopper) and [Restrander](https://github.com/mainguyenanhvu/Restrander) are used to detect poly(A) tails and primer signatures to fix this.
 
 ### Ensembl vs GENCODE annotations
 

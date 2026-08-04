@@ -12,10 +12,18 @@ skip_class: false
 # set the following QC and filtering parameters 
 minqual: 0
 minlen: 300 # default value
+maxlen: null # optional upper read length limit, e.g. 10000
 maxgc: 1
 mingc: 0
 headcrop: 0
 tailcrop: 0
+
+# set the sequencing library type: ONT_cDNA (PCR-cDNA or direct cDNA), ONT_DRS (direct RNAseq) or PacBio
+library: "ONT_cDNA"
+
+# set whether the library is stranded (automatically true for ONT_DRS and PacBio)
+# ONT_cDNA libraries must be re-oriented outside the pipeline (e.g. Pychopper, Restrander) to be set as true
+stranded_library: false
 
 # set the full path to your genome and annotation reference files
 # recommendation: always use the latest ensembl release version available
