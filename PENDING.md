@@ -11,147 +11,167 @@ what still needs verifying before it merges to `dev`.
 
 ---
 
-## Part 1 — Pending validations
+## Part 1 — Validation plan
 
-None of these ran on the Windows machine where the changes were written (no Java, no Nextflow, no
-usable WSL distro). **Everything below is unverified.** Run from the repo root on a machine with
-Nextflow and Docker/Singularity.
+Validation is done by **running the pipeline end to end** on the test data and reviewing the
+artifacts. A single real run exercises most of the changed surface at once. Three cheap gates run
+first, because each catches a whole class of failure in seconds rather than after hours of compute.
 
-### V1. Config parses and closures resolve — **highest priority**
-
-`conf/modules.config` defines two top-level `def` closures (`stranded_library`, `minimap2_preset`)
-called from inside `ext.args` closures. This relies on Groovy lexical capture surviving Nextflow's
-config parser. It should hold, but it is the one mechanism in the whole change never exercised.
+### Environment
 
 ```bash
-nextflow config -profile docker
-nextflow config -profile docker --library ONT_DRS
-nextflow config -profile docker --library PacBio
-nextflow config -profile docker --library ONT_cDNA --stranded_library true
+conda activate nf-core          # provides Nextflow >= 26.04
+module load singularity
+cd test_data && chmod +x download-ref-fastq.sh && ./download-ref-fastq.sh && cd ..
+# then fill the /full/path/to/... placeholders in test_data/samplesheet.csv and test_data/testing.yml
 ```
 
-Expect no `MissingMethodException` / `No such property: minimap2_preset`.
-
-**If this fails:** inline the `switch` into `MINIMAP2_ALIGN.ext.args` and the strandedness ternary
-into `BAMBU.ext.args`, accepting that the rule is then stated twice.
-
-### V2. Parameter validation fires correctly
-
-| Command | Expected |
-|---|---|
-| no `--library` | error: `--library must be provided when alignment is not skipped` |
-| `--library nonsense` | rejected by schema enum **and** `validateInputParameters()` |
-| `--library ONT_DRS --stranded_library false` | warning `...is always stranded...`, run proceeds |
-| `--skip_alignment`, no `--library` | no error (library only required when alignment runs) |
-
-### V3. minimap2 presets actually emitted
-
-Needs a **real, non-stub** run — minimap2's `stub` block does not interpolate `args`.
-
-```bash
-nextflow run . -profile docker -params-file test_data/testing.yml --library ONT_DRS
-grep -h "minimap2" work/*/*/.command.sh
-```
-
-| Setting | Expected preset |
-|---|---|
-| `ONT_DRS` | `-ax splice -uf -k14` |
-| `PacBio` | `-ax splice:hq -uf` |
-| `ONT_cDNA` + `stranded_library: true` | `-ax splice -uf` |
-| `ONT_cDNA` + `stranded_library: false` | `-ax splice` |
-
-### V4. Bambu receives strandedness and the new flag parses
-
-```bash
-grep -h "bambu.R" work/*/*/.command.sh
-```
-
-Expect `--ndr <value> --stranded true|false`. Confirm the run reaches `BambuOutput_*` without an
-optparse error on `--stranded`, and that `--ndr null` still behaves as before — the module no longer
-supplies its own default, `conf/modules.config` does.
-
-### V5. M4 regression — group labels still correct
-
-The specific thing the `collectFile` simplification could have broken. Row order in `bamlist.txt`
-changed from group-ordered to path-ordered.
-
-```bash
-wc -l work/*/*/bamlist.txt work/*/*/sampinfo_samplesheet.tsv   # one line per sample in each
-```
-
-```r
-se <- readRDS("<outdir>/bambu/se_multiSample.rds")
-colData(se)$group   # must match each sample's group in the samplesheet
-```
-
-### V6. Confirm the test-data library assumption
-
-`test_data/testing.yml` was set to `library: "ONT_cDNA"` / `stranded_library: false` based on
-`download-ref-fastq.sh` describing the ENCODE files as "CapTrap cDNA". Unstranded is the
-conservative default — if those CapTrap libraries come out oriented, flip to `true`.
-
-### V7. `maxlen` reaches chopper (P3)
-
-```bash
-grep -h "chopper" work/*/*/.command.sh
-```
-
-- Default run (`maxlen` unset) → **no** `--maxlength` flag present.
-- `--maxlen 10000` → `--maxlength 10000` present.
-- Confirm chopper's flag really is `--maxlength` on the pinned container version (`chopper --help`).
-
-### V8. `resourceLimits` caps retries (P4)
-
-Force a retry on a `process_high_memory` task under `-profile small` and confirm the second attempt
-requests 200 GB rather than 400 GB. Check the ceilings match your real hardware — the values were
-derived from each profile's own maximum request, not from any machine:
-
-| Profile | cpus | memory | time |
-|---|---|---|---|
-| base / small | 12 | 200 GB | 20 h |
-| light | 10 | 30 GB | 4 h |
-| medium | 20 | 100 GB | 20 h |
-| large | 20 | 500 GB | 48 h |
-| test | 2 | 12 GB | 12 h |
-
-### V9. Publishing still works after the `outputDir` removal (P5)
-
-`outputDir` / `workflow.output.mode` were deleted from `nextflow.config`. Confirm results still land
-under `params.outdir` in the expected 16 subdirectories, and that `publish_dir_mode: copy` is honoured.
-
-### V10. `BAMBU_VALIDATE` container pull (P1)
-
-`validate_counts` moved from `:test` to `:test3`. Confirm the image pulls and the module still runs —
-`:test3` was never exercised for this process before.
-
-### V11. POST_REFINEMENT module (new feature)
-
-The whole feature is untested. In order of what is most likely to break:
-
-1. **RDS row-name matching.** `post_refinement.R` subsets by `rownames(object) %in% ids`, where
-   `ids` is column 1 of the validated counts files. If Bambu's SE rownames carry version suffixes
-   (or the counts files do) and the other doesn't, the intersect is empty and the script errors out
-   with the "None of the N validated IDs matched" message. That message is deliberate — it tells you
-   the keys disagree rather than silently plotting nothing. Check with:
-   ```r
-   se <- readRDS("<outdir>/bambu/se_multiSample.rds"); head(rownames(se))
-   head(read.table("<outdir>/bambu_validated/BambuOutput_counts_transcript_validated.txt", header = TRUE)[[1]])
-   ```
-2. **`plotBambu` on a row-subset object** — confirm heatmap and PCA still render once rows are
-   removed, and that `colData$groupVar` survived the subset (it should; only rows are touched).
-3. **Both plot sets reach the report** — the rendered HTML should show a "Sample-level Expression
-   Overview" section with four two-up comparisons. If the panels are blank, the `show_plots()` vector
-   handling is the thing to look at.
-4. **Filename collisions in the RENDER_REPORT work dir** — raw plots stage as `pca.png`,
-   `pca_grouped.png`, `heatmap_gene.png`, `heatmap_transcript.png`; post-refinement ones as the same
-   names with a `_validated` suffix. Confirm all eight are present in the task's work directory and
-   none overwrote another.
-5. **`-stub` still works** — the BAMBU stub previously touched `bambu_output.rds`, a filename
-   `bin/bambu.R` never writes. It now touches `se_multiSample.rds` and `seGene_multiSample.rds` to
-   satisfy the new named outputs. Verify a full `-stub` run completes.
+> [!IMPORTANT]
+> This branch sets `manifest.nextflowVersion = '!>=26.04.0'`. From 26.04 the **strict syntax parser
+> is enabled by default**, which is stricter about config files than any version this pipeline has
+> run under before. Stage 0 exists specifically to catch that.
 
 ---
 
+### Stage 0 — `nextflow lint` (seconds)
+
+```bash
+nextflow lint .
+```
+
+Statically checks every `.nf` and `.config` file against the strict syntax. This is the highest-value
+single command on the branch, because 26.04 enforces rules the pipeline has never been parsed under.
+
+**Known constraint already handled:** the strict parser allows only config assignments, blocks and
+includes — top-level `def` declarations and helper functions are rejected. The library/strandedness
+logic was originally written as two shared top-level closures in `conf/modules.config`; it is now
+inlined inside the `MINIMAP2_ALIGN` and `BAMBU` `ext.args` closures, where local variables are still
+permitted. The rule is deliberately stated twice; do not "refactor" it back into a shared helper.
+
+**Most likely remaining offender:** `nextflow.config` sets
+
+```groovy
+trace_report_suffix = new java.util.Date().format( 'yyyy-MM-dd_HH-mm-ss')
+```
+
+This is nf-core template code written for 25.10 and involves a constructor call in a config
+assignment. If lint rejects it, replace with a literal or move the timestamp generation elsewhere.
+
+Anything lint flags in `modules/nf-core/*` is upstream template code, not part of this branch —
+note it, don't fix it here.
+
+### Stage 1 — config resolution (seconds)
+
+```bash
+nextflow config -profile test,singularity -params-file test_data/testing.yml
+```
+
+Confirms the config tree assembles and the `ext.args` closures are syntactically reachable. Check the
+resolved `process` block lists `resourceLimits` and that no `containers_*.config` is referenced
+(those eight files were deleted).
+
+### Stage 2 — stub run (~minutes)
+
+```bash
+nextflow run main.nf -profile test,singularity -params-file test_data/testing.yml -stub-run
+```
+
+Exercises every channel connection, input cardinality and output filename in the DAG without running
+a single real tool. Catches wiring errors in the new POST_REFINEMENT module and the M4 `collectFile`
+change for the price of a coffee, rather than after Bambu has run.
+
+Note the BAMBU stub previously touched `bambu_output.rds`, a filename `bin/bambu.R` never writes; it
+now touches `se_multiSample.rds` and `seGene_multiSample.rds` to satisfy the new named outputs.
+
+### Stage 3 — the real run (hours)
+
+```bash
+nextflow run main.nf -profile test,singularity -params-file test_data/testing.yml
+```
+
+> [!WARNING]
+> `-profile test` caps resources at `cpus: 2, memory: 12.GB` and gives `process_high_memory` 12 GB.
+> That is the Bambu step, running on real ENCODE reads against human chr1. If it is OOM-killed, this
+> is a test-profile sizing problem, not a defect in the branch — rerun that step with `-profile
+> medium,singularity` and note it.
+
+### Stage 4 — send for review
+
+The full `work/` directory is large and mostly BAMs. This bundle is what is actually needed:
+
+```bash
+tar czf pulposeq-validation.tar.gz \
+    .nextflow.log \
+    $(find work -name '.command.sh' -o -name '.command.err' -o -name '.command.out') \
+    results/pipeline_info \
+    results/transcriptome_report \
+    results/bambu_validated \
+    results/novel_transcripts \
+    results/annotated_transcripts \
+    results/multiqc \
+    results/bambu/*.png results/bambu/*.rds \
+    results/post_refinement 2>/dev/null
+```
+
+Deliberately excluded: `work/**/*.bam`, `results/minimap2/`, `results/chopper/` — large binaries with
+nothing to review in them. If a task fails, also include that task's full work directory.
+
+---
+
+### What the run covers
+
+| ID | Check | Covered by |
+|---|---|---|
+| V1 | Strict-syntax / config resolution | Stage 0–1 |
+| V3 | minimap2 preset emitted (`ONT_cDNA` unstranded only) | Stage 3 → `grep -h "minimap2" work/*/*/.command.sh` |
+| V4 | Bambu gets `--ndr` and `--stranded false`; optparse accepts the new flag | Stage 3 → `grep -h "bambu.R" work/*/*/.command.sh` |
+| V5 | M4 regression — group labels correct despite changed `bamlist.txt` order | Stage 3 → `colData(readRDS(...))$group` |
+| V7 | `maxlen` unset → **no** `--maxlength` in the chopper command | Stage 3 → `grep -h "chopper" work/*/*/.command.sh` |
+| V9 | Publishing still works after the `outputDir` removal | Stage 3 → results/ subdirectories present |
+| V10 | `BAMBU_VALIDATE` runs on `:test3` | Stage 3 → task completes |
+| V11 | POST_REFINEMENT end to end | Stage 2 + 3 |
+
+### What the run does *not* cover
+
+One run uses one library setting and one set of valid params, so these need deliberate extra
+invocations. All are cheap — none needs to run to completion.
+
+| ID | Check | How |
+|---|---|---|
+| V2 | Param validation errors | Run with no `--library`, then `--library nonsense`, then `--library ONT_DRS --stranded_library false`. Each should fail or warn at initialisation, in seconds. |
+| V3b | The other three presets | `-stub-run` with `--library ONT_DRS`, `--library PacBio`, `--library ONT_cDNA --stranded_library true`, then read `work/*/*/.command.sh`. Stub does not interpolate minimap2's `args`, so instead read the resolved value from `nextflow config` output, or do three short real runs killed after MINIMAP2_ALIGN starts. |
+| V7b | `maxlen` set | Add `--maxlen 10000` and confirm `--maxlength 10000` appears. |
+| V8 | `resourceLimits` caps retries | Force a `process_high_memory` retry under `-profile small` and confirm the second attempt requests 200 GB, not 400 GB. |
+| V6 | Library assumption for the test data | `testing.yml` is set to `ONT_cDNA` / `stranded_library: false`, a conservative guess from the ENCODE files being described as CapTrap cDNA. Correct it if the real orientation is known. |
+
+### Expected values
+
+| `library` | `stranded_library` | minimap2 preset | Bambu |
+|---|---|---|---|
+| `ONT_DRS` | forced `true` | `-ax splice -uf -k14` | `--stranded true` |
+| `PacBio` | forced `true` | `-ax splice:hq -uf` | `--stranded true` |
+| `ONT_cDNA` | `true` | `-ax splice -uf` | `--stranded true` |
+| `ONT_cDNA` | `false` | `-ax splice` | `--stranded false` |
+
+### V11 — POST_REFINEMENT, in order of what is most likely to break
+
+1. **RDS row-name matching.** `post_refinement.R` subsets by `rownames(object) %in% ids`, where `ids`
+   is column 1 of the validated counts files. If one side carries version suffixes and the other does
+   not, the intersect is empty and the script aborts with "None of the N validated IDs matched" —
+   that message is deliberate, it reports disagreeing keys rather than silently plotting nothing.
+   ```r
+   se <- readRDS("results/bambu/se_multiSample.rds"); head(rownames(se))
+   head(read.table("results/bambu_validated/BambuOutput_counts_transcript_validated.txt", header = TRUE)[[1]])
+   ```
+2. **`plotBambu` on a row-subset object** — confirm heatmap and PCA still render, and `colData$groupVar`
+   survived the subset (it should; only rows are touched).
+3. **Both plot sets reach the report** — rendered HTML should show a "Sample-level Expression
+   Overview" section with four two-up comparisons. Blank panels point at `show_plots()`.
+4. **No filename collisions in the RENDER_REPORT work dir** — raw plots stage as `pca.png`,
+   `pca_grouped.png`, `heatmap_gene.png`, `heatmap_transcript.png`; post-refinement ones as the same
+   names with a `_validated` suffix. All eight should be present, none overwritten.
+
+---
 ## Part 2 — Applied on the `updating` branch
 
 | Item | Change |
@@ -165,15 +185,17 @@ The whole feature is untested. In order of what is most likely to break:
 | **P5** | Inert `outputDir` / `workflow.output.mode` lines removed — committing to the `publishDir` model |
 | **P6** | 8 orphaned `conf/containers_*.config` files deleted |
 | **POST_REFINEMENT** | New module + `bin/post_refinement.R` regenerating the Bambu PCA/heatmaps from the validated transcriptome, between the metadata refinement steps and the report; both raw and post-refinement plots now embedded in the report |
+| **Nextflow 26** | `manifest.nextflowVersion` raised to `!>=26.04.0`; README badge and strict-syntax warning updated |
+| **Strict syntax** | The shared `stranded_library` / `minimap2_preset` closures in `conf/modules.config` were inlined into the `MINIMAP2_ALIGN` and `BAMBU` `ext.args` closures — the strict parser (default from 26.04) rejects top-level `def` declarations in config files |
 
 **Deliberately left alone under P6:** the `conda.enabled = false` guards in the docker/singularity/
 apptainer profiles (they actively enforce the no-conda policy), and
 `modules/nf-core/multiqc/{environment.yml,.conda-lock}` — those are managed by nf-core tooling via
 `modules.json`, and deleting them would break `nf-core modules update`.
 
-**Note on P5:** `publishDir` is **not** deprecated in Nextflow 25.10 — the migration guide says
-nothing about removing it, and workflow outputs merely came out of preview. Both models are current.
-The full output-DSL migration is deferred to D1 below.
+**Note on P5:** `publishDir` is **not** deprecated in Nextflow 26.04 — the migration guide says
+nothing about removing it, and workflow outputs merely came out of preview in 25.10. Both models are
+current. The full output-DSL migration is deferred to D2 below.
 
 ---
 
