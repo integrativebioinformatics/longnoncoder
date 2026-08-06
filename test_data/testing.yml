@@ -7,11 +7,11 @@ skip_alignment: false
 skip_alignment_qc: false
 skip_class: false
 
-# ENCODE CapTrap cDNA heart samples sequenced with ONT
-library: "ONT_cDNA"
+# ENCODE RUSH AD Project samples sequenced with PacBio
+library: "PacBio"
 
 # treated as unstranded, as the reads are not re-oriented before entering the pipeline
-stranded_library: false
+stranded_library: true
 
 reference: "/full/path/to/pulposeq/test_data/references/Homo_sapiens.GRCh38.dna.chromosome.1.fa"
 
