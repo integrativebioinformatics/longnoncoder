@@ -171,6 +171,43 @@ invocations. All are cheap — none needs to run to completion.
    `pca_grouped.png`, `heatmap_gene.png`, `heatmap_transcript.png`; post-refinement ones as the same
    names with a `_validated` suffix. All eight should be present, none overwritten.
 
+### V12 — biomaRt removal and GTF enrichment
+
+1. **Metadata parity — the decisive check.** The new `annotated_transcriptome_metadata.csv` should
+   match the biomaRt-era one from the last successful run: same rows, same columns, same values.
+   ```r
+   old <- read.csv("<previous>/annotated_transcripts/annotated_transcriptome_metadata.csv")
+   new <- read.csv("<new>/annotated_transcripts/annotated_transcriptome_metadata.csv")
+   all.equal(old[order(old$ensembl_transcript_id), ], new[order(new$ensembl_transcript_id), ])
+   ```
+   `transcript_length` is the field most likely to diverge — biomaRt returns the **mature** length
+   (sum of exon widths), not `end - start`. A systematic difference there means the exon summing in
+   `read_reference_gtf()` is wrong.
+2. **No network access.** `KNOWN_TRANSCRIPTS` must complete with no outbound calls; `.command.log`
+   should no longer contain "Connecting to Ensembl biomaRt...".
+3. **GTF attributes present:**
+   ```bash
+   grep -m3 "transcript_status" results/annotated_transcripts/bambu_annotated_transcriptome.gtf
+   grep -m3 "class_code" results/novel_transcripts/novel_transcripts_validated.gtf
+   grep -c 'gene_biotype "novel"' results/bambu_validated/BambuOutput_annotations_validated.gtf
+   ```
+   The last count should approximate the number of novel transcripts without a `cmp_ref_gene`
+   (630 of 1498 in the chr1 test data).
+4. **`ENRICH_VALIDATED_GTF` does not clobber its inputs.** The three validated GTFs are staged into
+   `input/` and rewritten at the task root. Confirm the published files carry the new attributes and
+   that record counts match the `SUBSET_BAMBU_GTF` outputs.
+5. **Publishing moved.** `SUBSET_BAMBU_GTF` no longer publishes — its GTFs are intermediates and
+   `ENRICH_VALIDATED_GTF` publishes the same three filenames to `bambu_validated/`. Confirm exactly
+   one copy of each exists and it is the enriched one.
+6. **Memory.** `KNOWN_TRANSCRIPTS` and `NOVEL_TRANSCRIPTS` moved from `process_single` to
+   `process_medium` because they now parse the reference GTF in R. Watch actual usage; a
+   whole-genome GENCODE annotation is much heavier than the chr1 test file.
+7. **GENCODE run.** The point of the change is that both sources work. Run once with a GENCODE GTF
+   and confirm biotypes populate via `gene_type` and `chromosome_name` reads `1`, not `chr1`. Use the
+   CHR or PRI build — ALL will trip the new duplicate-identifier check by design.
+8. **Params removed.** Any params file still setting `ensembl_organism_dataset` or `ensembl_version`
+   now fails schema validation. `test_data/testing.yml` and `examplerun.yml` are updated in-repo.
+
 ---
 ## Part 2 — Applied on the `updating` branch
 
@@ -186,7 +223,9 @@ invocations. All are cheap — none needs to run to completion.
 | **P6** | 8 orphaned `conf/containers_*.config` files deleted |
 | **POST_REFINEMENT** | New module + `bin/post_refinement.R` regenerating the Bambu PCA/heatmaps from the validated transcriptome, between the metadata refinement steps and the report; both raw and post-refinement plots now embedded in the report |
 | **Nextflow 26** | `manifest.nextflowVersion` raised to `!>=26.04.0`; README badge and strict-syntax warning updated |
-| **Strict syntax** | The shared `stranded_library` / `minimap2_preset` closures in `conf/modules.config` were inlined into the `MINIMAP2_ALIGN` and `BAMBU` `ext.args` closures — the strict parser (default from 26.04) rejects top-level `def` declarations in config files |
+| **Strict syntax** | The shared `stranded_library` / `minimap2_preset` closures in `conf/modules.config` were inlined into the `MINIMAP2_ALIGN` and `BAMBU` `ext.args` closures — the strict parser (default from 26.04) rejects top-level `def` declarations in config files, and rejects `switch`/`return` statements inside config closures |
+| **biomaRt removal** | `known_transcripts.R` now reads all transcript metadata from the supplied reference annotation GTF via the new `bin/gtf_annotation_utils.R`; `ensembl_organism_dataset` and `ensembl_version` deleted; known/novel split now tested by reference membership rather than an `ENS` prefix |
+| **GTF enrichment** | All custom-generated GTFs carry `transcript_status`, `gene_biotype`, `transcript_biotype`, `gene_name`, and — for novel transcripts — `class_code`, `classification` and `ref_gene_id`. New `bin/enrich_validated_gtf.R` + `ENRICH_VALIDATED_GTF` module post-processes the `subset_bambu_gtf.sh` outputs, leaving that shell script untouched |
 
 **Deliberately left alone under P6:** the `conda.enabled = false` guards in the docker/singularity/
 apptainer profiles (they actively enforce the no-conda policy), and

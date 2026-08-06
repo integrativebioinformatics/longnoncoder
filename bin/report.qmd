@@ -140,7 +140,7 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 
 1. Any gene or transcript that had zero counts across all samples were subset out(check the subset quantification files in the results folder `bambu_subset/`).
 2. Novel transcript isoforms were submitted to coding potential prediction with **RNAmining** [^2] and were compared to the reference annotations by **GffCompare** [^3], and classified as protein-coding or lncRNA among distinct sub-biotypes. 
-3. The structure of the isoforms is characterized, and metadata regarding isoform-level structure is retrieved from the GTF files and querying **biomaRt**[^4]. 
+3. The structure of the isoforms is characterized, and metadata regarding isoform-level structure is retrieved directly from the reference annotation and assembly GTF files with **rtracklayer**[^4].
 4. Finally, annotations, count matrices and characterization metadata are standardized into comprehensive metadatasets that are easily accessible for downstream analyses, and the overall statistics of the assembly are summarized in the following sections of this report.
 
 [^1]: Chen, Ying, et al. "Context-aware transcript quantification from long-read RNA-seq data with Bambu." Nature methods 20.8 (2023): 1187-1195. https://doi.org/10.1038/s41592-023-01908-w
@@ -149,7 +149,7 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 
 [^3]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1
 
-[^4]: Durinck, Steffen, et al. "BioMart and Bioconductor: a powerful link between biological databases and microarray data analysis." Bioinformatics 21.16 (2005): 3439-3440. https://doi.org/10.1093/bioinformatics/bti525
+[^4]: Lawrence, Michael, Robert Gentleman, and Vincent Carey. "rtracklayer: an R package for interfacing with genome browsers." Bioinformatics 25.14 (2009): 1841-1842. https://doi.org/10.1093/bioinformatics/btp328
 
 Final validated results are organized into the folders `bambu_validated`, `novel_trancripts` and `annotated_transcripts` in the output directory.
 

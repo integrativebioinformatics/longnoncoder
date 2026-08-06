@@ -1,6 +1,8 @@
 process NOVEL_TRANSCRIPTS {
     tag "Process Novel Transcripts"
-    label 'process_single'
+    // process_medium rather than process_single: this step now parses the full
+    // reference annotation GTF in R to resolve reference gene biotypes.
+    label 'process_medium'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/longnoncoder:test3':
@@ -13,7 +15,9 @@ process NOVEL_TRANSCRIPTS {
     path rnamining_predictions
     path tx_counts
     path gene_counts
-    path r_script // <- ADDED: The R script is now a formal input
+    path annotation
+    path r_script
+    path gtf_utils
 
     output:
     path "novel_transcripts_metadata.csv"          , emit: novel_transcripts_metadata
@@ -43,6 +47,7 @@ process NOVEL_TRANSCRIPTS {
         --rnamining_predictions ${rnamining_predictions} \\
         --tx_counts ${tx_counts} \\
         --gene_counts ${gene_counts} \\
+        --annotation ${annotation} \\
         $args
 
     cat <<-END_VERSIONS > versions.yml

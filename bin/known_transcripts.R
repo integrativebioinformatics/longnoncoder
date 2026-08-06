@@ -1,21 +1,18 @@
 #!/usr/bin/env Rscript
 
 Sys.setenv(HOME = tempdir())
-Sys.setenv(BIOMART_CACHE = file.path(tempdir(), "biomart_cache"))
-
-cat("HOME defined as:", Sys.getenv("HOME"), "\n")
-cat("biomart cache:", Sys.getenv("BIOMART_CACHE"), "\n")
 
 # Load required libraries
 suppressPackageStartupMessages({
     library(dplyr)
     library(readr)
-    library(biomaRt)
     library(GenomicRanges)
     library(rtracklayer)
     library(optparse)
-    library(httr2)	
 })
+
+# Shared reference-GTF helpers, staged alongside this script by the module
+source("gtf_annotation_utils.R")
 
 # Define command line options
 option_list <- list(
@@ -25,17 +22,16 @@ option_list <- list(
                 help="Path to Bambu gene counts file", metavar="character"),
     make_option(c("--gtf_file"), type="character", default=NULL,
                 help="Path to Bambu GTF annotations file", metavar="character"),
-    make_option(c("--ensembl_organism_dataset"), type="character", default=NULL,
-                help="Ensembl organism genome dataset:", metavar="character"),
-    make_option(c("--ensembl_version"), type="integer", default = NULL,
-                help="Ensembl release version", metavar="integer")
+    make_option(c("--annotation"), type="character", default=NULL,
+                help="Path to the reference annotation GTF (Ensembl or GENCODE)", metavar="character")
 )
 
 opt_parser <- OptionParser(option_list=option_list)
 opt <- parse_args(opt_parser)
 
 # Check required arguments
-if (is.null(opt$transcript_counts) || is.null(opt$gene_counts) || is.null(opt$gtf_file)) {
+if (is.null(opt$transcript_counts) || is.null(opt$gene_counts) ||
+    is.null(opt$gtf_file) || is.null(opt$annotation)) {
     print_help(opt_parser)
     stop("All input files must be specified.", call.=FALSE)
 }
@@ -47,180 +43,120 @@ cat("Starting transcript annotation analysis...\n")
 cat("Reading transcript counts...\n")
 tx <- read_table(opt$transcript_counts, show_col_types = FALSE)
 
-# Identify organism and release version
-cat("Identifying organism and release version...\n")
-organism <- opt$ensembl_organism_dataset
-ensembl_version <- opt$ensembl_version
+# Read all transcript metadata out of the reference annotation
+reference <- read_reference_gtf(opt$annotation)
+ref_tx <- reference$tx
 
-# Extract Ensembl transcript IDs
-ens_ids <- tx$TXNAME[startsWith(tx$TXNAME, "ENS")]
-cat(paste("Found", length(ens_ids), "Ensembl transcript IDs\n"))
+# Identify which assembled transcripts are known, i.e. present in the reference.
+# Bambu names novel transcripts BambuTx* and passes reference identifiers through
+# unchanged, so membership in the supplied annotation is the definition of "known".
+# Matching on whichever id form the counts use keeps Ensembl (unversioned) and
+# GENCODE (versioned) references both working.
+version_suffix <- any(tx$TXNAME %in% ref_tx$ensembl_transcript_id_version &
+                      !tx$TXNAME %in% ref_tx$ensembl_transcript_id)
 
-# Apply biomaRt to gather metadata
-cat("Connecting to Ensembl biomaRt...\n")
-
-ensembl <- useEnsembl(biomart="genes", dataset=organism, version=ensembl_version)
-
-attributes <- c(
-    "chromosome_name",
-    "ensembl_gene_id", "ensembl_gene_id_version",
-    "ensembl_transcript_id", "ensembl_transcript_id_version",
-    "external_transcript_name", "external_gene_name",
-    "strand", "transcript_start", "transcript_end",
-    "transcript_length", "gene_biotype", "transcript_biotype"
-)
-
-cat("Retrieving transcript metadata from biomaRt...\n")
-
-# Verify Ensembl transcript IDs
-if (any(grepl("\\.", ens_ids))) {
-    version_suffix <- TRUE
-    filters <- "ensembl_transcript_id_version"
-    ens_tx <- getBM(attributes = attributes, filters = filters, values = ens_ids, mart = ensembl)
+if (version_suffix) {
+    id_col <- "ensembl_transcript_id_version"
 } else {
-    version_suffix <- FALSE
-    filters <- "ensembl_transcript_id"
-    ens_tx <- getBM(attributes = attributes, filters = filters, values = ens_ids, mart = ensembl)
+    id_col <- "ensembl_transcript_id"
 }
 
-# Fix strand notation
-ens_tx$strand <- ifelse(ens_tx$strand=="-1", "-", "+")
+ens_ids <- tx$TXNAME[tx$TXNAME %in% ref_tx[[id_col]]]
+cat(paste("Found", length(ens_ids), "known transcript IDs in the reference annotation\n"))
+
+if (length(ens_ids) == 0) {
+    stop(paste0("None of the assembled transcripts matched the reference annotation.\n",
+                "  Check that --annotation is the same GTF that was supplied to Bambu."),
+         call. = FALSE)
+}
+
+# Subset the reference metadata to the assembled known transcripts
+ens_tx <- ref_tx[ref_tx[[id_col]] %in% ens_ids, ]
+
+# Exon table for the same set
+ref_exons <- reference$exons
+ens_exons <- ref_exons[ref_exons[[id_col]] %in% ens_ids, ]
 
 # Write transcriptome metadata
 write.csv(ens_tx, "annotated_transcriptome_metadata.csv", row.names=FALSE)
 cat("Written annotated_transcriptome_metadata.csv\n")
 
-# Process lncRNAs
-cat("Processing lncRNAs...\n")
-ens_lnc <- ens_tx[ens_tx$gene_biotype=="lncRNA", ]
-if (version_suffix == TRUE) {
-    ens_lnc_ids <- ens_lnc$ensembl_transcript_id_version
-} else {
-    ens_lnc_ids <- ens_lnc$ensembl_transcript_id
-}
+#' Write the metadata and exon-length tables for one biotype.
+#'
+#' Mirrors the previous per-biotype blocks, including the empty-file fallbacks so
+#' downstream processes always have something to consume.
+process_biotype <- function(biotype, metadata_file, exonlength_file, label) {
+    cat(paste0("Processing ", label, "...\n"))
 
-if (length(ens_lnc_ids) > 0) {
-    # Get exon information for lncRNAs
-    exon_attributes <- c("chromosome_name", "ensembl_transcript_id", "ensembl_transcript_id_version", "ensembl_exon_id", 
-                        "exon_chrom_start", "exon_chrom_end")
-    
-    exon_ens_lnc <- getBM(attributes=exon_attributes, filters=filters, 
-                         values=ens_lnc_ids, mart=ensembl)
-    
-    # Calculate the number of exons per transcript
-    exon_counts <- exon_ens_lnc %>%
-        group_by(ensembl_transcript_id_version) %>%
-        summarize(num_exons = n_distinct(ensembl_exon_id), .groups = 'drop')
-    
-    ens_lnc <- merge(ens_lnc, exon_counts, by.x="ensembl_transcript_id_version", 
-                    by.y="ensembl_transcript_id_version", all.x=TRUE)
-    
-    write.csv(ens_lnc, "annotated_lncRNAs_metadata.csv", row.names=FALSE)
-    cat("Written annotated_lncRNAs_metadata.csv\n")
-    
-    # Calculate exon lengths for lncRNAs
-    if (nrow(exon_ens_lnc) > 0) {
-        exons_gr <- makeGRangesFromDataFrame(exon_ens_lnc,
-                                           keep.extra.columns = TRUE,
-                                           start.field = "exon_chrom_start",
-                                           end.field = "exon_chrom_end",
-                                           seqnames.field="chromosome_name")
-        
+    subset_tx <- ens_tx[ens_tx$gene_biotype == biotype, ]
+    subset_ids <- subset_tx[[id_col]]
+
+    if (length(subset_ids) == 0) {
+        write.csv(data.frame(), metadata_file, row.names=FALSE)
+        write.csv(data.frame(), exonlength_file, row.names=FALSE)
+        cat(paste0("No ", label, " found, created empty files\n"))
+        return(subset_tx)
+    }
+
+    subset_exons <- ens_exons[ens_exons[[id_col]] %in% subset_ids, ]
+
+    # Number of exons per transcript
+    exon_counts <- exon_counts_per_transcript(subset_exons)
+
+    subset_tx <- merge(subset_tx, exon_counts,
+                       by.x="ensembl_transcript_id_version",
+                       by.y="ensembl_transcript_id_version", all.x=TRUE)
+
+    write.csv(subset_tx, metadata_file, row.names=FALSE)
+    cat(paste("Written", metadata_file, "\n"))
+
+    if (nrow(subset_exons) > 0) {
         exon_lengths <- data.frame(
-            ensembl_transcript_id = exons_gr$ensembl_transcript_id,
-            ensembl_transcript_id_version = exons_gr$ensembl_transcript_id_version,
-            ensembl_exon_id = exons_gr$ensembl_exon_id,
-            width = width(exons_gr)
-        ) 
-        
-        write.csv(exon_lengths, "annotated_lncRNAs_exonlength.csv", row.names=FALSE)
-        cat("Written annotated_lncRNAs_exonlength.csv\n")
+            ensembl_transcript_id         = subset_exons$ensembl_transcript_id,
+            ensembl_transcript_id_version = subset_exons$ensembl_transcript_id_version,
+            ensembl_exon_id               = subset_exons$ensembl_exon_id,
+            width                         = subset_exons$exon_chrom_end - subset_exons$exon_chrom_start + 1
+        )
+        write.csv(exon_lengths, exonlength_file, row.names=FALSE)
+        cat(paste("Written", exonlength_file, "\n"))
     } else {
-        # Create empty file if no exons found
-        write.csv(data.frame(), "annotated_lncRNAs_exonlength.csv", row.names=FALSE)
+        write.csv(data.frame(), exonlength_file, row.names=FALSE)
     }
-} else {
-    # Create empty files if no lncRNAs found
-    write.csv(data.frame(), "annotated_lncRNAs_metadata.csv", row.names=FALSE)
-    write.csv(data.frame(), "annotated_lncRNAs_exonlength.csv", row.names=FALSE)
-    cat("No lncRNAs found, created empty files\n")
+
+    subset_tx
 }
 
-# Process protein-coding transcripts
-cat("Processing protein-coding transcripts...\n")
-ens_pc <- ens_tx[ens_tx$gene_biotype=="protein_coding", ]
-if (version_suffix == TRUE) {
-    ens_pc_ids <- ens_pc$ensembl_transcript_id_version
-} else {
-    ens_pc_ids <- ens_pc$ensembl_transcript_id
-}
+ens_lnc <- process_biotype("lncRNA",
+                           "annotated_lncRNAs_metadata.csv",
+                           "annotated_lncRNAs_exonlength.csv",
+                           "lncRNAs")
 
-if (length(ens_pc_ids) > 0) {
-    # Get exon information for protein-coding transcripts
-    exon_attributes <- c("chromosome_name", "ensembl_transcript_id", "ensembl_transcript_id_version", "ensembl_exon_id", 
-                        "exon_chrom_start", "exon_chrom_end")
-    
-    exon_ens_pc <- getBM(attributes=exon_attributes, filters=filters, 
-                        values=ens_pc_ids, mart=ensembl)
-    
-    # Calculate the number of exons per transcript
-    exon_counts_pc <- exon_ens_pc %>%
-        group_by(ensembl_transcript_id_version) %>%
-        summarize(num_exons = n_distinct(ensembl_exon_id), .groups = 'drop')
-    
-    ens_pc <- merge(ens_pc, exon_counts_pc, by.x="ensembl_transcript_id_version", 
-                   by.y="ensembl_transcript_id_version", all.x=TRUE)
-    
-    write.csv(ens_pc, "annotated_protein-coding_metadata.csv", row.names=FALSE)
-    cat("Written annotated_protein-coding_metadata.csv\n")
-    
-    # Calculate exon lengths for protein-coding transcripts
-    if (nrow(exon_ens_pc) > 0) {
-        exons_gr_pc <- makeGRangesFromDataFrame(exon_ens_pc,
-                                              keep.extra.columns = TRUE,
-                                              start.field = "exon_chrom_start",
-                                              end.field = "exon_chrom_end",
-                                              seqnames.field="chromosome_name")
-        
-        exon_lengths_pc <- data.frame(
-            ensembl_transcript_id = exons_gr_pc$ensembl_transcript_id,
-            ensembl_transcript_id_version = exons_gr_pc$ensembl_transcript_id_version,
-            ensembl_exon_id = exons_gr_pc$ensembl_exon_id,
-            width = width(exons_gr_pc)
-        ) 
-        
-        write.csv(exon_lengths_pc, "annotated_protein-coding_exonlength.csv", row.names=FALSE)
-        cat("Written annotated_protein-coding_exonlength.csv\n")
-    } else {
-        # Create empty file if no exons found
-        write.csv(data.frame(), "annotated_protein-coding_exonlength.csv", row.names=FALSE)
-    }
-} else {
-    # Create empty files if no protein-coding transcripts found
-    write.csv(data.frame(), "annotated_protein-coding_metadata.csv", row.names=FALSE)
-    write.csv(data.frame(), "annotated_protein-coding_exonlength.csv", row.names=FALSE)
-    cat("No protein-coding transcripts found, created empty files\n")
-}
+ens_pc <- process_biotype("protein_coding",
+                          "annotated_protein-coding_metadata.csv",
+                          "annotated_protein-coding_exonlength.csv",
+                          "protein-coding transcripts")
 
 # Export GTF and counts for annotated transcripts
 cat("Processing GTF files and counts...\n")
 gtf <- import(opt$gtf_file)
 
-# Test not removing version suffixes
-
 # get the IDs
-if (version_suffix == TRUE) {
-    tx_ids <- ens_tx$ensembl_transcript_id_version
-    lnc_ids <- ens_lnc$ensembl_transcript_id_version
-    pc_ids <- ens_pc$ensembl_transcript_id_version
-} else {
-    tx_ids <- ens_tx$ensembl_transcript_id
-    lnc_ids <- ens_lnc$ensembl_transcript_id
-    pc_ids <- ens_pc$ensembl_transcript_id
-}
+tx_ids  <- ens_tx[[id_col]]
+lnc_ids <- if (nrow(ens_lnc) > 0) ens_lnc[[id_col]] else character(0)
+pc_ids  <- if (nrow(ens_pc) > 0) ens_pc[[id_col]] else character(0)
+
+# Reference attributes to write into the exported GTFs, keyed by transcript id
+known_attrs <- list(
+    transcript_status   = rep("known", nrow(ens_tx)),
+    gene_name           = ens_tx$external_gene_name,
+    gene_biotype        = ens_tx$gene_biotype,
+    transcript_name     = ens_tx$external_transcript_name,
+    transcript_biotype  = ens_tx$transcript_biotype
+)
 
 # Export annotated transcriptome GTF
 ann_tx_gtf <- subset(gtf, transcript_id %in% tx_ids)
+ann_tx_gtf <- annotate_gtf(ann_tx_gtf, tx_ids, known_attrs)
 export(ann_tx_gtf, "bambu_annotated_transcriptome.gtf")
 cat("Written bambu_annotated_transcriptome.gtf\n")
 
@@ -232,6 +168,7 @@ cat("Written bambu_annotated_transcriptome_tx_counts.csv\n")
 # Export lncRNA GTF
 if (length(lnc_ids) > 0) {
     ann_lnc_gtf <- subset(gtf, transcript_id %in% lnc_ids)
+    ann_lnc_gtf <- annotate_gtf(ann_lnc_gtf, tx_ids, known_attrs)
     export(ann_lnc_gtf, "bambu_annotated_lncRNAs.gtf")
     cat("Written bambu_annotated_lncRNAs.gtf\n")
 } else {
@@ -243,6 +180,7 @@ if (length(lnc_ids) > 0) {
 # Export protein-coding GTF
 if (length(pc_ids) > 0) {
     ann_pc_gtf <- subset(gtf, transcript_id %in% pc_ids)
+    ann_pc_gtf <- annotate_gtf(ann_pc_gtf, tx_ids, known_attrs)
     export(ann_pc_gtf, "bambu_annotated_mRNAs.gtf")
     cat("Written bambu_annotated_mRNAs.gtf\n")
 } else {

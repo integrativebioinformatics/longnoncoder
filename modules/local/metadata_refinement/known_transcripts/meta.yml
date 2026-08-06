@@ -1,22 +1,19 @@
 name: "known_transcripts"
-description: Annotate and classify known (reference-matching) transcripts from Bambu output using Ensembl BioMart metadata, producing separate lncRNA and protein-coding GTFs and metadata tables.
+description: Annotate and classify known (reference-matching) transcripts from Bambu output using metadata read directly from the supplied reference annotation GTF, producing separate lncRNA and protein-coding GTFs and metadata tables.
 keywords:
   - known-transcripts
   - lncRNA
   - protein-coding
   - annotation
-  - biomart
+  - gtf
   - ensembl
+  - gencode
 tools:
   - r-base:
       description: The R Project for Statistical Computing.
       homepage: https://www.r-project.org/
       documentation: https://cran.r-project.org/manuals.html
       licence: ["GPL-2.0-or-later"]
-  - bioconductor-biomart:
-      description: Interface to BioMart databases for annotation retrieval.
-      homepage: https://bioconductor.org/packages/release/bioc/html/biomaRt.html
-      licence: ["Artistic-2.0"]
   - bioconductor-rtracklayer:
       description: R interface to genome annotation files and the UCSC genome browser.
       homepage: https://bioconductor.org/packages/release/bioc/html/rtracklayer.html
@@ -35,10 +32,18 @@ input:
       type: file
       description: GTF file with all transcripts (known + novel) from Bambu.
       pattern: "*.gtf"
+  - annotation:
+      type: file
+      description: Reference annotation GTF (Ensembl or GENCODE) supplying transcript metadata.
+      pattern: "*.gtf"
   - r_script:
       type: file
       description: Executable R script for known transcripts annotation.
       pattern: "*.R"
+  - gtf_utils:
+      type: file
+      description: Shared R helpers for reading metadata from the reference annotation.
+      pattern: "gtf_annotation_utils.R"
 
 output:
   - transcriptome_metadata:

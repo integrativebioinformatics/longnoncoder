@@ -10,6 +10,7 @@ include { SUBSET_BAMBU_COUNTS               } from '../modules/local/metadata_re
 include { SUBSET_BAMBU_GTF                  } from '../modules/local/metadata_refinement/subset_bambu_gtf/main'
 include { BAMBU_VALIDATE                    } from '../modules/local/metadata_refinement/validate_counts/main'
 include { KNOWN_TRANSCRIPTS                 } from '../modules/local/metadata_refinement/known_transcripts/main'
+include { ENRICH_VALIDATED_GTF              } from '../modules/local/metadata_refinement/enrich_gtf/main'
 include { POST_REFINEMENT                   } from '../modules/local/post_refinement/main'
 include { RENDER_REPORT                     } from '../modules/local/report/main'
 include { QC_FILT                           } from '../subworkflows/local/qc'
@@ -100,7 +101,9 @@ workflow PULPOSEQ {
             CLASSIFICATION.out.predictions,
             SUBSET_BAMBU_COUNTS.out.counts_transcript_subset,
             SUBSET_BAMBU_COUNTS.out.counts_gene_subset,
-            file("${projectDir}/bin/novel_transcripts.R", checkIfExists: true) // <- ADDED SCRIPT PATH
+            params.annotation,
+            file("${projectDir}/bin/novel_transcripts.R", checkIfExists: true),
+            file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
         )
         ch_versions = ch_versions.mix(NOVEL_TRANSCRIPTS.out.versions)
 
@@ -117,7 +120,9 @@ workflow PULPOSEQ {
             BAMBU_VALIDATE.out.counts_transcript_validated,
             BAMBU_VALIDATE.out.counts_gene_validated,
             TRANSCRIPT_RECONSTRUCTION.out.gtf_all_transcripts,
-            file("${projectDir}/bin/known_transcripts.R", checkIfExists: true) // <- ADDED SCRIPT PATH
+            params.annotation,
+            file("${projectDir}/bin/known_transcripts.R", checkIfExists: true),
+            file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
         )
         ch_versions = ch_versions.mix(KNOWN_TRANSCRIPTS.out.versions)
 
@@ -128,6 +133,21 @@ workflow PULPOSEQ {
             BAMBU_VALIDATE.out.unique_counts_transcript_validated
         )
         ch_versions = ch_versions.mix(SUBSET_BAMBU_GTF.out.versions)
+
+        //
+        // Attach biotype and classification attributes to the validated GTFs
+        //
+        ENRICH_VALIDATED_GTF (
+            SUBSET_BAMBU_GTF.out.annotations_validated_gtf,
+            SUBSET_BAMBU_GTF.out.fullLength_validated_gtf,
+            SUBSET_BAMBU_GTF.out.uniquelyMapped_validated_gtf,
+            KNOWN_TRANSCRIPTS.out.transcriptome_metadata,
+            NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
+            params.annotation,
+            file("${projectDir}/bin/enrich_validated_gtf.R", checkIfExists: true),
+            file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
+        )
+        ch_versions = ch_versions.mix(ENRICH_VALIDATED_GTF.out.versions)
 
         //
         // Regenerate the Bambu PCA and heatmaps from the validated transcriptome

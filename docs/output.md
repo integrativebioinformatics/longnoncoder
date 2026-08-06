@@ -232,6 +232,24 @@ This document describes the file-level reference for outputs produced by each pi
 | `BambuOutput_annotations_validated.gtf` | Final validated annotation. |
 | `BambuOutput_uniquelyMapped_validated.gtf` | Validated transcript isoforms supported by uniquely mapped reads. |
 
+### Annotated GTF attributes
+
+Bambu writes only `gene_id`, `transcript_id` and `exon_number` into its GTF output. pulposeq adds the attributes below to every `GTF` it generates, so each file is self-describing and can be filtered without cross-referencing the metadata tables.
+
+| Attribute | Description |
+|--------------------------------|----------------------------------------|
+| `transcript_status` | `known` if the transcript is present in the reference annotation, `novel` if it was assembled by Bambu. |
+| `gene_biotype` | For known transcripts, the biotype from the reference annotation. For novel transcripts arising from a known gene, that gene's reference biotype; for novel transcripts at previously unannotated loci, `novel`. |
+| `transcript_biotype` | For known transcripts, the biotype from the reference annotation. For novel transcripts, `novel_lncRNA` or `novel_protein_coding` according to the RNAmining coding-potential prediction. |
+| `gene_name` | Gene symbol, where the reference annotation or gffcompare provides one. |
+| `transcript_name` | Transcript name from the reference annotation (known transcripts only). |
+| `class_code` | gffcompare class code relative to the reference (novel transcripts only). |
+| `classification` | Human-readable reading of `class_code`: intergenic, intronic, antisense, multiexon SJ match, total intron retention or partial intron retention (novel transcripts only). |
+| `ref_gene_id` | Reference gene the novel transcript was matched against, where gffcompare found one (novel transcripts only). |
+
+> [!NOTE]
+> Novel transcripts frequently arise from genes that are already annotated. In that case `gene_biotype` reports the reference gene's real biotype while `transcript_biotype` records the novel isoform's predicted class, so the two can legitimately differ, e.g. a `novel_lncRNA` transcript within a `protein_coding` gene.
+
 ## `gffcompare/` (novel transcript comparison)
 
 > _Check the GffCompare's official [documentation](http://ccb.jhu.edu/software/stringtie/gffcompare.shtml)._

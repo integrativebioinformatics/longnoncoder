@@ -36,12 +36,5 @@ ndr: null # e.g. 0.2
 # set organism scientific name for ncRNA prediction by RNAmining (check the list of available organisms)
 organism: "Genus_species" # e.g. "Mus_musculus"
 
-# set reference ensembl dataset
-# the scientific name is entirely in lowercase and must follow an abbreviation pattern:
-# the first letter of the genus name followed by the full species name, then "_gene_ensembl"
-ensembl_organism_dataset: "organism_gene_ensembl" # e.g. "mmusculus_gene_ensembl"
-
-# set ensembl release version number according to your reference files
-# If using GENCODE, check version compatibility (e.g. GENCODE GRCh38 v48 corresponds to Ensembl release 114)
-# In practical terms, the GENCODE annotation is essentially identical to the Ensembl annotation.
-ensembl_version: 114
+# transcript metadata is read directly from the annotation GTF set above, so no
+# Ensembl release or BioMart dataset needs to be declared

@@ -1,6 +1,9 @@
 process KNOWN_TRANSCRIPTS {
     tag "Processing_Known_Transcripts"
-    label 'process_single'
+    // process_medium rather than process_single: this step now parses the full
+    // reference annotation GTF in R, which a whole-genome GENCODE build makes
+    // too large for the 6 GB that process_single allows.
+    label 'process_medium'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/longnoncoder:test3':
@@ -10,7 +13,9 @@ process KNOWN_TRANSCRIPTS {
     path transcript_counts
     path gene_counts
     path gtf_file
-    path r_script // <- ADDED: The R script is now a formal input
+    path annotation
+    path r_script
+    path gtf_utils
 
     output:
     path "annotated_transcriptome_metadata.csv"          , emit: transcriptome_metadata
@@ -29,13 +34,14 @@ process KNOWN_TRANSCRIPTS {
     task.ext.when == null || task.ext.when
 
     script:
-    def args     = task.ext.args ? task.ext.args : "--ensembl_organism_dataset '${params.ensembl_organism_dataset}' --ensembl_version ${params.ensembl_version}"
+    def args     = task.ext.args ?: ''
     """
     # Run the R script directly using the input path variable
     Rscript $r_script \\
         --transcript_counts ${transcript_counts} \\
         --gene_counts ${gene_counts} \\
         --gtf_file ${gtf_file} \\
+        --annotation ${annotation} \\
         $args
 
     cat <<-END_VERSIONS > versions.yml
@@ -43,11 +49,9 @@ process KNOWN_TRANSCRIPTS {
         r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
         r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
-        r-httr: \$(Rscript -e "cat(as.character(packageVersion('httr')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
-        bioconductor-biomart: \$(Rscript -e "cat(as.character(packageVersion('biomaRt')))")
     END_VERSIONS
     """
 
@@ -70,11 +74,9 @@ process KNOWN_TRANSCRIPTS {
         r-base: \$(R --version 2>&1 | sed 's/R version //; s/ (.*//' | head -1)
         r-readr: \$(Rscript -e "cat(as.character(packageVersion('readr')))")
         r-optparse: \$(Rscript -e "cat(as.character(packageVersion('optparse')))")
-        r-httr2: \$(Rscript -e "cat(as.character(packageVersion('httr2')))")
         r-dplyr: \$(Rscript -e "cat(as.character(packageVersion('dplyr')))")
         bioconductor-genomicranges: \$(Rscript -e "cat(as.character(packageVersion('GenomicRanges')))")
         bioconductor-rtracklayer: \$(Rscript -e "cat(as.character(packageVersion('rtracklayer')))")
-        bioconductor-biomart: \$(Rscript -e "cat(as.character(packageVersion('biomaRt')))")
     END_VERSIONS
     """
 }

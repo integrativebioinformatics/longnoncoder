@@ -69,8 +69,6 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `stranded_library` | Whether the library is stranded (`true`/`false`) |
 | `skip_class` | Skip transcriptome characterization (runs MultiQC, then finishes pipeline execution) |
 | `organism` | Organism scientific name (e.g. `"Homo_sapiens"`) |
-| `ensembl_organism_dataset` | Reference species-specific BiomaRt dataset (e.g. `"hsapiens_gene_ensembl"`) |
-| `ensembl_version` | Number of Ensembl release version (e.g. `114`) |
 
 ### Library type and strandedness
 
@@ -94,14 +92,26 @@ The `library` and `stranded_library` parameters are **required** whenever alignm
 
 ### Ensembl vs GENCODE annotations
 
-> [!NOTE]
-> If using GENCODE annotations, check version compatibility and set `ensembl_version` to the correspondent Ensembl release version (e.g. GENCODE GRCh38 v48 corresponds to Ensembl release 114). Check detailed information at [ ][1].
+Transcript metadata is read **directly from the annotation `GTF` you supply** with `annotation`. Nothing is queried over the network, so runs are reproducible, work on offline compute nodes, and are unaffected by Ensembl archiving older releases or retiring service endpoints. It also guarantees the metadata describes exactly the annotation used for assembly, rather than whichever release a remote server happened to serve.
+
+Both Ensembl and GENCODE annotations are accepted, and the differences between them are handled automatically:
+
+| | Ensembl | GENCODE |
+|---------------------|-------------------------------------------|--------------------------------------|
+| Biotype attributes | `gene_biotype` / `transcript_biotype` | `gene_type` / `transcript_type` |
+| Identifiers | unversioned, with separate `gene_version` / `transcript_version` | versioned inline (e.g. `ENSG00000290825.2`) |
+| Sequence names | `1` | `chr1` |
+
+Both identifier forms are always produced, so the `ensembl_transcript_id` and `ensembl_transcript_id_version` columns are populated whichever source you use. Sequence names are normalised by stripping a leading `chr`, so `chromosome_name` reads `1` in either case.
+
+> [!IMPORTANT]
+> With GENCODE, use the **CHR** or **PRI** annotation build. The **ALL** build additionally contains alternate loci, assembly patches and haplotypes, which duplicate gene and transcript identifiers. pulposeq checks for duplicated identifiers and stops with an error rather than silently double-counting them.
+
+Regarding the pseudoautosomal regions (PAR) of chromosome Y: the gene annotation in these regions is identical between chromosomes X and Y, and until GENCODE release 43 the chrY copies were distinguished by an `_PAR_Y` suffix appended to their identifiers. From GENCODE release 44 (equivalent to Ensembl release 110) onward, the chrY PAR annotation carries its own distinct identifiers, so within the supported release range below this is not a concern. Additionally, the GENCODE GTF contains a number of attributes not present in the Ensembl GTF, but that does not interfere with the pipeline execution nor is required.
+
+Check detailed information at the [GENCODE FAQ][1].
 
   [1]: https://www.gencodegenes.org/pages/faq.html
-
-By convention, Ensembl IDs are structured of a species index (e.g. "ENS" for human and "ENSMUS" for mouse) followed by a feature type indicator ("G" for gene, "T" for transcript, "E" for exon, "P" for translation) and an 11-number figure. In order to generate metadatasets for annotated transcripts, pulposeq queries biomaRt according to species dataset informed by the `ensembl_organism_dataset` parameter, and searches attributes based on IDs presenting the `ENS` suffix.
-
-The only exception regarding GENCODE was until release 43 (Ensembl 109), in the case of the pseudoautosomal regions (PAR) of chromosome Y. The gene annotation in these regions is identical between chromosomes X and Y, but Ensembl did not provide different feature ids for both chromosomes until release 110 (equivalent to GENCODE release 44). Additionally, the GENCODE GTF contains a number of attributes not present in the Ensembl GTF, but that does not interfere with the pipeline execution nor is required.
 
 > [!WARNING]
 > We highly recommend always using the latest stable release available, whether its GENCODE or Ensembl. The pipeline was only tested from Ensembl release 112 onwards. Due to reported differences between older versions, we recommend using, at least, from GENCODE v44 (Ensembl release 110) onwards. Versions older than that might cause issues with the transcriptome characterization steps.
@@ -111,7 +121,7 @@ The only exception regarding GENCODE was until release 43 (Ensembl 109), in the 
 The typical command for running the pipeline is as follows:
 
 ``` bash
-nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --reference [fasta] --annotation [gtf] --organism [Genus_species] --ensembl_organism_dataset [Gspecies_gene_ensembl] --ensembl_version [release number] -profile [profile: light, medium, large, etc],[executor profile: docker/singularity]
+nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --reference [fasta] --annotation [gtf] --organism [Genus_species] --library [ONT_cDNA/ONT_DRS/PacBio] --stranded_library [true/false] -profile [profile: light, medium, large, etc],[executor profile: docker/singularity]
 ```
 
 Note that the pipeline will create the following files in your working directory:

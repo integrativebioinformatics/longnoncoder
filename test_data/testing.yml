@@ -18,5 +18,3 @@ reference: "/full/path/to/pulposeq/test_data/references/Homo_sapiens.GRCh38.dna.
 annotation: "/full/path/to/pulposeq/test_data/references/Homo_sapiens.GRCh38.114.chr1.gtf"
 
 organism: 'Homo_sapiens'
-ensembl_organism_dataset: 'hsapiens_gene_ensembl'
-ensembl_version: 114

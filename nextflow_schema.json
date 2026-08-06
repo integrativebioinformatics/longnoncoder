@@ -196,12 +196,6 @@
         "organism": {
             "type": "string"
         },
-        "ensembl_organism_dataset": {
-            "type": "string"
-        },
-        "ensembl_version": {
-            "type": "integer"
-        },
         "maxlen": {
             "type": "integer",
             "description": "Maximum read length (bp). Reads longer than this are discarded by chopper. Unset by default (no upper limit)."

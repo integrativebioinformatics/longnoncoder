@@ -10,10 +10,15 @@ suppressPackageStartupMessages({
 
 })
 
+# Shared reference-GTF helpers, staged alongside this script by the module
+source("gtf_annotation_utils.R")
+
 # Define command line options
 option_list <- list(
     make_option(c("--bambu_gtf"), type="character", default=NULL,
                 help="Path to bambu novel transcripts GTF file", metavar="character"),
+    make_option(c("--annotation"), type="character", default=NULL,
+                help="Path to the reference annotation GTF (Ensembl or GENCODE)", metavar="character"),
     make_option(c("--compared_gtf"), type="character", default=NULL,
                 help="Path to compared transcriptome annotated GTF file", metavar="character"),
     make_option(c("--tmap_file"), type="character", default=NULL,
@@ -30,11 +35,18 @@ opt_parser <- OptionParser(option_list=option_list)
 opt <- parse_args(opt_parser)
 
 # Check if all required arguments are provided
-if (is.null(opt$bambu_gtf) || is.null(opt$compared_gtf) || is.null(opt$tmap_file) || 
-    is.null(opt$rnamining_predictions) || is.null(opt$tx_counts) || is.null(opt$gene_counts)) {
+if (is.null(opt$bambu_gtf) || is.null(opt$compared_gtf) || is.null(opt$tmap_file) ||
+    is.null(opt$rnamining_predictions) || is.null(opt$tx_counts) || is.null(opt$gene_counts) ||
+    is.null(opt$annotation)) {
     print_help(opt_parser)
     stop("All input files must be specified.", call.=FALSE)
 }
+
+# Reference gene biotypes, used to give novel transcripts arising from a known
+# gene that gene's real biotype rather than a generic label
+reference <- read_reference_gtf(opt$annotation)
+ref_gene_biotype <- reference$gene_biotype
+rm(reference)
 
 # Import GTF files
 cat("Loading GTF files...\n")
@@ -86,6 +98,31 @@ tx_info <- tx_info[tx_info$qry_id %in% tx_counts$TXNAME, ]
 cat("Saving novel transcripts metadata...\n")
 write.csv(tx_info, file="novel_transcripts_metadata.csv", row.names = FALSE)
 
+#' Build the attribute set written into the novel GTFs.
+#'
+#' Novel transcripts get a novel_lncRNA / novel_protein_coding transcript_biotype.
+#' At gene level, a novel transcript arising from a known gene keeps that gene's
+#' real biotype from the reference annotation; only genuinely new loci, which
+#' gffcompare reports without a reference gene, are labelled "novel".
+novel_attrs <- function(meta) {
+    ref_gene <- as.character(meta$ref_gene_id)
+    ref_gene[is.na(ref_gene) | ref_gene == "-" | !nzchar(ref_gene)] <- NA_character_
+
+    gene_biotype <- unname(ref_gene_biotype[ref_gene])
+    gene_biotype[is.na(gene_biotype)] <- "novel"
+
+    list(
+        transcript_status  = rep("novel", nrow(meta)),
+        transcript_biotype = ifelse(meta$prediction == "coding",
+                                    "novel_protein_coding", "novel_lncRNA"),
+        gene_biotype       = gene_biotype,
+        class_code         = as.character(meta$class_code),
+        classification     = as.character(meta$classification),
+        ref_gene_id        = ref_gene,
+        gene_name          = as.character(meta$gene_name)
+    )
+}
+
 # Select new lncRNAs
 cat("Processing lncRNAs...\n")
 new_lncRNAs <- tx_info[tx_info$class_code %in% c('u', 'i', 'x', 'j', 'm', 'n') & 
@@ -108,6 +145,7 @@ new_lncRNAs_tx_gtf <- subset(gtf, type == "transcript" & transcript_id %in% lnc_
 new_lncRNAs_exons_gtf <- subset(gtf, type == "exon" & transcript_id %in% lnc_ids)
 new_lncRNAs_gtf <- c(new_lncRNAs_tx_gtf, new_lncRNAs_exons_gtf)
 new_lncRNAs_gtf <- new_lncRNAs_gtf[order(new_lncRNAs_gtf$transcript_id, new_lncRNAs_gtf$type == "transcript", decreasing = TRUE)]
+new_lncRNAs_gtf <- annotate_gtf(new_lncRNAs_gtf, lnc_ids, novel_attrs(new_lncRNAs))
 export(new_lncRNAs_gtf, "novel_lncRNAs.gtf")
 
 # Select new mRNAs
@@ -132,6 +170,7 @@ new_mRNAs_tx_gtf <- subset(gtf, type == "transcript" & transcript_id %in% mrna_i
 new_mRNAs_exons_gtf <- subset(gtf, type == "exon" & transcript_id %in% mrna_ids)
 new_mRNAs_gtf <- c(new_mRNAs_tx_gtf, new_mRNAs_exons_gtf)
 new_mRNAs_gtf <- new_mRNAs_gtf[order(new_mRNAs_gtf$transcript_id, new_mRNAs_gtf$type == "transcript", decreasing = TRUE)]
+new_mRNAs_gtf <- annotate_gtf(new_mRNAs_gtf, mrna_ids, novel_attrs(new_mRNAs))
 export(new_mRNAs_gtf, "novel_protein-coding.gtf")
 
 # Save combined metadata of novel mRNAs and lncRNAs
@@ -144,6 +183,7 @@ novel_tx_gtf <- subset(gtf, type == "transcript" & transcript_id %in% new_mRNA_l
 novel_exon_gtf <- subset(gtf, type == "exon" & transcript_id %in% new_mRNA_lncRNA$qry_id)
 novel_gtf <- c(novel_tx_gtf, novel_exon_gtf)
 novel_gtf <- novel_gtf[order(novel_gtf$transcript_id, novel_gtf$type == "transcript", decreasing = TRUE)]
+novel_gtf <- annotate_gtf(novel_gtf, ids, novel_attrs(new_mRNA_lncRNA))
 export(novel_gtf, "novel_transcripts_validated.gtf")
 
 # Get exon lengths
