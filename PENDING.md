@@ -123,8 +123,8 @@ nothing to review in them. If a task fails, also include that task's full work d
 | ID | Check | Covered by |
 |---|---|---|
 | V1 | Strict-syntax / config resolution | Stage 0–1 |
-| V3 | minimap2 preset emitted (`ONT_cDNA` unstranded only) | Stage 3 → `grep -h "minimap2" work/*/*/.command.sh` |
-| V4 | Bambu gets `--ndr` and `--stranded false`; optparse accepts the new flag | Stage 3 → `grep -h "bambu.R" work/*/*/.command.sh` |
+| V3 | minimap2 preset emitted — `testing.yml` is set to `PacBio`, so expect `-ax splice:hq -uf` | Stage 3 → `grep -h "minimap2" work/*/*/.command.sh` |
+| V4 | Bambu gets `--ndr` and `--stranded true`; optparse accepts the new flag | Stage 3 → `grep -h "bambu.R" work/*/*/.command.sh` |
 | V5 | M4 regression — group labels correct despite changed `bamlist.txt` order | Stage 3 → `colData(readRDS(...))$group` |
 | V7 | `maxlen` unset → **no** `--maxlength` in the chopper command | Stage 3 → `grep -h "chopper" work/*/*/.command.sh` |
 | V9 | Publishing still works after the `outputDir` removal | Stage 3 → results/ subdirectories present |

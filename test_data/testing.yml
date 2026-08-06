@@ -10,7 +10,7 @@ skip_class: false
 # ENCODE RUSH AD Project samples sequenced with PacBio
 library: "PacBio"
 
-# treated as unstranded, as the reads are not re-oriented before entering the pipeline
+# PacBio libraries are always stranded, having been processed and oriented by PacBio's own workflows
 stranded_library: true
 
 reference: "/full/path/to/pulposeq/test_data/references/Homo_sapiens.GRCh38.dna.chromosome.1.fa"
