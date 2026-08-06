@@ -31,8 +31,9 @@ mkdir -p samples
 
 FASTQ_URL="https://www.encodeproject.org/files/"
 
-curl -L "${FASTQ_URL}"ENCFF309DAU/@@download/ENCFF309DAU.fastq.gz -o samples/ENCFF309DAU.fastq.gz
-curl -L "${FASTQ_URL}"ENCFF168OKB/@@download/ENCFF168OKB.fastq.gz -o samples/ENCFF168OKB.fastq.gz
+curl -L "${FASTQ_URL}"ENCFF827DUW/@@download/ENCFF827DUW.fastq.gz -o samples/ENCFF827DUW.fastq.gz
+curl -L "${FASTQ_URL}"ENCFF708BOP/@@download/ENCFF708BOP.fastq.gz -o samples/ENCFF708BOP.fastq.gz
+curl -L "${FASTQ_URL}"ENCFF785KVJ/@@download/ENCFF785KVJ.fastq.gz -o samples/ENCFF785KVJ.fastq.gz
+curl -L "${FASTQ_URL}"ENCFF260AWP/@@download/ENCFF260AWP.fastq.gz -o samples/ENCFF260AWP.fastq.gz
 
-
-echo -e "\nENCODE Project CapTrap cDNA - Downloaded ENCFF309DAU and ENCFF168OKB fastq files for heart samples.\n"
+echo -e "\nENCODE Project RUSH AD PacBio - Downloaded ENCFF827DUW, ENCFF708BOP, ENCFF785KVJ and ENCFF260AWP fastq files for dorsolateral pre-frontal cortex samples.\n"
