@@ -15,7 +15,7 @@ include { RENDER_REPORT                     } from '../modules/local/report/main
 include { QC_FILT                           } from '../subworkflows/local/qc'
 include { ALIGNMENT                         } from '../subworkflows/local/alignment'
 include { TRANSCRIPT_RECONSTRUCTION         } from '../subworkflows/local/transcript_reconstruction'
-include { CLASSIFICATION_POTENTIAL_CODING   } from '../subworkflows/local/classification_codingpotential.nf'
+include { CLASSIFICATION                    } from '../subworkflows/local/classification'
 include { paramsSummaryMap                  } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc              } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { softwareVersionsToYAML            } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -78,12 +78,12 @@ workflow PULPOSEQ {
     }
 
     if (run_classification) {
-        CLASSIFICATION_POTENTIAL_CODING (
+        CLASSIFICATION (
             ch_gtf_new_transcripts,
             params.annotation,
             params.reference
         )
-        ch_versions = ch_versions.mix(CLASSIFICATION_POTENTIAL_CODING.out.versions)
+        ch_versions = ch_versions.mix(CLASSIFICATION.out.versions)
 
         SUBSET_BAMBU_COUNTS (
             TRANSCRIPT_RECONSTRUCTION.out.gene_counts,
@@ -95,9 +95,9 @@ workflow PULPOSEQ {
 
         NOVEL_TRANSCRIPTS (
             ch_gtf_new_transcripts,
-            CLASSIFICATION_POTENTIAL_CODING.out.annotated_gtf,
-            CLASSIFICATION_POTENTIAL_CODING.out.tmap,
-            CLASSIFICATION_POTENTIAL_CODING.out.predictions,
+            CLASSIFICATION.out.annotated_gtf,
+            CLASSIFICATION.out.tmap,
+            CLASSIFICATION.out.predictions,
             SUBSET_BAMBU_COUNTS.out.counts_transcript_subset,
             SUBSET_BAMBU_COUNTS.out.counts_gene_subset,
             file("${projectDir}/bin/novel_transcripts.R", checkIfExists: true) // <- ADDED SCRIPT PATH
