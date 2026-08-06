@@ -189,7 +189,7 @@ lapply(names(plots), function(x) {
   file_path <- file.path(output_dir, paste0(x, ".", file_ext))
 
   # Use the appropriate device based on file extension
-  png(file_path, width = 4, height = 4, units = "in", res = 600)  # Adjust dimensions and resolution as needed
+  png(file_path, width = 8, height = 6, units = "in", res = 600)  # Adjust dimensions and resolution as needed
 
   print(plots[[x]])  # Print the plot to the device
   dev.off()
