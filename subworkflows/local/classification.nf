@@ -11,11 +11,11 @@ include { RNAMINING  } from '../../modules/local/rnamining/main'
 
 /*
 ========================================================================================
-    RUN CLASSIFICATION_POTENTIAL_CODING WORKFLOW
+    RUN CLASSIFICATION WORKFLOW
 ========================================================================================
 */
 
-workflow CLASSIFICATION_POTENTIAL_CODING {
+workflow CLASSIFICATION {
     take:
     gtf         // path: GTF from transcript reconstruction
     annotation  // path/string: reference annotation GTF (params.annotation)
