@@ -115,7 +115,7 @@ plots <- list(
 
 lapply(names(plots), function(x) {
   file_path <- file.path(output_dir, paste0(x, ".png"))
-  png(file_path, width = 4, height = 4, units = "in", res = 600)
+  png(file_path, width = 5, height = 5, units = "in", res = 600)
   print(plots[[x]])
   dev.off()
 })
