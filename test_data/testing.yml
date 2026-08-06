@@ -1,4 +1,4 @@
-input: "/full/path/pulposeq/test_data/samplesheet.csv"
+input: "/full/path/to/pulposeq/test_data/samplesheet.csv"
 outdir: "/full/path/to/pulposeq/test_data/results"
 
 skip_qc: false
