@@ -1,3 +1,5 @@
 sample,group,fastq
-ENCFF309DAU,embryo,/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/samples/ENCFF309DAU.fastq.gz
-ENCFF168OKB,adult,/home/vmaracaja/babi/paper-longnoncoder/longnoncoder/test_data/samples/ENCFF168OKB.fastq.gz
+ENCFF827DUW,alzheimer,/home/vmaracaja/shared-projects/babi/test_data/samples/ENCFF827DUW.fastq.gz
+ENCFF708BOP,control,/home/vmaracaja/shared-projects/babi/test_data/samples/ENCFF708BOP.fastq.gz
+ENCFF785KVJ,alzheimer,/home/vmaracaja/shared-projects/babi/test_data/samples/ENCFF785KVJ.fastq.gz
+ENCFF260AWP,control,/home/vmaracaja/shared-projects/babi/test_data/samples/ENCFF260AWP.fastq.gz
