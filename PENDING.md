@@ -12,7 +12,9 @@ A full run completed on the chr1 test dataset with `-profile test,singularity` a
 `library: PacBio` / `stranded_library: true`. **All 24 tasks reached COMPLETED or CACHED; none
 failed.** That settles the structural questions:
 
-- the pipeline parses and runs under the strict syntax on Nextflow 26.x (V1)
+- the pipeline parses and runs under the strict syntax on Nextflow 26.x (V1). Confirmed twice over:
+  `nextflow lint .` reports 42 files with 0 errors, which is the stronger result since it covers
+  every file rather than only the paths the run happened to exercise
 - `POST_REFINEMENT` and `ENRICH_VALIDATED_GTF` are wired correctly and produce their outputs
   (V11, V12.4)
 - `KNOWN_TRANSCRIPTS` completes with no biomaRt query, so the reference-GTF path works end to end
@@ -52,32 +54,40 @@ cd test_data && chmod +x download-ref-fastq.sh && ./download-ref-fastq.sh && cd 
 
 ---
 
-### Stage 0 — `nextflow lint` (seconds)
+### Stage 0 — `nextflow lint` — **PASSED 2026-08-07**
 
 ```bash
 nextflow lint .
 ```
 
-Statically checks every `.nf` and `.config` file against the strict syntax. This is the highest-value
-single command on the branch, because 26.04 enforces rules the pipeline has never been parsed under.
+Statically checks every `.nf` and `.config` file against the strict syntax. **42 files, 0 errors.**
+This was the highest-value single command on the branch, because 26.04 enforces rules the pipeline
+had never been parsed under.
 
-**Known constraint already handled:** the strict parser allows only config assignments, blocks and
-includes — top-level `def` declarations and helper functions are rejected. The library/strandedness
-logic was originally written as two shared top-level closures in `conf/modules.config`; it is now
-inlined inside the `MINIMAP2_ALIGN` and `BAMBU` `ext.args` closures, where local variables are still
-permitted. The rule is deliberately stated twice; do not "refactor" it back into a shared helper.
+**Known constraint, handled:** the strict parser allows only config assignments, blocks and includes
+— top-level `def` declarations and helper functions are rejected, and inside a config closure it
+also rejects statement forms such as `switch` and `return`. The library/strandedness logic was
+originally written as two shared top-level closures in `conf/modules.config`, then as a `switch`; it
+is now a single ternary expression inside each of the `MINIMAP2_ALIGN` and `BAMBU` `ext.args`
+closures. The rule is deliberately stated twice; do not "refactor" it back into a shared helper or a
+switch — both fail to parse.
 
-**Most likely remaining offender:** `nextflow.config` sets
+**Three warnings, all upstream — do not fix:**
 
-```groovy
-trace_report_suffix = new java.util.Date().format( 'yyyy-MM-dd_HH-mm-ss')
+```
+subworkflows/nf-core/utils_nextflow_pipeline/main.nf:43   Emit name should be omitted when there is only one emit
+subworkflows/nf-core/utils_nfcore_pipeline/main.nf:20     Emit name should be omitted when there is only one emit
+subworkflows/nf-core/utils_nfschema_plugin/main.nf:76     Emit name should be omitted when there is only one emit
 ```
 
-This is nf-core template code written for 25.10 and involves a constructor call in a config
-assignment. If lint rejects it, replace with a literal or move the timestamp generation elsewhere.
+All three subworkflows are tracked in `modules.json`, so they are nf-core template code. Editing them
+locally would be overwritten by the next `nf-core subworkflows update` and would leave the copies
+diverged from upstream until then. The warnings concern style, not correctness. The same applies to
+anything lint flags under `modules/nf-core/*`.
 
-Anything lint flags in `modules/nf-core/*` is upstream template code, not part of this branch —
-note it, don't fix it here.
+`nextflow.config` builds `trace_report_suffix` with `new java.util.Date().format(...)`, inherited
+from the nf-core 4.0.2 template and written for 25.10. It was the one construct expected to trip the
+strict parser; it is among the 42 clean files, so no change is needed.
 
 ### Stage 1 — config resolution (seconds)
 
@@ -141,7 +151,7 @@ nothing to review in them. If a task fails, also include that task's full work d
 
 | ID | Check | Covered by |
 |---|---|---|
-| V1 | Strict-syntax / config resolution | Stage 0–1 |
+| V1 | Strict-syntax / config resolution | **PASSED** — Stage 0 lint, 42 files / 0 errors |
 | V3 | minimap2 preset emitted — `testing.yml` is set to `PacBio`, so expect `-ax splice:hq -uf` | Stage 3 → `grep -h "minimap2" work/*/*/.command.sh` |
 | V4 | Bambu gets `--ndr` and `--stranded true`; optparse accepts the new flag | Stage 3 → `grep -h "bambu.R" work/*/*/.command.sh` |
 | V5 | M4 regression — group labels correct despite changed `bamlist.txt` order | Stage 3 → `colData(readRDS(...))$group` |
