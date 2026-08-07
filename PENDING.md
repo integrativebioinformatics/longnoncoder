@@ -3,11 +3,30 @@
 Carried over from the `dev`-branch review. Tracks what has been applied on the `updating` branch and
 what still needs verifying before it merges to `dev`.
 
-**Applied on `updating`:** M4, M5, P1–P6, and the new POST_REFINEMENT module.
+**Applied on `updating`:** M4, M5, P1–P6, POST_REFINEMENT, the biomaRt removal and the GTF
+enrichment.
+
+## Run status — 2026-08-07
+
+A full run completed on the chr1 test dataset with `-profile test,singularity` and
+`library: PacBio` / `stranded_library: true`. **All 24 tasks reached COMPLETED or CACHED; none
+failed.** That settles the structural questions:
+
+- the pipeline parses and runs under the strict syntax on Nextflow 26.x (V1)
+- `POST_REFINEMENT` and `ENRICH_VALIDATED_GTF` are wired correctly and produce their outputs
+  (V11, V12.4)
+- `KNOWN_TRANSCRIPTS` completes with no biomaRt query, so the reference-GTF path works end to end
+  on an Ensembl annotation (V12.2)
+- the `:test3` container serves every local module including `BAMBU_VALIDATE` (V10)
+- publishing still works after the `outputDir` removal (V9)
 
 > [!WARNING]
-> None of the applied changes have been executed. They were written in an environment with no
-> Nextflow, no Java and no R, so every item in Part 1 below is unverified.
+> Completing is not the same as being correct. Everything below that concerns **output content**
+> remains unverified — most importantly the metadata parity check (V12.1), the GTF attribute
+> contents (V12.3), the group labels after the collectFile change (V5), and the report panels
+> (V11.3). A GENCODE run (V12.7) has not been attempted at all.
+
+`conf/test.config` has since been retuned against this run's measured usage; see Part 2.
 
 ---
 
@@ -226,6 +245,7 @@ invocations. All are cheap — none needs to run to completion.
 | **Strict syntax** | The shared `stranded_library` / `minimap2_preset` closures in `conf/modules.config` were inlined into the `MINIMAP2_ALIGN` and `BAMBU` `ext.args` closures — the strict parser (default from 26.04) rejects top-level `def` declarations in config files, and rejects `switch`/`return` statements inside config closures |
 | **biomaRt removal** | `known_transcripts.R` now reads all transcript metadata from the supplied reference annotation GTF via the new `bin/gtf_annotation_utils.R`; `ensembl_organism_dataset` and `ensembl_version` deleted; known/novel split now tested by reference membership rather than an `ENS` prefix |
 | **GTF enrichment** | All custom-generated GTFs carry `transcript_status`, `gene_biotype`, `transcript_biotype`, `gene_name`, and — for novel transcripts — `class_code`, `classification` and `ref_gene_id`. New `bin/enrich_validated_gtf.R` + `ENRICH_VALIDATED_GTF` module post-processes the `subset_bambu_gtf.sh` outputs, leaving that shell script untouched |
+| **test.config** | Retuned against the 2026-08-07 run's measured usage. `process_medium` 8→4 cpus and 15→12 GB, `process_high` 25→15 GB, `process_high_memory` 4→2 cpus and 40→24 GB; time limits cut except `process_high`, whose slowest task ran 84 min and now gets 3 h. `process_single` deliberately left at 5 GB — RENDER_REPORT at 68% is the tightest fit in the run. Header records the observed peaks and the reasoning |
 
 **Deliberately left alone under P6:** the `conda.enabled = false` guards in the docker/singularity/
 apptainer profiles (they actively enforce the no-conda policy), and
