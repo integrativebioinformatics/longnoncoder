@@ -198,8 +198,40 @@ order_chromosomes <- function(x) {
   numeric_sorted <- values[is_numeric_chr][order(as.numeric(bare[is_numeric_chr]))]
   other_sorted <- sort(values[!is_numeric_chr])
 
-  factor(x, levels = c(numeric_sorted, other_sorted))
+  # droplevels so a chromosome absent from the data never reserves an empty panel
+  droplevels(factor(x, levels = c(numeric_sorted, other_sorted)))
 }
+
+# --- Faceted figure sizing ---------------------------------------------------
+# The chromosome figures were a fixed 35 x 30 inches regardless of the data. A
+# single-chromosome test run got a five-column layout with four empty slots, and
+# a whole genome produced an image so much larger than the page that the browser
+# scaled it down about fourfold, shrinking every label -- which is why the titles
+# had been pushed to size 50 to compensate.
+#
+# Size the figure from the number of panels instead: a squarish grid, a fixed
+# allowance per panel, and floors and ceilings so one chromosome is not
+# microscopic and twenty-five is not thirty inches tall. Rendering near the
+# display size keeps text at its intended size.
+facet_layout <- function(n, panel_w = 3.0, panel_h = 2.8,
+                         max_ncol = 5, min_w = 6, max_w = 16,
+                         min_h = 4, max_h = 22) {
+  n <- max(1L, as.integer(n))
+  ncol <- min(max_ncol, max(1L, ceiling(sqrt(n))))
+  nrow <- ceiling(n / ncol)
+
+  list(
+    n      = n,
+    ncol   = ncol,
+    nrow   = nrow,
+    width  = min(max_w, max(min_w, ncol * panel_w + 1)),
+    height = min(max_h, max(min_h, nrow * panel_h + 1.5))
+  )
+}
+
+# Point size for the lollipop plots. One value so the whole report stays
+# consistent; raise it here if the dots read too small.
+lolli_size <- 3.6
 ```
 
 ## Introduction
@@ -677,7 +709,7 @@ create_plot <- function(data, x, fill, title) {
     # correctly, and the counts here genuinely span several orders of magnitude.
     geom_linerange(aes(ymin = 1, ymax = count), position = position_dodge(width = 0.9),
                    colour = "grey65", linewidth = 0.5) +
-    geom_point(position = position_dodge(width = 0.9), size = 2.4, shape = 21, colour = "grey20") +
+    geom_point(position = position_dodge(width = 0.9), size = lolli_size, shape = 21, colour = "grey20") +
     labs(x = "\nGene biotypes", y = "Count (log10 scale)\n", fill = "Transcript biotypes", title = title) +
     theme(
       panel.background = element_rect(fill = "white"), 
@@ -746,7 +778,7 @@ panel2
 
 This visualization maps the distribution of different gene biotypes across all chromosomes, revealing genomic hotspots for certain types of genes.
 
-> This image might render differently according to data. Access `assets/report_template.qmd`, and adjust the `fig-height` and `fig-width` parameters to better fit the plot if needed. The code chunk generating this plot is `plot-gb-across-chr`.
+> The layout of this figure adapts to how many chromosomes your data covers, so it should not need manual adjustment. If you do want to change the proportions, the per-panel allowance is set by `facet_layout()` in the `load-libraries` chunk; the plot itself is `fig-gb-across-chr`.
 
 ```{r}
 #| label: prep-chr-data
@@ -760,18 +792,21 @@ chr_gb <- ann_txome %>%
   summarise(count = n(), .groups = "drop")
 chr_gb$gene_biotype <- factor(chr_gb$gene_biotype, levels = c("protein_coding", "lncRNA", "small_RNA", "pseudogene", "other"))
 chr_gb$chromosome_name <- order_chromosomes(chr_gb$chromosome_name)
+chr_gb$gene_biotype <- droplevels(chr_gb$gene_biotype)
+
+chr_lay <- facet_layout(nlevels(chr_gb$chromosome_name))
 ```
 
 ```{r}
 #| label: fig-gb-across-chr
 #| fig-cap: "**Chromosomal Distribution of Gene Biotypes.** Each panel represents a chromosome, showing the count of transcript isoforms for each biotype found there. This provides a genome-wide view of how different functional classes of genes are organized and transcribed across chromosomes."
-#| fig-height: 30
-#| fig-width: 35
+#| fig-width: !expr chr_lay$width
+#| fig-height: !expr chr_lay$height
 
 p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
   geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
-  geom_point(aes(fill = gene_biotype), size = 2.2, shape = 21, colour = "grey20") +
-  facet_wrap(~ chromosome_name, scales = "free_x", ncol = 5) +
+  geom_point(aes(fill = gene_biotype), size = lolli_size, shape = 21, colour = "grey20") +
+  facet_wrap(~ chromosome_name, scales = "free_x", ncol = chr_lay$ncol, drop = TRUE) +
   scale_fill_viridis_d(option = "viridis", guide = "none") +
   scale_y_log10_std(expand_top = TRUE) +
   theme(
@@ -780,10 +815,12 @@ p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
     axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"),
     strip.text = element_text(face = "bold", color = "black", margin = margin(t = 8, b = 8, l = 5, r = 5)),
     strip.background = element_rect(fill = "grey85", color = "grey70", linewidth = 0.5),
-    plot.title = element_text(size = 50, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 40, hjust = 0.5),
-    plot.margin = margin(1, 1, 1, 1, "cm"), panel.spacing = unit(1.2, "cm")
+    # Normal sizes now the figure is rendered near its display size and no
+    # longer scaled down by the browser
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 13, hjust = 0.5),
+    plot.margin = margin(0.4, 0.4, 0.4, 0.4, "cm"), panel.spacing = unit(0.5, "cm")
   ) +
-  labs(title = "Gene Biotype Diversity Across Human Chromosomes", subtitle = "Distribution of different gene types per chromosome (log10 scale)", x = "Gene Biotype", y = "Count (log10 scale)") +
+  labs(title = "Gene Biotype Diversity Across Chromosomes", subtitle = "Distribution of different gene types per chromosome (log10 scale)", x = "Gene Biotype", y = "Count (log10 scale)") +
   geom_text(aes(label = count), vjust = -0.5, color = "black")
 p9
 ```
@@ -882,7 +919,7 @@ count_momu <- ann_pc_lnc_txome %>% group_by(gene_biotype, transcript_biotype, cl
 
 p16 <- ggplot(count_momu, aes(x = transcript_biotype, y = count, fill = transcript_biotype)) +
   geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
-  geom_point(size = 2.2, shape = 21, colour = "grey20") +
+  geom_point(size = lolli_size, shape = 21, colour = "grey20") +
   facet_grid(gene_biotype ~ class_exon, scales = "free_x", space = "free_x") +
   labs(title = "Distribution of mono and multi-exonic transcripts", x = "\nTranscript biotype", y = "Count (log10 scale)", fill = "Transcript biotype") +
   theme(,
@@ -997,7 +1034,7 @@ class_counts <- novel_tx %>% group_by(biotype, classification) %>% summarise(cou
 p20 <- ggplot(class_counts, aes(x = classification, y = count, fill = classification)) +
   geom_linerange(aes(ymin = 1, ymax = count), position = position_dodge(width = 0.9),
                  colour = "grey65", linewidth = 0.5) +
-  geom_point(position = position_dodge(width = 0.9), size = 2.2, shape = 21, colour = "grey20") +
+  geom_point(position = position_dodge(width = 0.9), size = lolli_size, shape = 21, colour = "grey20") +
   geom_text(aes(label = count, y = count), vjust = -0.9, position = position_dodge(width = 0.9), angle = 0) +
   facet_grid(~ biotype, scales = "free_x", space = "free_x") +
   labs(title = "GFFCompare classification stats overview of novel protein-coding and lncRNAs", x = "\n\nClassification", y = "Count (log10)", fill = "Classification") +
@@ -1013,7 +1050,7 @@ p20
 
 This visualization maps the distribution of novel protein-coding and lncRNA transcripts across all chromosomes.
 
-> This image might render differently according to data. Access `assets/report_template.qmd`, and adjust the `fig-height` and `fig-width` parameters to better fit the plot if needed. The code chunk generating this plot is `plot-novel-across-chr`.
+> The layout of this figure adapts to how many chromosomes your data covers, so it should not need manual adjustment. If you do want to change the proportions, the per-panel allowance is set by `facet_layout()` in the `load-libraries` chunk; the plot itself is `fig-novel-across-chr`.
 
 ```{r}
 #| label: prep-novel-chr-data
@@ -1021,18 +1058,20 @@ This visualization maps the distribution of novel protein-coding and lncRNA tran
 
 chr_tb_novel <- novel_tx %>% group_by(seqnames, biotype) %>% summarise(count = n(), .groups = 'drop')
 chr_tb_novel$seqnames <- order_chromosomes(chr_tb_novel$seqnames)
+
+chr_novel_lay <- facet_layout(nlevels(chr_tb_novel$seqnames))
 ```
 
 ```{r}
 #| label: fig-novel-across-chr
 #| fig-cap: "**Chromosomal Distribution of Novel Transcripts.** Each panel represents a chromosome and shows the number of novel protein-coding and novel lncRNA transcripts discovered there."
-#| fig-width: 25
-#| fig-height: 30
+#| fig-width: !expr chr_novel_lay$width
+#| fig-height: !expr chr_novel_lay$height
 
 p21 <- ggplot(chr_tb_novel, aes(x = biotype, y = count)) +
   geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
-  geom_point(aes(fill = biotype), size = 2.2, shape = 21, colour = "grey20") +
-  facet_wrap(~ seqnames, scales = "free_x", nrow = 5) +
+  geom_point(aes(fill = biotype), size = lolli_size, shape = 21, colour = "grey20") +
+  facet_wrap(~ seqnames, scales = "free_x", ncol = chr_novel_lay$ncol, drop = TRUE) +
   scale_fill_viridis_d(option = "viridis", guide = "none") +
   scale_y_log10_std(expand_top = TRUE) +
   theme(
@@ -1041,8 +1080,8 @@ p21 <- ggplot(chr_tb_novel, aes(x = biotype, y = count)) +
     axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"),
     strip.text = element_text(face = "bold", color = "black", margin = margin(t = 8, b = 8, l = 5, r = 5)),
     strip.background = element_rect(fill = "grey85", color = "grey70", linewidth = 0.5),
-    plot.title = element_text(size = 50, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 40, hjust = 0.5),
-    plot.margin = margin(1, 1, 1, 1, "cm"), panel.spacing = unit(1.0, "cm"), axis.ticks = element_blank()
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 13, hjust = 0.5),
+    plot.margin = margin(0.4, 0.4, 0.4, 0.4, "cm"), panel.spacing = unit(0.5, "cm"), axis.ticks = element_blank()
   ) +
   labs(title = "Novel RNAs Diversity Across Chromosomes", subtitle = "Distribution of novel RNA biotypes per chromosome (log10 scale)", x = "Biotype", y = "Count (log10 scale)") +
   geom_text(aes(label = count), vjust = -0.5, color = "black")
@@ -1105,7 +1144,7 @@ count_momu_novel <- novel_tx %>%
 
 p25 <- ggplot(count_momu_novel, aes(x = classification, y = count, fill = classification)) +
   geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
-  geom_point(size = 2.2, shape = 21, colour = "grey20") +
+  geom_point(size = lolli_size, shape = 21, colour = "grey20") +
   facet_grid(biotype ~ class_exon, scales = "free_x", space = "free_x") +
   labs(title = "Distribution of mono and multi-exonic novel transcripts", x = "Classification",
        y = "Count (log10 scale)", fill = "Classification") +
