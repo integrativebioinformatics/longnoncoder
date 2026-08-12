@@ -1,7 +1,6 @@
 process ENRICH_VALIDATED_GTF {
     tag "Enriching_Validated_GTFs"
-    // process_medium: parses the full reference annotation GTF in R.
-    label 'process_medium'
+    label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/longnoncoder:test3':

@@ -1,9 +1,6 @@
 process KNOWN_TRANSCRIPTS {
     tag "Processing_Known_Transcripts"
-    // process_medium rather than process_single: this step now parses the full
-    // reference annotation GTF in R, which a whole-genome GENCODE build makes
-    // too large for the 6 GB that process_single allows.
-    label 'process_medium'
+    label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/longnoncoder:test3':

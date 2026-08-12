@@ -1,8 +1,6 @@
 process NOVEL_TRANSCRIPTS {
     tag "Process Novel Transcripts"
-    // process_medium rather than process_single: this step now parses the full
-    // reference annotation GTF in R to resolve reference gene biotypes.
-    label 'process_medium'
+    label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/longnoncoder:test3':

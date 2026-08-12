@@ -27,13 +27,13 @@ echo -e "\nHuman reference chromosome 1 - genome and annotation files downloaded
 
 # Download the fastq files
 
-#mkdir -p samples
+mkdir -p samples
 
-#FASTQ_URL="https://www.encodeproject.org/files/"
+FASTQ_URL="https://www.encodeproject.org/files/"
 
-#curl -L "${FASTQ_URL}"ENCFF827DUW/@@download/ENCFF827DUW.fastq.gz -o samples/ENCFF827DUW.fastq.gz
-#curl -L "${FASTQ_URL}"ENCFF708BOP/@@download/ENCFF708BOP.fastq.gz -o samples/ENCFF708BOP.fastq.gz
-#curl -L "${FASTQ_URL}"ENCFF785KVJ/@@download/ENCFF785KVJ.fastq.gz -o samples/ENCFF785KVJ.fastq.gz
-#curl -L "${FASTQ_URL}"ENCFF260AWP/@@download/ENCFF260AWP.fastq.gz -o samples/ENCFF260AWP.fastq.gz
+curl -L "${FASTQ_URL}"ENCFF827DUW/@@download/ENCFF827DUW.fastq.gz -o samples/ENCFF827DUW.fastq.gz
+curl -L "${FASTQ_URL}"ENCFF708BOP/@@download/ENCFF708BOP.fastq.gz -o samples/ENCFF708BOP.fastq.gz
+curl -L "${FASTQ_URL}"ENCFF785KVJ/@@download/ENCFF785KVJ.fastq.gz -o samples/ENCFF785KVJ.fastq.gz
+curl -L "${FASTQ_URL}"ENCFF260AWP/@@download/ENCFF260AWP.fastq.gz -o samples/ENCFF260AWP.fastq.gz
 
 echo -e "\nENCODE Project RUSH AD PacBio - Downloaded ENCFF827DUW, ENCFF708BOP, ENCFF785KVJ and ENCFF260AWP fastq files for dorsolateral pre-frontal cortex samples.\n"
