@@ -1,397 +1,231 @@
-# pulposeq — pending fixes & pending validations
+# pulposeq — validation status of the `updating` branch
 
-Carried over from the `dev`-branch review. Tracks what has been applied on the `updating` branch and
-what still needs verifying before it merges to `dev`.
+Tracks what has been verified on this branch and what has not, ahead of merging to `dev`.
 
-**Applied on `updating`:** M4, M5, P1–P6, POST_REFINEMENT, the biomaRt removal and the GTF
-enrichment.
-
-## Run status — 2026-08-07
-
-A full run completed on the chr1 test dataset with `-profile test,singularity` and
-`library: PacBio` / `stranded_library: true`. **All 24 tasks reached COMPLETED or CACHED; none
-failed.** That settles the structural questions:
-
-- the pipeline parses and runs under the strict syntax on Nextflow 26.x (V1). Confirmed twice over:
-  `nextflow lint .` reports 42 files with 0 errors, which is the stronger result since it covers
-  every file rather than only the paths the run happened to exercise
-- `POST_REFINEMENT` and `ENRICH_VALIDATED_GTF` are wired correctly and produce their outputs
-  (V11, V12.4)
-- `KNOWN_TRANSCRIPTS` completes with no biomaRt query, so the reference-GTF path works end to end
-  on an Ensembl annotation (V12.2)
-- the `:test3` container serves every local module including `BAMBU_VALIDATE` (V10)
-- publishing still works after the `outputDir` removal (V9)
-
-> [!WARNING]
-> Completing is not the same as being correct. Everything below that concerns **output content**
-> remains unverified — most importantly the metadata parity check (V12.1), the GTF attribute
-> contents (V12.3), the group labels after the collectFile change (V5), and the report panels
-> (V11.3). A GENCODE run (V12.7) has not been attempted at all.
-
-`conf/test.config` has since been retuned against this run's measured usage; see Part 2.
+**What the branch contains:** the `library` / `stranded_library` parameters driving the minimap2
+preset and Bambu strandedness; removal of the biomaRt query in favour of reading transcript metadata
+from the supplied reference annotation; biotype and classification attributes written into every
+generated GTF; the new `POST_REFINEMENT` and `ENRICH_VALIDATED_GTF` modules; a rewritten resource
+profile scheme; the Nextflow 26.04 / strict-syntax move; and a set of report fixes. Commit history
+has the detail.
 
 ---
 
-## Part 1 — Validation plan
+# 1. Validations done
 
-Validation is done by **running the pipeline end to end** on the test data and reviewing the
-artifacts. A single real run exercises most of the changed surface at once. Three cheap gates run
-first, because each catches a whole class of failure in seconds rather than after hours of compute.
+## Static checks
 
-### Environment
+| Check | Result |
+|---|---|
+| **`nextflow lint .`** | **PASSED** — 42 files, 0 errors. The 3 warnings are all in nf-core template subworkflows tracked in `modules.json`; they are style-only and deliberately not fixed, since `nf-core subworkflows update` would overwrite any local edit. |
+| **`nextflow config -profile test,apptainer`** | **PASSED** — config tree assembles on Apptainer/SLURM. The `MINIMAP2_ALIGN` and `BAMBU` `ext.args` ternaries survive the strict parser with the config loaded, `SUBSET_BAMBU_GTF` resolves to `publishDir { enabled = false }`, and no deleted `containers_*.config` is referenced. |
+| **Label coverage** | **PASSED** — all 16 processes resolve a label in all 5 profiles, so nothing falls back silently to `base.config` defaults. Every profile's `resourceLimits` is at or above its largest request, so no allocation is clamped. |
 
-```bash
-conda activate nf-core          # provides Nextflow >= 26.04
-module load singularity
-cd test_data && chmod +x download-ref-fastq.sh && ./download-ref-fastq.sh && cd ..
-# then fill the /full/path/to/... placeholders in test_data/samplesheet.csv and test_data/testing.yml
-```
+> `nextflow config` accepts **no parameters** — its options are `-flat`, `-h`, `-profile`,
+> `-properties`, `-r`, `-a`, `-sort`, `-value`. Passing `-params-file` fails with "Unknown option".
+> It also cannot check the minimap2 presets: params cannot be injected, and `ext.args` is a closure
+> printed unevaluated.
 
-> [!IMPORTANT]
-> This branch sets `manifest.nextflowVersion = '!>=26.04.0'`. From 26.04 the **strict syntax parser
-> is enabled by default**, which is stricter about config files than any version this pipeline has
-> run under before. Stage 0 exists specifically to catch that.
+## Stub run
 
----
+**PASSED** — 24 tasks, ~4 minutes, `-profile test,apptainer`. Confirms every channel connection,
+input cardinality and output filename, including the `ENRICH_VALIDATED_GTF` and `POST_REFINEMENT`
+wiring, the extra `path` inputs on `KNOWN_TRANSCRIPTS` / `NOVEL_TRANSCRIPTS`, and the corrected BAMBU
+stub, which previously touched a `bambu_output.rds` that `bin/bambu.R` never writes.
 
-### Stage 0 — `nextflow lint` — **PASSED 2026-08-07**
+> `-stub-run` is a boolean switch and takes no value. `-stub-run true` leaves `true` as a positional
+> argument and warns. The same warning appears for `-profile test, apptainer` with a space — that one
+> genuinely breaks, since only `test` reaches `-profile` and no container runtime is enabled.
 
-```bash
-nextflow lint .
-```
+## Real runs
 
-Statically checks every `.nf` and `.config` file against the strict syntax. **42 files, 0 errors.**
-This was the highest-value single command on the branch, because 26.04 enforces rules the pipeline
-had never been parsed under.
+Three completed: chr1 test data, a GENCODE run, and a full Ensembl 116 run. Between them:
 
-**Known constraint, handled:** the strict parser allows only config assignments, blocks and includes
-— top-level `def` declarations and helper functions are rejected, and inside a config closure it
-also rejects statement forms such as `switch` and `return`. The library/strandedness logic was
-originally written as two shared top-level closures in `conf/modules.config`, then as a `switch`; it
-is now a single ternary expression inside each of the `MINIMAP2_ALIGN` and `BAMBU` `ext.args`
-closures. The rule is deliberately stated twice; do not "refactor" it back into a shared helper or a
-switch — both fail to parse.
+| Check | Result |
+|---|---|
+| Pipeline completes end to end | **PASSED** — all tasks reach COMPLETED, output files generated as expected |
+| Strict syntax at runtime | **PASSED** — parses and runs under Nextflow 26.x |
+| `KNOWN_TRANSCRIPTS` without biomaRt | **PASSED** — completes with no network access |
+| `POST_REFINEMENT` / `ENRICH_VALIDATED_GTF` | **PASSED** — run and produce their outputs |
+| `:test3` container | **PASSED** — serves every local module including `BAMBU_VALIDATE` |
+| Publishing after the `outputDir` removal | **PASSED** — results land in the expected subdirectories |
+| minimap2 preset for `PacBio` | **PASSED** — `-ax splice:hq -uf` |
+| **GENCODE annotation** | **PASSED** — biotypes populate via `gene_type`. Surfaced one real defect, since fixed: `chromosome_name` was being stripped of its `chr` prefix on the annotated side but not the novel side. Sequence names are now passed through untouched on both. |
 
-**Three warnings, all upstream — do not fix:**
+## Report
 
-```
-subworkflows/nf-core/utils_nextflow_pipeline/main.nf:43   Emit name should be omitted when there is only one emit
-subworkflows/nf-core/utils_nfcore_pipeline/main.nf:20     Emit name should be omitted when there is only one emit
-subworkflows/nf-core/utils_nfschema_plugin/main.nf:76     Emit name should be omitted when there is only one emit
-```
+Verified against the rendered Ensembl 116 HTML:
 
-All three subworkflows are tracked in `modules.json`, so they are nf-core template code. Editing them
-locally would be overwritten by the next `nf-core subworkflows update` and would leave the copies
-diverged from upstream until then. The warnings concern style, not correctness. The same applies to
-anything lint flags under `modules/nf-core/*`.
-
-`nextflow.config` builds `trace_report_suffix` with `new java.util.Date().format(...)`, inherited
-from the nf-core 4.0.2 template and written for 25.10. It was the one construct expected to trip the
-strict parser; it is among the 42 clean files, so no change is needed.
-
-### Stage 1 — config resolution — **PASSED 2026-08-11** (`-profile test,apptainer`)
-
-```bash
-nextflow config -profile test,singularity
-```
-
-Confirmed on an Apptainer/SLURM deployment: the tree assembles, the `MINIMAP2_ALIGN` and `BAMBU`
-`ext.args` ternaries survive the strict parser with the config actually loaded, `SUBSET_BAMBU_GTF`
-resolves to `publishDir { enabled = false }` with `ENRICH_VALIDATED_GTF` publishing in its place, and
-no `containers_*.config` is referenced. `resourceLimits` sits exactly at the largest label request
-(4 cpus / 18 GB / 2 h), so nothing is clamped — every process carries a label and `process_long` is
-unused.
-
-`file = 'null/pipeline_info/...'` in the output is expected, not a defect: `params.outdir` is unset
-because this command cannot take a params file.
-
-> [!IMPORTANT]
-> `nextflow config` takes **no parameters**. Its full option list is `-flat`, `-h`, `-profile`,
-> `-properties`, `-r`, `-a`, `-sort` and `-value` — passing `-params-file` fails with
-> "Unknown option". Swap `singularity` for `apptainer` or `docker` to match your runtime.
-
-Confirms the config tree assembles, that the resolved `process` block lists `resourceLimits`, and
-that no `containers_*.config` is referenced (those eight files were deleted). A single value can be
-pulled out directly:
-
-```bash
-nextflow config -profile test,singularity -value process.resourceLimits
-```
-
-**This stage cannot check the minimap2 presets**, for two reasons: no params can be injected, so
-`params.library` is always `null` here; and `ext.args` is a closure, which `nextflow config` prints
-unevaluated rather than resolving. Preset verification only happens in a real run — see V3.
-
-### Stage 2 — stub run — **PASSED 2026-08-11** (24 tasks, 4 min, `-profile test,apptainer`)
-
-```bash
-nextflow run main.nf -profile test,singularity -params-file test_data/testing.yml -stub-run
-```
-
-> [!NOTE]
-> `-stub-run` is a boolean switch and takes no value. Writing `-stub-run true` leaves `true` as a
-> positional argument, which surfaces as "nf-core pipelines do not accept positional arguments". The
-> run still works; the stray argument is simply never consumed. The same warning appears for
-> `-profile test, apptainer` with a space, which *does* break — only `test` reaches `-profile`, so no
-> container runtime is enabled.
-
-Exercises every channel connection, input cardinality and output filename in the DAG without running
-a single real tool. All 24 processes completed, which confirms the new `ENRICH_VALIDATED_GTF` and
-`POST_REFINEMENT` modules are wired correctly, the extra `path` inputs added to `KNOWN_TRANSCRIPTS`
-and `NOVEL_TRANSCRIPTS` stage as expected, and every stub block emits the outputs its module
-declares — including the corrected BAMBU stub, which previously touched `bambu_output.rds`, a
-filename `bin/bambu.R` never writes, and now touches `se_multiSample.rds` and
-`seGene_multiSample.rds` (V11.5).
-
-**What a stub run does not prove:** stub blocks only `touch` empty files, so no output *content* is
-exercised. Everything about correctness — V3, V4, V5, V12.1, V12.3 — still needs the real run.
-
-### Stage 3 — the real run (hours)
-
-```bash
-nextflow run main.nf -profile test,singularity -params-file test_data/testing.yml
-```
-
-> [!WARNING]
-> `-profile test` caps resources at `cpus: 2, memory: 12.GB` and gives `process_high_memory` 12 GB.
-> That is the Bambu step, running on real ENCODE reads against human chr1. If it is OOM-killed, this
-> is a test-profile sizing problem, not a defect in the branch — rerun that step with `-profile
-> medium,singularity` and note it.
-
-### Stage 4 — send for review
-
-The full `work/` directory is large and mostly BAMs. This bundle is what is actually needed:
-
-```bash
-tar czf pulposeq-validation.tar.gz \
-    .nextflow.log \
-    $(find work -name '.command.sh' -o -name '.command.err' -o -name '.command.out') \
-    results/pipeline_info \
-    results/transcriptome_report \
-    results/bambu_validated \
-    results/novel_transcripts \
-    results/annotated_transcripts \
-    results/multiqc \
-    results/bambu/*.png results/bambu/*.rds \
-    results/post_refinement 2>/dev/null
-```
-
-Deliberately excluded: `work/**/*.bam`, `results/minimap2/`, `results/chopper/` — large binaries with
-nothing to review in them. If a task fails, also include that task's full work directory.
+| Check | Result |
+|---|---|
+| Duplicated captions on the before/after figures | **FIXED** — each caption appears once, with `(a)` / `(b)` subcaptions |
+| Colliding figure numbers | **FIXED** — 25 captions numbered 1–25, no duplicates, no hand-written `**Figure N:**` left |
+| Stale cross-reference | **FIXED** — `@fig-density` resolves to Figure 14; the old hardcoded "Figure 13" pointed at the wrong figure |
+| Chromosome naming | **FIXED** — annotated and novel figures now agree, both using the annotation's own naming |
+| Chromosome figure scaling | **FIXED** — layout derived from the number of chromosomes rather than a fixed 35×30 in |
+| Tabsets, palette, legends, lollipops, log ticks | **APPLIED** — visible in the render |
+| File size | 17 MB for a whole genome at 150 dpi, against 20 MB for chr1 alone at 300 dpi |
 
 ---
 
-### What the run covers
+# 2. Validations still pending
 
-| ID | Check | Covered by |
-|---|---|---|
-| V1 | Strict-syntax / config resolution | **PASSED** — Stage 0 lint, 42 files / 0 errors |
-| V3 | minimap2 preset emitted — `testing.yml` is set to `PacBio`, so expect `-ax splice:hq -uf` | Stage 3 → `grep -h "minimap2" work/*/*/.command.sh` |
-| V4 | Bambu gets `--ndr` and `--stranded true`; optparse accepts the new flag | Stage 3 → `grep -h "bambu.R" work/*/*/.command.sh` |
-| V5 | M4 regression — group labels correct despite changed `bamlist.txt` order | Stage 3 → `colData(readRDS(...))$group` |
-| V7 | `maxlen` unset → **no** `--maxlength` in the chopper command | Stage 3 → `grep -h "chopper" work/*/*/.command.sh` |
-| V9 | Publishing still works after the `outputDir` removal | Stage 3 → results/ subdirectories present |
-| V10 | `BAMBU_VALIDATE` runs on `:test3` | Stage 3 → task completes |
-| V11 | POST_REFINEMENT end to end | Stage 2 + 3 |
+## Priorities
 
-### What the run does *not* cover
+Everything here should be settled before merging to `dev`.
 
-One run uses one library setting and one set of valid params, so these need deliberate extra
-invocations. All are cheap — none needs to run to completion.
+### P1. Metadata parity — **in progress**
 
-| ID | Check | How |
-|---|---|---|
-| V2 | Param validation errors | Run with no `--library`, then `--library nonsense`, then `--library ONT_DRS --stranded_library false`. Each should fail or warn at initialisation, in seconds. |
-| V3b | The other three presets | `-stub-run` with `--library ONT_DRS`, `--library PacBio`, `--library ONT_cDNA --stranded_library true`, then read `work/*/*/.command.sh`. Stub does not interpolate minimap2's `args`, so instead read the resolved value from `nextflow config` output, or do three short real runs killed after MINIMAP2_ALIGN starts. |
-| V7b | `maxlen` set | Add `--maxlen 10000` and confirm `--maxlength 10000` appears. |
-| V8 | `resourceLimits` caps retries | Force a `process_high_memory` retry under `-profile small` and confirm the second attempt requests 200 GB, not 400 GB. |
-| V6 | Library assumption for the test data | `testing.yml` is set to `ONT_cDNA` / `stranded_library: false`, a conservative guess from the ENCODE files being described as CapTrap cDNA. Correct it if the real orientation is known. |
+The decisive check for the biomaRt removal: the GTF-derived
+`annotated_transcriptome_metadata.csv` must match the biomaRt-era output.
 
-### Expected values
+```r
+old <- read.csv("<previous>/annotated_transcripts/annotated_transcriptome_metadata.csv")
+new <- read.csv("<new>/annotated_transcripts/annotated_transcriptome_metadata.csv")
+all.equal(old[order(old$ensembl_transcript_id), ], new[order(new$ensembl_transcript_id), ])
+```
 
-| `library` | `stranded_library` | minimap2 preset | Bambu |
+`transcript_length` is the field most likely to diverge — biomaRt reports the **mature** length, the
+sum of exon widths, not `end - start`. A systematic difference there means the exon summing in
+`read_reference_gtf()` is wrong.
+
+> **The annotation release must match the baseline.** Ensembl changes content between releases: new
+> transcripts, bumped versions, reassigned biotypes. A 116 GTF compared against a baseline biomaRt
+> queried at 114 will differ for reasons that have nothing to do with the parsing. Either regenerate
+> the baseline at the same release, or restrict the comparison to transcripts present in both.
+>
+> `chromosome_name` will also differ against a **GENCODE** baseline by design, since sequence names
+> are no longer rewritten. Compare against Ensembl, or exclude that column.
+
+### P2. Parameter validation — not run, needs no compute
+
+Four deliberately bad invocations, each failing or warning at initialisation in seconds:
+
+| Command | Expected |
+|---|---|
+| no `--library` | error: `--library must be provided when alignment is not skipped` |
+| `--library nonsense` | rejected by the schema enum **and** `validateInputParameters()` |
+| `--library ONT_DRS --stranded_library false` | warning that ONT_DRS is always stranded; run proceeds |
+| `--skip_alignment`, no `--library` | no error — library is only required when alignment runs |
+
+### P3. Remaining minimap2 presets
+
+`PacBio` is confirmed. A large run covering `PacBio` and unstranded `ONT_cDNA` was in flight at the
+time of writing. Still outstanding:
+
+| `library` | `stranded_library` | Expected preset | Bambu |
 |---|---|---|---|
 | `ONT_DRS` | forced `true` | `-ax splice -uf -k14` | `--stranded true` |
-| `PacBio` | forced `true` | `-ax splice:hq -uf` | `--stranded true` |
 | `ONT_cDNA` | `true` | `-ax splice -uf` | `--stranded true` |
-| `ONT_cDNA` | `false` | `-ax splice` | `--stranded false` |
 
-### V11 — POST_REFINEMENT, in order of what is most likely to break
+Read the resolved value with `grep -h "minimap2" work/*/*/.command.sh` after a real run — a stub run
+does not interpolate minimap2's `args`.
 
-1. **RDS row-name matching.** `post_refinement.R` subsets by `rownames(object) %in% ids`, where `ids`
-   is column 1 of the validated counts files. If one side carries version suffixes and the other does
-   not, the intersect is empty and the script aborts with "None of the N validated IDs matched" —
-   that message is deliberate, it reports disagreeing keys rather than silently plotting nothing.
-   ```r
-   se <- readRDS("results/bambu/se_multiSample.rds"); head(rownames(se))
-   head(read.table("results/bambu_validated/BambuOutput_counts_transcript_validated.txt", header = TRUE)[[1]])
-   ```
-2. **`plotBambu` on a row-subset object** — confirm heatmap and PCA still render, and `colData$groupVar`
-   survived the subset (it should; only rows are touched).
-3. **Both plot sets reach the report** — rendered HTML should show a "Sample-level Expression
-   Overview" section with four two-up comparisons. Blank panels point at `show_plots()`.
-4. **No filename collisions in the RENDER_REPORT work dir** — raw plots stage as `pca.png`,
-   `pca_grouped.png`, `heatmap_gene.png`, `heatmap_transcript.png`; post-refinement ones as the same
-   names with a `_validated` suffix. All eight should be present, none overwritten.
+### P4. Sample group labels after the `collectFile` change
 
-### V12 — biomaRt removal and GTF enrichment
+The one outstanding check with real consequences if it fails. Row order in `bamlist.txt` changed
+from group-ordered to path-ordered; if the group mapping broke, every group-wise figure in the report
+is silently wrong and nothing else flags it.
 
-1. **Metadata parity — the decisive check. IN PROGRESS.** Being evaluated against an Ensembl 116
-   run. The GTF-derived `annotated_transcriptome_metadata.csv` should match the biomaRt-era output:
-   same rows, same columns, same values.
-   ```r
-   old <- read.csv("<previous>/annotated_transcripts/annotated_transcriptome_metadata.csv")
-   new <- read.csv("<new>/annotated_transcripts/annotated_transcriptome_metadata.csv")
-   all.equal(old[order(old$ensembl_transcript_id), ], new[order(new$ensembl_transcript_id), ])
-   ```
-   `transcript_length` is the field most likely to diverge — biomaRt returns the **mature** length
-   (sum of exon widths), not `end - start`. A systematic difference there means the exon summing in
-   `read_reference_gtf()` is wrong.
+```r
+se <- readRDS("<outdir>/bambu/se_multiSample.rds")
+colData(se)$group   # must match each sample's group in the samplesheet
+```
 
-   > **Match the annotation release to the baseline.** Ensembl changes content between releases —
-   > new transcripts, bumped versions, reassigned biotypes. Comparing a 116 GTF against a baseline
-   > biomaRt queried at 114 will show differences that reflect Ensembl's own updates rather than
-   > anything about the parsing. Either regenerate the baseline at the same release, or restrict the
-   > comparison to transcripts present in both.
-   >
-   > `chromosome_name` will also differ against a **GENCODE** run by design, since sequence names are
-   > no longer rewritten (`chr1`, where biomaRt returned `1`). Compare against Ensembl, or exclude
-   > that column.
-2. **No network access.** `KNOWN_TRANSCRIPTS` must complete with no outbound calls; `.command.log`
-   should no longer contain "Connecting to Ensembl biomaRt...".
-3. **GTF attributes present:**
-   ```bash
-   grep -m3 "transcript_status" results/annotated_transcripts/bambu_annotated_transcriptome.gtf
-   grep -m3 "class_code" results/novel_transcripts/novel_transcripts_validated.gtf
-   grep -c 'gene_biotype "novel"' results/bambu_validated/BambuOutput_annotations_validated.gtf
-   ```
-   The last count should approximate the number of novel transcripts without a `cmp_ref_gene`
-   (630 of 1498 in the chr1 test data).
-4. **`ENRICH_VALIDATED_GTF` does not clobber its inputs.** The three validated GTFs are staged into
-   `input/` and rewritten at the task root. Confirm the published files carry the new attributes and
-   that record counts match the `SUBSET_BAMBU_GTF` outputs.
-5. **Publishing moved.** `SUBSET_BAMBU_GTF` no longer publishes — its GTFs are intermediates and
-   `ENRICH_VALIDATED_GTF` publishes the same three filenames to `bambu_validated/`. Confirm exactly
-   one copy of each exists and it is the enriched one.
-6. **Memory.** `KNOWN_TRANSCRIPTS` and `NOVEL_TRANSCRIPTS` moved from `process_single` to
-   `process_medium` because they now parse the reference GTF in R. Watch actual usage; a
-   whole-genome GENCODE annotation is much heavier than the chr1 test file.
-7. **GENCODE run.** The point of the change is that both sources work. Run once with a GENCODE GTF
-   and confirm biotypes populate via `gene_type`, and that `chromosome_name` reads `chr1` — the
-   annotation's own naming, matching what the novel-transcript outputs report. Use the
-   CHR or PRI build — ALL will trip the new duplicate-identifier check by design.
-8. **Params removed.** Any params file still setting `ensembl_organism_dataset` or `ensembl_version`
-   now fails schema validation. `test_data/testing.yml` and `examplerun.yml` are updated in-repo.
+`bin/bambu.R` matches sample rows to BAMs by basename rather than by position, which is why the
+change should be safe — but it has not been confirmed on a multi-group dataset.
 
----
-## Part 2 — Applied on the `updating` branch
+### P5. GTF attribute contents
 
-| Item | Change |
-|---|---|
-| **M4** | `transcript_reconstruction.nf` — both `collectFile` chains collapsed to single calls with `sort: true` |
-| **M5** | `library` / `stranded_library` params driving the minimap2 preset and Bambu `stranded`; new `--stranded` option in `bin/bambu.R`; validation, schema, and docs |
-| **P1** | `validate_counts` container `:test` → `:test3` (all 7 local modules now on one tag) |
-| **P2** | Missing `\` before `$args` fixed in `subset_counts` and `validate_counts` |
-| **P3** | `maxlen` wired into `CHOPPER.ext.args2` as a conditional `--maxlength`; schema description, docs row, `examplerun.yml` entry |
-| **P4** | `process.resourceLimits` added to `base`, `light`, `medium`, `large`, `test` configs |
-| **P5** | Inert `outputDir` / `workflow.output.mode` lines removed — committing to the `publishDir` model |
-| **P6** | 8 orphaned `conf/containers_*.config` files deleted |
-| **POST_REFINEMENT** | New module + `bin/post_refinement.R` regenerating the Bambu PCA/heatmaps from the validated transcriptome, between the metadata refinement steps and the report; both raw and post-refinement plots now embedded in the report |
-| **Nextflow 26** | `manifest.nextflowVersion` raised to `!>=26.04.0`; README badge and strict-syntax warning updated |
-| **Strict syntax** | The shared `stranded_library` / `minimap2_preset` closures in `conf/modules.config` were inlined into the `MINIMAP2_ALIGN` and `BAMBU` `ext.args` closures — the strict parser (default from 26.04) rejects top-level `def` declarations in config files, and rejects `switch`/`return` statements inside config closures |
-| **biomaRt removal** | `known_transcripts.R` now reads all transcript metadata from the supplied reference annotation GTF via the new `bin/gtf_annotation_utils.R`; `ensembl_organism_dataset` and `ensembl_version` deleted; known/novel split now tested by reference membership rather than an `ENS` prefix |
-| **GTF enrichment** | All custom-generated GTFs carry `transcript_status`, `gene_biotype`, `transcript_biotype`, `gene_name`, and — for novel transcripts — `class_code`, `classification` and `ref_gene_id`. New `bin/enrich_validated_gtf.R` + `ENRICH_VALIDATED_GTF` module post-processes the `subset_bambu_gtf.sh` outputs, leaving that shell script untouched |
-| **test.config** | Retuned against the 2026-08-07 run's measured usage. `process_medium` 8→4 cpus and 15→12 GB, `process_high` 25→15 GB, `process_high_memory` 4→2 cpus and 40→24 GB; time limits cut except `process_high`, whose slowest task ran 84 min and now gets 3 h. `process_single` deliberately left at 5 GB — RENDER_REPORT at 68% is the tightest fit in the run. Header records the observed peaks and the reasoning |
+```bash
+grep -m3 "transcript_status" results/annotated_transcripts/bambu_annotated_transcriptome.gtf
+grep -m3 "class_code" results/novel_transcripts/novel_transcripts_validated.gtf
+grep -c 'gene_biotype "novel"' results/bambu_validated/BambuOutput_annotations_validated.gtf
+```
 
-**Deliberately left alone under P6:** the `conda.enabled = false` guards in the docker/singularity/
-apptainer profiles (they actively enforce the no-conda policy), and
-`modules/nf-core/multiqc/{environment.yml,.conda-lock}` — those are managed by nf-core tooling via
-`modules.json`, and deleting them would break `nf-core modules update`.
+The last count should approximate the number of novel transcripts without a `cmp_ref_gene` — 630 of
+1498 in the chr1 test data. Also confirm `ENRICH_VALIDATED_GTF` did not clobber its inputs: the three
+validated GTFs are staged into `input/` and rewritten at the task root, and exactly one copy of each
+should exist in `bambu_validated/`, carrying the new attributes.
 
-**Note on P5:** `publishDir` is **not** deprecated in Nextflow 26.04 — the migration guide says
-nothing about removing it, and workflow outputs merely came out of preview in 25.10. Both models are
-current. The full output-DSL migration is deferred to D2 below.
+### P6. Release decisions
+
+Not validations, but they gate a v1.0.0 with a DOI.
+
+- **Container reproducibility.** `:test3` is a mutable tag in a personal Docker Hub namespace. If it
+  is rebuilt, this branch stops being reproducible retroactively and nothing recovers it. A digest
+  pin is a small change now that the image is known to work.
+- **`publish_dir_mode`.** Now `symlink`, which is good for iterating on large data but produces an
+  output directory that cannot be moved, archived or shared — deleting `work/` destroys it. `copy`
+  is the safer default for a release, with `symlink` as a documented opt-in. Documented either way.
+- **Release metadata.** `CHANGELOG.md` is still the unfilled nf-core stub (`## v1.0.0 - [date]`),
+  `manifest.doi` is empty, and `defaultBranch` is `main` while work happens on `updating`.
 
 ---
 
-## Part 3 — Pending, needs discussion or help
+## Non-urgent polishing
 
-### D1. CI and nf-test — *you asked for help here*
+Nothing here affects correctness of a run.
 
-No `.github/workflows/` directory exists. `.nf-core.yml` disables `nf_test_content` lint. No tests
-for the eight local modules or the pipeline. Every local module already has a working `stub` block,
-so a `-stub` CI job is cheap and would catch V1/V2 automatically. Suggested order: stub-run workflow
-→ linting workflow → per-module nf-tests.
+### CI and testing
 
-### D2. Migrate to the workflow output definition
+**No `.github/workflows/` exists**, `.nf-core.yml` disables `nf_test_content` lint, and there are no
+tests for the local modules or the pipeline. Every local module already has a working `stub`, so a
+`-stub` CI job is cheap and would catch the config and wiring classes of failure automatically.
+Suggested order: stub-run workflow → linting workflow → per-module nf-tests.
 
-Deferred from P5 until D1 lands, so there is something to catch regressions. Scope: every published
-channel must reach the entry workflow's `publish:` section, but the subworkflows don't currently emit
-most of what gets published — `QC_FILT` emits 3 channels while NanoComp alone has 11 being published;
-`CLASSIFICATION_POTENTIAL_CODING` emits 5 while GffCompare and RNAmining produce 9 between them.
-Roughly 50 channels to plumb through 4 subworkflows, each declared twice (`publish:` + `output {}`),
-plus stripping all `publishDir` from `conf/modules.config`. Several hundred lines.
+This is the highest-value item in this section: it is what stops the next round of changes from
+being unverified in the same way.
 
-### D3. Granular step control (was H7)
+### Larger refactors
 
-You want `run only QC`, `QC+mapping`, `QC+mapping+assembly`, etc. N independent `skip_*` booleans
-multiply into invalid combinations fast. Worth discussing a `--step` / `--from` / `--to` parameter
-(sarek-style) instead of adding more flags.
+- **Workflow output definition.** `publishDir` is not deprecated in 26.04, so this is direction
+  rather than necessity. Scope is large: every published channel must reach the entry workflow's
+  `publish:` section, but the subworkflows do not currently emit most of what gets published —
+  roughly 50 channels through 4 subworkflows, each declared twice, plus stripping all `publishDir`
+  from `conf/modules.config`. Worth doing only after CI exists.
+- **Granular step control.** "Run only QC", "QC+mapping", and so on. Independent `skip_*` booleans
+  multiply into invalid combinations quickly; a `--step` / `--from` / `--to` parameter (sarek-style)
+  scales better than more flags.
+- **`val` → `path` staging.** `BAMBU` (`val bam_list`, `val sample_info`) and `RNAMINING`
+  (`val fasta`) take files as `val`, so they are never staged and never declared as dependencies.
+  **Not a correctness bug** for Docker/Singularity on a shared filesystem — ordering and `-resume`
+  both hold. Two residual risks: `cleanup = true` or `nextflow clean` may remove work directories
+  that `bamlist.txt` still points at, and `-with-dag` will not draw the BAM → BAMBU edges.
 
-### D4. `val` → `path` staging (was H1, downgraded)
+### Code hygiene
 
-`BAMBU` (`val bam_list`, `val sample_info`) and `RNAMINING` (`val fasta`) take files as `val`, so they
-are never staged and never declared as dependencies. **Not a correctness bug** for Docker/Singularity
-on a shared filesystem — ordering and `-resume` both hold. Two residual risks: `cleanup = true` /
-`nextflow clean` may delete upstream work dirs that `bamlist.txt` still points at, and `-with-dag`
-won't draw the BAM → BAMBU edges. Worth doing alongside other refactoring, not on its own.
+1. Change-log comments left in source: `// <- ADDED SCRIPT PATH`, `// FIXED: Put 104 in brackets`,
+   `// REMOVED the unused 'def args' line`, `// Removed the broken CHOPPER.out.versions line
+   entirely`, and a duplicated `// Running quality check in filtered reads` in `qc.nf`.
+2. Dead emits: `ALIGNMENT.out.index` is always empty; `TRANSCRIPT_RECONSTRUCTION` emits `bamlist`,
+   `samp_info`, `reference` and `annotation` with no consumer. Bambu's PNGs never reach MultiQC.
+3. Version-collection gaps, partly deliberate: `RNAMINING.out.versions` is dropped because
+   `CLASSIFICATION`'s `ch_versions` is never mixed; `SUBSET_BAMBU_COUNTS.out.versions` and
+   `BAMBU_VALIDATE.out.versions` are never mixed in `workflows/pulposeq.nf`.
+4. `.ifEmpty(null)` on version channels in `alignment.nf` and `transcript_reconstruction.nf` emits a
+   literal `null` — a deprecated pattern.
+5. The reference channel in `alignment.nf` passes a String as `meta2` and a String as the path, which
+   works only by coercion. Prefer
+   `channel.value([[id: file(params.reference).baseName], file(params.reference)])`.
+6. Inconsistent params plumbing — `ALIGNMENT` reads `params.reference` directly while other
+   subworkflows receive it via `take:`. Prefer `take:` throughout, for testability.
+7. Local modules use bare `path` inputs with no meta map, which hard-codes one sample set per run.
+8. Inconsistent script staging — R scripts are formal `path` inputs, while `.sh` / `.awk` helpers
+   rely on `bin/` being on `PATH`, and `subset_bambu_gtf` uses `$(which subset_gtf.awk)`.
+9. awk version parsing differs between sibling modules using the same container (`mawk` vs `GNU Awk`).
+10. `ext.args = {"--plot violin"}` closures in `conf/modules.config` where plain strings suffice.
+11. The README points users at `-profile test`, but the test data must be downloaded and paths filled
+    in first. Working as designed; the wording could say so.
 
-### D5. Container reproducibility beyond the tag
+### Report — reviewed and deliberately not changed
 
-P1 unified on `:test3`, but that is still a mutable tag in a personal Docker Hub namespace. For a
-v1.0.0 carrying a DOI this wants a versioned tag or a digest pin.
-
----
-
-## Part 4 — Low priority / polish
-
-1. Strip change-log comments from source: `// <- ADDED SCRIPT PATH` (×3 in `workflows/pulposeq.nf`),
-   `// FIXED: Put 104 in brackets`, `// REMOVED the unused 'def args' line`,
-   `// Removed the broken CHOPPER.out.versions line entirely`, and the duplicated
-   `// Running quality check in filtered reads` in `subworkflows/local/qc.nf`.
-2. Dead emits: `ALIGNMENT.out.index` is always empty; `TRANSCRIPT_RECONSTRUCTION` still emits
-   `bamlist`, `samp_info`, `reference`, `annotation` with no consumer. (`pca`, `pca_grouped`,
-   `h_gene`, `h_transcript` are now consumed by the report via POST_REFINEMENT.) The PNGs still
-   never reach MultiQC.
-3. Version-collection gaps (partly intentional): `RNAMINING.out.versions` is dropped because
-   `CLASSIFICATION_POTENTIAL_CODING`'s `ch_versions` is never mixed; `SUBSET_BAMBU_COUNTS.out.versions`
-   and `BAMBU_VALIDATE.out.versions` are never mixed in `workflows/pulposeq.nf`.
-4. `.ifEmpty(null)` on version channels in `alignment.nf` and `transcript_reconstruction.nf` — emits a
-   literal `null`; deprecated pattern.
-5. Reference channel in `alignment.nf` passes a String as `meta2` and a String as the path; works only
-   by coercion. Replace with `channel.value([[id: file(params.reference).baseName], file(params.reference)])`.
-6. Inconsistent include path — `classification_codingpotential.nf` is included with its `.nf`
-   extension, the other three without.
-7. Inconsistent params plumbing — `ALIGNMENT` reads `params.reference` directly; other subworkflows
-   receive it via `take:`. Prefer `take:` throughout for testability.
-8. Local modules use bare `path` inputs with no meta map — hard-codes one sample set per run.
-9. Inconsistent script staging — R scripts are formal `path` inputs; `.sh`/`.awk` helpers rely on
-   `bin/` on `PATH`, and `subset_bambu_gtf` uses `$(which subset_gtf.awk)`.
-10. awk version parsing differs between sibling modules using the same container (`mawk` vs `GNU Awk`).
-11. Release metadata still template state — `CHANGELOG.md` is the unfilled nf-core stub
-    (`## v1.0.0 - [date]`), `manifest.doi` empty, `defaultBranch = 'main'`.
-12. `nextflowVersion = '!>=25.10.4'` is a hard floor that will exclude users on institutional clusters.
-13. `ext.args = {"--plot violin"}` closures in `conf/modules.config` where plain strings suffice.
-14. README tells users to run `-profile test`, but `conf/test.config` carries only resource labels —
-    test data must be downloaded and paths filled in first (working as designed; wording could say so).
-
----
-
-## Resolved — no action
-
-- **H2** resource profiles — `medium.config` and `large.config` set `process_high_memory { cpus = 6 }`;
-  profile configs override the `base.config` baseline. Working as designed. (Minor: `light.config`
-  sets only `memory`, so it inherits `cpus = 1` from base while its `process_high` gets 10.)
-- **H3** test data is user-downloaded by design.
-- **M1** version omissions are partly deliberate — RNAmining's version is hardcoded, and modules
-  sharing a container were deduplicated. Item 3 in Part 4 lists what is dropped, if you want it back.
+- **Count bars on a log axis.** Now drawn as lollipops so position rather than bar length carries the
+  value, which a log axis represents correctly. The remaining question is whether a linear axis with
+  free-scale facets would communicate better — a presentation decision, not a defect.
+- **`fig-format: svg`.** Would be sharper and scalable, but `showtext` draws glyphs as polygons, so
+  every label and legend entry becomes vector paths. On figures with this much text that may grow the
+  file rather than shrink it. `dpi: 150` was taken instead. Worth measuring if size matters more.
+- **Interactivity.** Tabsets are in. Anything further — sortable tables, tooltips, linked filtering —
+  needs R packages that are almost certainly not in `longnoncoder:test3`, so it is gated behind a
+  container rebuild and the reproducibility decision above.
