@@ -182,7 +182,7 @@ workflow PULPOSEQ {
             POST_REFINEMENT.out.pca_grouped,
             POST_REFINEMENT.out.h_gene,
             POST_REFINEMENT.out.h_transcript,
-            file("${projectDir}/bin/report2.qmd", checkIfExists: true) // <- ADDED SCRIPT PATH
+            file("${projectDir}/bin/report.qmd", checkIfExists: true) // <- ADDED SCRIPT PATH
         )
         ch_versions = ch_versions.mix(RENDER_REPORT.out.versions)
     }

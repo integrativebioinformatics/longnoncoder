@@ -126,9 +126,18 @@ read_reference_gtf <- function(path) {
     has_exon_id      <- "exon_id" %in% cols
     cat("  identifier style:", if (has_tx_version) "Ensembl (separate *_version)" else "GENCODE (inline version)", "\n")
 
-    # seqnames: normalise chr1 -> 1 so the chromosome_name column means the same
-    # thing for both sources, which is what biomaRt returned.
-    norm_seqnames <- function(gr) sub("^chr", "", as.character(seqnames(gr)))
+    # Sequence names are written exactly as the annotation has them: "1" for
+    # Ensembl, "chr1" for GENCODE. No prefix is stripped, for two reasons.
+    #
+    # Either source may also name a contig with a GRC accession such as
+    # KI270728.1 or GL000009.2, where there is no prefix and no safe
+    # transformation to apply, so any rule would have to special-case them.
+    #
+    # And the novel-transcript side reports seqnames straight from the
+    # gffcompare GTF, which is never rewritten. Stripping here made the two
+    # halves of the report disagree -- the annotated chromosome figure showed
+    # "1" while the novel one showed "chr1" for the same GENCODE run.
+    norm_seqnames <- function(gr) as.character(seqnames(gr))
 
     tx_gr   <- gtf[gtf$type == "transcript"]
     exon_gr <- gtf[gtf$type == "exon"]

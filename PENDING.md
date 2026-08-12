@@ -232,7 +232,8 @@ invocations. All are cheap — none needs to run to completion.
    `process_medium` because they now parse the reference GTF in R. Watch actual usage; a
    whole-genome GENCODE annotation is much heavier than the chr1 test file.
 7. **GENCODE run.** The point of the change is that both sources work. Run once with a GENCODE GTF
-   and confirm biotypes populate via `gene_type` and `chromosome_name` reads `1`, not `chr1`. Use the
+   and confirm biotypes populate via `gene_type`, and that `chromosome_name` reads `chr1` — the
+   annotation's own naming, matching what the novel-transcript outputs report. Use the
    CHR or PRI build — ALL will trip the new duplicate-identifier check by design.
 8. **Params removed.** Any params file still setting `ensembl_organism_dataset` or `ensembl_version`
    now fails schema validation. `test_data/testing.yml` and `examplerun.yml` are updated in-repo.

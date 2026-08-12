@@ -94,6 +94,15 @@ params:
 knitr:
   opts_chunk:
     fig.showtext: true
+    # 150 dpi rather than 300. The figures are embedded as base64 in a
+    # self-contained HTML, and 300 dpi pushed the rendered report past 20 MB for
+    # no visible gain on screen -- 150 is indistinguishable at normal zoom and
+    # roughly quarters the pixel count.
+    #
+    # fig-format: svg would be sharper still, but showtext draws glyphs as
+    # polygons, so every axis label, facet strip and legend entry becomes vector
+    # paths. On figures with this much text that tends to grow the file rather
+    # than shrink it. Worth measuring before switching.
     dpi: 300
 ---
 
@@ -120,8 +129,109 @@ base_theme <- theme(
 )
 
 theme_set(theme_bw(base_family = "Source Sans 3", base_size = 12) + base_theme)
-update_geom_defaults("text", list(family = "Source Sans 3", size = 10 /.pt))
+update_geom_defaults("text", list(family = "Source Sans 3", size = 11 /.pt))
 update_geom_defaults("label", list(family = "Source Sans 3", size = 11))
+
+# --- Shared log axes ---------------------------------------------------------
+# Every log-scaled axis in this report goes through these, so tick labels read
+# 1,000 rather than a mixture of 1,000 and 1e+03. scales::breaks_log() replaces
+# trans_breaks(), which is deprecated from scales 1.3.0.
+#
+# expand_top adds headroom above the highest bar. Set it wherever count labels
+# are drawn on top of bars, otherwise the topmost label is clipped by the panel
+# edge.
+
+scale_y_log10_std <- function(expand_top = FALSE, ...) {
+  scale_y_log10(
+    breaks = scales::breaks_log(),
+    labels = scales::label_comma(),
+    expand = if (expand_top) expansion(mult = c(0, 0.2)) else waiver(),
+    ...
+  )
+}
+
+scale_x_log10_std <- function(...) {
+  scale_x_log10(
+    breaks = scales::breaks_log(),
+    labels = scales::label_comma(),
+    ...
+  )
+}
+
+# Exon counts are small integers, so the default log breaks (1, 3, 10, 30) read
+# oddly for a number of exons. Force integer breaks instead. The axis stays
+# logarithmic because the distribution is heavily skewed towards 1-2 exons.
+scale_y_log10_exons <- function(...) {
+  scale_y_log10(
+    breaks = c(1, 2, 3, 5, 10, 20, 50, 100, 200),
+    labels = scales::label_comma(accuracy = 1),
+    ...
+  )
+}
+
+# --- Palette -----------------------------------------------------------------
+# One discrete palette for the whole report. ggplot2's default hue palette is
+# not colourblind-safe and sat next to viridis and Brewer fills in other panels,
+# so the same biotype could appear in three different colours. viridis is
+# colourblind-safe and prints legibly in greyscale.
+
+options(
+  ggplot2.discrete.fill = function(...) scale_fill_viridis_d(..., option = "D", end = 0.92),
+  ggplot2.discrete.colour = function(...) scale_colour_viridis_d(..., option = "D", end = 0.92)
+)
+
+# --- Chromosome ordering -----------------------------------------------------
+# Facet chromosomes in genomic order (1, 2, ... 10, 11 ... X, Y, MT) rather than
+# the alphabetical order a plain sort() gives, which would interleave 10 and 11
+# between 1 and 2.
+#
+# The optional chr prefix is stripped before the numeric test. Ensembl names
+# contigs "1" while GENCODE names them "chr1"; without stripping, no GENCODE
+# name matches the numeric pattern and every chromosome falls through to the
+# alphabetical branch.
+
+order_chromosomes <- function(x) {
+  values <- unique(as.character(x))
+  bare <- sub("^chr", "", values, ignore.case = TRUE)
+
+  is_numeric_chr <- grepl("^[0-9]+$", bare)
+  numeric_sorted <- values[is_numeric_chr][order(as.numeric(bare[is_numeric_chr]))]
+  other_sorted <- sort(values[!is_numeric_chr])
+
+  # droplevels so a chromosome absent from the data never reserves an empty panel
+  droplevels(factor(x, levels = c(numeric_sorted, other_sorted)))
+}
+
+# --- Faceted figure sizing ---------------------------------------------------
+# The chromosome figures were a fixed 35 x 30 inches regardless of the data. A
+# single-chromosome test run got a five-column layout with four empty slots, and
+# a whole genome produced an image so much larger than the page that the browser
+# scaled it down about fourfold, shrinking every label -- which is why the titles
+# had been pushed to size 50 to compensate.
+#
+# Size the figure from the number of panels instead: a squarish grid, a fixed
+# allowance per panel, and floors and ceilings so one chromosome is not
+# microscopic and twenty-five is not thirty inches tall. Rendering near the
+# display size keeps text at its intended size.
+facet_layout <- function(n, panel_w = 3.0, panel_h = 2.8,
+                         max_ncol = 5, min_w = 6, max_w = 16,
+                         min_h = 4, max_h = 22) {
+  n <- max(1L, as.integer(n))
+  ncol <- min(max_ncol, max(1L, ceiling(sqrt(n))))
+  nrow <- ceiling(n / ncol)
+
+  list(
+    n      = n,
+    ncol   = ncol,
+    nrow   = nrow,
+    width  = min(max_w, max(min_w, ncol * panel_w + 1)),
+    height = min(max_h, max(min_h, nrow * panel_h + 1.5))
+  )
+}
+
+# Point size for the lollipop plots. One value so the whole report stays
+# consistent; raise it here if the dots read too small.
+lolli_size <- 3.6
 ```
 
 ## Introduction
@@ -253,8 +363,8 @@ bambu_df$Bambu <- factor(bambu_df$Bambu, levels = rev(c("genes", "transcripts", 
 ```
 
 ```{r}
-#| label: plot-bambu-gene-transcript-stats
-#| fig-cap: "**Figure 1: Summary of Assembled Genes and Transcripts.** This figure displays the total counts of genes (A) and various categories of transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
+#| label: fig-bambu-gene-transcript-stats
+#| fig-cap: "**Summary of Assembled Genes and Transcripts.** This figure displays the total counts of genes (A) and various categories of transcripts (B) identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
 #| fig-width: 10
 #| fig-height: 5
 
@@ -262,7 +372,7 @@ bambu_gene_data <- bambu_df %>% filter(FeatureType == "Gene")
 bambu_gene_plot <- ggplot(bambu_gene_data, aes(x = Status, y = Count, fill = Status)) +
   geom_col(show.legend = FALSE, position = "dodge") +
   geom_text(aes(label = Count), vjust = -0.3) +
-  scale_fill_brewer(palette = "Set1") +
+  scale_fill_viridis_d(option = "D", end = 0.92) +
   labs(title = "Genes", x = "\nStatus", y = "No. of genes\n") +
   theme(plot.title = element_text(hjust = 0.5, face = "bold"))
 
@@ -271,7 +381,7 @@ bambu_transcript_data$Bambu <- factor(bambu_transcript_data$Bambu, levels = name
 levels(bambu_transcript_data$Bambu) <- custom_labels[-1]
 
 bambu_transcript_plot <- ggplot(bambu_transcript_data, aes(x = Bambu, y = Count, fill = Status)) +
-  scale_fill_brewer(palette = "Set1") +
+  scale_fill_viridis_d(option = "D", end = 0.92) +
   geom_col(position = "dodge") +
   geom_text(aes(label = Count), position = position_dodge(width = 0.9), vjust = -0.3) +
   labs(title = "Transcripts", x = "\nAssembly", y = "No. of transcripts\n", fill = "Status") +
@@ -400,8 +510,8 @@ if (length(results_biotype) > 0) {
 ```
 
 ```{r}
-#| label: plot-bambu-lnc-pc-stats
-#| fig-cap: "**Figure 1.1: Summary of Assembled Protein-coding and lncRNA Transcripts.** Total counts of lncRNA and protein-coding transcripts identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
+#| label: fig-bambu-lnc-pc-stats
+#| fig-cap: "**Summary of Assembled Protein-coding and lncRNA Transcripts.** Total counts of lncRNA and protein-coding transcripts identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
 #| fig-width: 10
 #| fig-height: 5
 
@@ -422,7 +532,7 @@ levels(bambu_transcript_biotype_data$Bambu) <- custom_labels
 lnc_pc_bambu_plot <- ggplot(bambu_transcript_biotype_data, aes(x = Bambu, y = Count, fill = Status)) +
   geom_col(position = "dodge") +
   geom_text(aes(label = Count), position = position_dodge(width = 0.9), vjust = -0.3) +
-  scale_fill_brewer(palette = "Set1") +
+  scale_fill_viridis_d(option = "D", end = 0.92) +
   facet_wrap(~ Biotype, scales = "free_y") +
   labs(title = "Transcripts", x = "\nAssembly", y = "No. of transcripts\n", fill = "Status") +
   theme(
@@ -474,43 +584,71 @@ show_plots <- function(keys) {
 
 ### Principal Component Analysis
 
+::: {.panel-tabset}
+
+#### All samples
+
 ```{r}
 #| label: fig-pca
 #| echo: false
-#| fig-cap: "Sample PCA before (left) and after (right) validation and curation."
+#| fig-cap: "Sample PCA before and after validation and curation."
+#| fig-subcap:
+#|   - "Raw assembly"
+#|   - "Validated and curated"
 #| layout-ncol: 2
 
 show_plots(c("raw_pca", "post_pca"))
 ```
 
+#### Coloured by group
+
 ```{r}
 #| label: fig-pca-grouped
 #| echo: false
-#| fig-cap: "Sample PCA coloured by group, before (left) and after (right) validation and curation."
+#| fig-cap: "Sample PCA coloured by group, before and after validation and curation."
+#| fig-subcap:
+#|   - "Raw assembly"
+#|   - "Validated and curated"
 #| layout-ncol: 2
 
 show_plots(c("raw_pca_grouped", "post_pca_grouped"))
 ```
 
+:::
+
 ### Expression Heatmaps
+
+::: {.panel-tabset}
+
+#### Transcript level
 
 ```{r}
 #| label: fig-heatmap-transcript
 #| echo: false
-#| fig-cap: "Transcript-level expression heatmap, before (left) and after (right) validation and curation."
+#| fig-cap: "Transcript-level expression heatmap, before and after validation and curation."
+#| fig-subcap:
+#|   - "Raw assembly"
+#|   - "Validated and curated"
 #| layout-ncol: 2
 
 show_plots(c("raw_heatmap_transcript", "post_heatmap_transcript"))
 ```
 
+#### Gene level
+
 ```{r}
 #| label: fig-heatmap-gene
 #| echo: false
-#| fig-cap: "Gene-level expression heatmap, before (left) and after (right) validation and curation."
+#| fig-cap: "Gene-level expression heatmap, before and after validation and curation."
+#| fig-subcap:
+#|   - "Raw assembly"
+#|   - "Validated and curated"
 #| layout-ncol: 2
 
 show_plots(c("raw_heatmap_gene", "post_heatmap_gene"))
 ```
+
+:::
 
 ------------------------------------------------------------------------
 
@@ -564,7 +702,14 @@ all_other_RNAs$category <- factor(all_other_RNAs$category, levels = c("Pseudogen
 # Plotting function
 create_plot <- function(data, x, fill, title) {
   ggplot(data, aes(x = {{x}}, y = count, fill = {{fill}})) +
-    geom_bar(stat = "identity", position = "dodge2") +
+    # Lollipop rather than bars. A bar reads its value from the length of the
+    # bar, measured from zero -- but a log axis has no zero, so bar length stops
+    # being proportional to the count and comparisons between bars mislead. A
+    # point reads its value from position alone, which a log axis represents
+    # correctly, and the counts here genuinely span several orders of magnitude.
+    geom_linerange(aes(ymin = 1, ymax = count), position = position_dodge(width = 0.9),
+                   colour = "grey65", linewidth = 0.5) +
+    geom_point(position = position_dodge(width = 0.9), size = lolli_size, shape = 21, colour = "grey20") +
     labs(x = "\nGene biotypes", y = "Count (log10 scale)\n", fill = "Transcript biotypes", title = title) +
     theme(
       panel.background = element_rect(fill = "white"), 
@@ -577,8 +722,9 @@ create_plot <- function(data, x, fill, title) {
       axis.title.x = element_text(face = "bold"), 
       plot.margin = margin(1, 1, 1, 1, "cm")
     ) +
-    scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x), labels = comma) +
-    geom_text(aes(label = count), position = position_dodge2(width = 0.9), vjust = -0.5, hjust = 0.5)
+    scale_y_log10_std(expand_top = TRUE) +
+    # position_dodge, matching the geoms above, so labels sit over their points
+    geom_text(aes(label = count), position = position_dodge(width = 0.9), vjust = -1, hjust = 0.5)
 }
 
 # Generate plots
@@ -594,11 +740,15 @@ p8 <- create_plot(IG_RNAs, gene_biotype, transcript_biotype, "Immunoglobulin ele
 
 #### Overview of Major RNA Categories
 
-The plots below summarize the counts of transcripts grouped into four major categories. The y-axis is on a log10 scale to accommodate the wide range of counts.
+The plots below summarize the counts of transcripts grouped into four major categories. The y-axis is on a log10 scale to accommodate the wide range of counts, so each count is shown as a point rather than a bar.
+
+::: {.panel-tabset}
+
+#### Major RNA categories
 
 ```{r}
-#| label: plot-panel-1
-#| fig-cap: "**Figure 2: Transcript Counts for Major RNA Categories.** This panel shows the distribution of transcript biotypes within four main gene biotype categories: (A) Protein-coding RNAs, (B) Long non-coding RNAs (lncRNAs), (C) Small RNAs, and (D) a consolidated group of all other RNA types."
+#| label: fig-panel-1
+#| fig-cap: "**Transcript Counts for Major RNA Categories.** This panel shows the distribution of transcript biotypes within four main gene biotype categories: (A) Protein-coding RNAs, (B) Long non-coding RNAs (lncRNAs), (C) Small RNAs, and (D) a consolidated group of all other RNA types."
 #| fig-width: 16
 #| fig-height: 10
 
@@ -606,13 +756,13 @@ panel1 <- plot_grid(p1, p2, p3, p4, ncol = 2, rel_widths = c(1.3, 1), labels = "
 panel1
 ```
 
-**Detailed View of Other RNA Categories**
+#### Other RNA categories
 
 This panel provides a more detailed breakdown of the diverse and less common RNA biotypes, including pseudogenes and elements related to the immune system.
 
 ```{r}
-#| label: plot-panel-2
-#| fig-cap: "**Figure 3: Detailed Breakdown of Other RNA Categories.** This figure provides a closer look at specific RNA families: (A) diversity within Pseudogene RNAs, (B) T-cell receptor (TCR) elements, (C) Immunoglobulin (IG) elements, and (D) other variety of RNA types."
+#| label: fig-panel-2
+#| fig-cap: "**Detailed Breakdown of Other RNA Categories.** This figure provides a closer look at specific RNA families: (A) diversity within Pseudogene RNAs, (B) T-cell receptor (TCR) elements, (C) Immunoglobulin (IG) elements, and (D) other variety of RNA types."
 #| fig-width: 16
 #| fig-height: 10
 
@@ -622,11 +772,13 @@ panel2 <- plot_grid(top_row_panel2, bottom_row_panel2, nrow = 2, rel_heights = c
 panel2
 ```
 
+:::
+
 #### Gene Biotype Diversity Across Chromosomes
 
 This visualization maps the distribution of different gene biotypes across all chromosomes, revealing genomic hotspots for certain types of genes.
 
-> This image might render differently according to data. Access `assets/report_template.qmd`, and adjust the `fig-height` and `fig-width` parameters to better fit the plot if needed. The code chunk generating this plot is `plot-gb-across-chr`.
+> The layout of this figure adapts to how many chromosomes your data covers, so it should not need manual adjustment. If you do want to change the proportions, the per-panel allowance is set by `facet_layout()` in the `load-libraries` chunk; the plot itself is `fig-gb-across-chr`.
 
 ```{r}
 #| label: prep-chr-data
@@ -639,36 +791,37 @@ chr_gb <- ann_txome %>%
   group_by(chromosome_name, gene_biotype) %>%
   summarise(count = n(), .groups = "drop")
 chr_gb$gene_biotype <- factor(chr_gb$gene_biotype, levels = c("protein_coding", "lncRNA", "small_RNA", "pseudogene", "other"))
-chromosome_names <- unique(chr_gb$chromosome_name)
-numeric_chromosomes <- grep("^[0-9]+$", chromosome_names, value = TRUE)
-non_numeric_chromosomes <- setdiff(chromosome_names, numeric_chromosomes)
-numeric_chromosomes_sorted <- as.character(sort(as.numeric(numeric_chromosomes)))
-chromosome_order <- c(numeric_chromosomes_sorted, sort(non_numeric_chromosomes))
-chr_gb$chromosome_name <- factor(chr_gb$chromosome_name, levels = chromosome_order)
+chr_gb$chromosome_name <- order_chromosomes(chr_gb$chromosome_name)
+chr_gb$gene_biotype <- droplevels(chr_gb$gene_biotype)
+
+chr_lay <- facet_layout(nlevels(chr_gb$chromosome_name))
 ```
 
 ```{r}
-#| label: plot-gb-across-chr
-#| fig-cap: "**Figure 4: Chromosomal Distribution of Gene Biotypes.** Each panel represents a chromosome, showing the count of transcript isoforms for each biotype found there. This provides a genome-wide view of how different functional classes of genes are organized and transcribed across chromosomes."
-#| fig-height: 30
-#| fig-width: 35
+#| label: fig-gb-across-chr
+#| fig-cap: "**Chromosomal Distribution of Gene Biotypes.** Each panel represents a chromosome, showing the count of transcript isoforms for each biotype found there. This provides a genome-wide view of how different functional classes of genes are organized and transcribed across chromosomes."
+#| fig-width: !expr chr_lay$width
+#| fig-height: !expr chr_lay$height
 
 p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
-  geom_bar(stat = "identity", aes(fill = gene_biotype), alpha = 1, width = 0.8) +
-  facet_wrap(~ chromosome_name, scales = "free_x", ncol = 5) +
+  geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
+  geom_point(aes(fill = gene_biotype), size = lolli_size, shape = 21, colour = "grey20") +
+  facet_wrap(~ chromosome_name, scales = "free_x", ncol = chr_lay$ncol, drop = TRUE) +
   scale_fill_viridis_d(option = "viridis", guide = "none") +
-  scale_y_log10(labels = scales::comma_format(), expand = expansion(mult = c(0, 0.2))) +
+  scale_y_log10_std(expand_top = TRUE) +
   theme(
     panel.background = element_rect(fill = "white", color = "grey90"), panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
     axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, margin = margin(t = 5, b = 10)),
     axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"),
     strip.text = element_text(face = "bold", color = "black", margin = margin(t = 8, b = 8, l = 5, r = 5)),
     strip.background = element_rect(fill = "grey85", color = "grey70", linewidth = 0.5),
-    plot.title = element_text(size = 50, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 40, hjust = 0.5),
-    plot.margin = margin(1, 1, 1, 1, "cm"), panel.spacing = unit(1.2, "cm")
+    # Normal sizes now the figure is rendered near its display size and no
+    # longer scaled down by the browser
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 13, hjust = 0.5),
+    plot.margin = margin(0.4, 0.4, 0.4, 0.4, "cm"), panel.spacing = unit(0.5, "cm")
   ) +
-  labs(title = "Gene Biotype Diversity Across Human Chromosomes", subtitle = "Distribution of different gene types per chromosome (log10 scale)", x = "Gene Biotype", y = "Count (log10 scale)") +
-  geom_text(aes(label = count), vjust = -0.5, color = "black")
+  labs(title = "Gene Biotype Diversity Across Chromosomes", subtitle = "Distribution of different gene types per chromosome (log10 scale)", x = "Gene Biotype", y = "Count (log10 scale)") +
+  geom_text(aes(label = count), vjust = -1, color = "black")
 p9
 ```
 
@@ -688,22 +841,22 @@ median_lnc <- selected_tx %>% filter(gene_biotype == "lncRNA") %>% group_by(tran
 
 p10 <- ggplot(selected_tx, aes(x = gene_biotype, y = transcript_length, fill = factor(gene_biotype))) +
   geom_boxplot() + labs(title = "Transcript length across gene biotypes", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Gene biotype\n(median length)") +
-  scale_y_log10() + scale_fill_discrete(labels = paste0(median_stx$gene_biotype, " (", round(median_stx$median_length, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_stx$gene_biotype, " (", round(median_stx$median_length, 2), ")"))
 
 p11 <- selected_tx %>% filter(gene_biotype == "protein_coding") %>%
   ggplot(aes(x = gene_biotype, y = transcript_length, fill = transcript_biotype)) +
   geom_boxplot() + labs(title = "Transcript length across protein-coding biotypes", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Transcript biotypes\n(median length)") +
-  scale_y_log10() + scale_fill_discrete(labels = paste0(median_pc$transcript_biotype, " (", round(median_pc$median_length_txb, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_pc$transcript_biotype, " (", round(median_pc$median_length_txb, 2), ")"))
 
 p12 <- selected_tx %>% filter(gene_biotype == "lncRNA") %>%
   ggplot(aes(x = gene_biotype, y = transcript_length, fill = transcript_biotype)) +
   geom_boxplot() + labs(title = "Transcript length across lncRNA biotypes", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Transcript biotypes\n(median length)") +
-  scale_y_log10() + scale_fill_discrete(labels = paste0(median_lnc$transcript_biotype, " (", round(median_lnc$median_length_txb, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_lnc$transcript_biotype, " (", round(median_lnc$median_length_txb, 2), ")"))
 ```
 
 ```{r}
-#| label: plot-panel3
-#| fig-cap: "**Figure 5: Transcript Length Distributions.** This panel of boxplots compares transcript lengths (on a log10 scale) across different biotypes. (A) Compares major gene biotypes. (B) Details the lengths of different transcript types within the protein-coding category. (C) Does the same for lncRNAs. Median lengths for each category are shown in the legend."
+#| label: fig-panel3
+#| fig-cap: "**Transcript Length Distributions.** This panel of boxplots compares transcript lengths (on a log10 scale) across different biotypes. (A) Compares major gene biotypes. (B) Details the lengths of different transcript types within the protein-coding category. (C) Does the same for lncRNAs. Median lengths for each category are shown in the legend."
 #| fig-width: 8
 #| fig-height: 15
 
@@ -726,19 +879,19 @@ ann_pc_lnc_txome <- rbind(ann_pc_txome, ann_lnc_txome)
 median_exnum <- ann_pc_lnc_txome %>% group_by(gene_biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
 p13 <- ggplot(ann_pc_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = gene_biotype)) +
   geom_boxplot() + labs(title = "Number of exons across protein-coding and lncRNA biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Gene biotype\n(median number)") +
-  scale_y_log10() + scale_fill_discrete(labels = paste0(median_exnum$gene_biotype, " (", round(median_exnum$median_exnum, 2), ")"))
+  scale_y_log10_exons() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_exnum$gene_biotype, " (", round(median_exnum$median_exnum, 2), ")"))
 
 median_pc_exnum <- ann_pc_txome %>% group_by(transcript_biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
 median_lnc_exnum <- ann_lnc_txome %>% group_by(transcript_biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
-p14 <- ggplot(ann_pc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across protein-coding transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10() + scale_fill_discrete(labels = paste0(median_pc_exnum$transcript_biotype, " (", round(median_pc_exnum$median_exnum, 2), ")"))
-p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across lncRNA transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10() + scale_fill_discrete(labels = paste0(median_lnc_exnum$transcript_biotype, " (", round(median_lnc_exnum$median_exnum, 2), ")"))
+p14 <- ggplot(ann_pc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across protein-coding transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10_exons() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_pc_exnum$transcript_biotype, " (", round(median_pc_exnum$median_exnum, 2), ")"))
+p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across lncRNA transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10_exons() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_lnc_exnum$transcript_biotype, " (", round(median_lnc_exnum$median_exnum, 2), ")"))
 ```
 
 #### Exon Number Comparison
 
 ```{r}
-#| label: plot-panel4
-#| fig-cap: "**Figure 6: Exon Number Distributions.** This panel examines the number of exons per transcript. (A) A direct comparison between protein-coding and lncRNA gene biotypes. (B) A detailed view of exon numbers for different protein-coding transcript types. (C) A similar detailed view for lncRNA transcript types."
+#| label: fig-panel4
+#| fig-cap: "**Exon Number Distributions.** This panel examines the number of exons per transcript. (A) A direct comparison between protein-coding and lncRNA gene biotypes. (B) A detailed view of exon numbers for different protein-coding transcript types. (C) A similar detailed view for lncRNA transcript types."
 #| fig-width: 8
 #| fig-height: 15
 
@@ -758,27 +911,30 @@ panel4
 #### Mono- vs. Multi-exonic Transcripts
 
 ```{r}
-#| label: plot-mono-multi-exon-analysis
+#| label: fig-mono-multi-exon-analysis
 #| include: false
 
 ann_pc_lnc_txome$class_exon <- ifelse(ann_pc_lnc_txome$num_exons == 1, "mono-exonic", "multi-exonic")
 count_momu <- ann_pc_lnc_txome %>% group_by(gene_biotype, transcript_biotype, class_exon) %>% summarise(count = n_distinct(ensembl_transcript_id_version), .groups = 'drop')
 
 p16 <- ggplot(count_momu, aes(x = transcript_biotype, y = count, fill = transcript_biotype)) +
-  geom_bar(stat = "identity") + facet_grid(gene_biotype ~ class_exon, scales = "free_x", space = "free_x") +
+  geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
+  geom_point(size = lolli_size, shape = 21, colour = "grey20") +
+  facet_grid(gene_biotype ~ class_exon, scales = "free_x", space = "free_x") +
   labs(title = "Distribution of mono and multi-exonic transcripts", x = "\nTranscript biotype", y = "Count (log10 scale)", fill = "Transcript biotype") +
   theme(,
       axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-  scale_y_log10() + geom_text(aes(label = count), vjust = -0.5)
+  scale_y_log10_std(expand_top = TRUE) + geom_text(aes(label = count), vjust = -1) +
+  guides(fill = "none")
 
 p17 <- ggplot(ann_pc_lnc_txome, aes(x = gene_biotype, y = transcript_length, fill = class_exon)) +
   geom_boxplot() + labs(title = "Mono and multi-exonic transcript length", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Exon class") +
-  scale_y_log10()
+  scale_y_log10_std()
 ```
 
 ```{r}
-#| fig-cap:
-#|   - "**Figure 7: Counts of Mono- vs. Multi-exonic Transcripts.** This plot shows the number of mono- and multi-exonic transcripts for each transcript biotype, separated by protein-coding and lncRNA gene categories."
+#| label: fig-mono-multi-counts
+#| fig-cap: "**Counts of Mono- vs. Multi-exonic Transcripts.** This plot shows the number of mono- and multi-exonic transcripts for each transcript biotype, separated by protein-coding and lncRNA gene categories."
 #| fig-width: 10
 #| fig-height: 10 
 
@@ -786,8 +942,8 @@ p16
 ```
 
 ```{r}
-#| fig-cap:
-#|   - "**Figure 8: Length of Mono- vs. Multi-exonic Transcripts.** This boxplot compares the final transcript length of mono- and multi-exonic transcripts within the protein-coding and lncRNA categories."
+#| label: fig-mono-multi-length
+#| fig-cap: "**Length of Mono- vs. Multi-exonic Transcripts.** This boxplot compares the final transcript length of mono- and multi-exonic transcripts within the protein-coding and lncRNA categories."
 
 p17
 ```
@@ -797,14 +953,14 @@ p17
 A 2D density plot helps visualize the relationship between the number of exons in a transcript and its total length for both protein-coding and lncRNA genes.
 
 ```{r}
-#| label: plot-density
-#| fig-cap: "**Figure 9: Relationship Between Exon Count and Transcript Length.** This plot shows the density of transcripts based on their exon count (x-axis) and total length (y-axis). Higher density (brighter color) indicates a common combination of exon number and length. The analysis is shown separately for protein-coding genes and lncRNAs."
+#| label: fig-density
+#| fig-cap: "**Relationship Between Exon Count and Transcript Length.** This plot shows the density of transcripts based on their exon count (x-axis) and total length (y-axis). Higher density (brighter color) indicates a common combination of exon number and length. The analysis is shown separately for protein-coding genes and lncRNAs."
 #| fig-width: 8
 #| fig-height: 6
 
 p18 <- ggplot(ann_pc_lnc_txome, aes(x = num_exons, y = transcript_length)) +
   stat_density2d(aes(fill = after_stat(level)), geom = "polygon", alpha = 0.8) +
-  scale_x_log10() + scale_y_log10() + scale_fill_viridis_c(option = "plasma") +
+  scale_x_log10_std() + scale_y_log10_std() + scale_fill_viridis_c(option = "plasma") +
   facet_wrap(~gene_biotype, scales = "free_x") +
   labs(x = "Number of exons (log10 scale)", y = "Transcript length (log10 scale)", title = "Relationship between number of exons and transcript length")
 p18
@@ -830,8 +986,8 @@ ann_pc_lnc_exon <- merge(
 ```
 
 ```{r}
-#| label: plot-indiv-exlen
-#| fig-cap: "**Figure 10: Length of individual exons.** This boxplot compares the individual exon length of protein-coding and lncRNA transcripts, separeted by mono and multi-exonic structures."
+#| label: fig-indiv-exlen
+#| fig-cap: "**Length of individual exons.** This boxplot compares the individual exon length of protein-coding and lncRNA transcripts, separeted by mono and multi-exonic structures."
 #| fig-width: 8
 #| fig-height: 6
 
@@ -843,7 +999,7 @@ p19 <- ggplot(ann_pc_lnc_exon, aes(x = gene_biotype, y = width,
        x = "Gene biotype",
        y = "Exon length (log10 scale)",
        fill = "Exon class") +  # Set legend title
-  scale_y_log10() # Add log10 scale to y-axis
+  scale_y_log10_std() # Add log10 scale to y-axis
 
 p19
 ```
@@ -870,20 +1026,23 @@ class_counts <- novel_tx %>% group_by(biotype, classification) %>% summarise(cou
 ```
 
 ```{r}
-#| label: plot-novel-biotypes-and-classes
-#| fig-cap: "**Figure 11: GFFCompare Classification of Novel Transcripts.** This bar chart shows the counts of novel protein-coding and lncRNA transcripts according to their GFFCompare classification code."
+#| label: fig-novel-biotypes-and-classes
+#| fig-cap: "**GFFCompare Classification of Novel Transcripts.** This bar chart shows the counts of novel protein-coding and lncRNA transcripts according to their GFFCompare classification code."
 #| fig-width: 10
 #| fig-height: 7
 
 p20 <- ggplot(class_counts, aes(x = classification, y = count, fill = classification)) +
-  geom_bar(stat = "identity", position = "dodge") +
-  geom_text(aes(label = count, y = count), vjust = -0.5, position = position_dodge(width = 0.9), angle = 0) +
+  geom_linerange(aes(ymin = 1, ymax = count), position = position_dodge(width = 0.9),
+                 colour = "grey65", linewidth = 0.5) +
+  geom_point(position = position_dodge(width = 0.9), size = lolli_size, shape = 21, colour = "grey20") +
+  geom_text(aes(label = count, y = count), vjust = -1, position = position_dodge(width = 0.9), angle = 0) +
   facet_grid(~ biotype, scales = "free_x", space = "free_x") +
   labs(title = "GFFCompare classification stats overview of novel protein-coding and lncRNAs", x = "\n\nClassification", y = "Count (log10)", fill = "Classification") +
   theme(,
         axis.text.x = element_text(angle = 90, vjust = 0.3, hjust =1),
         legend.position = "right") +
-scale_y_log10()
+scale_y_log10_std() +
+  guides(fill = "none")
 p20
 ```
 
@@ -891,43 +1050,41 @@ p20
 
 This visualization maps the distribution of novel protein-coding and lncRNA transcripts across all chromosomes.
 
-> This image might render differently according to data. Access `assets/report_template.qmd`, and adjust the `fig-height` and `fig-width` parameters to better fit the plot if needed. The code chunk generating this plot is `plot-novel-across-chr`.
+> The layout of this figure adapts to how many chromosomes your data covers, so it should not need manual adjustment. If you do want to change the proportions, the per-panel allowance is set by `facet_layout()` in the `load-libraries` chunk; the plot itself is `fig-novel-across-chr`.
 
 ```{r}
 #| label: prep-novel-chr-data
 #| include: false
 
 chr_tb_novel <- novel_tx %>% group_by(seqnames, biotype) %>% summarise(count = n(), .groups = 'drop')
-chromosome_names_novel <- unique(chr_tb_novel$seqnames)
-numeric_chromosomes_novel <- grep("^[0-9]+$", chromosome_names_novel, value = TRUE)
-non_numeric_chromosomes_novel <- setdiff(chromosome_names_novel, numeric_chromosomes_novel)
-numeric_chromosomes_sorted_novel <- as.character(sort(as.numeric(numeric_chromosomes_novel)))
-chromosome_order_novel <- c(numeric_chromosomes_sorted_novel, sort(non_numeric_chromosomes_novel))
-chr_tb_novel$seqnames <- factor(chr_tb_novel$seqnames, levels = chromosome_order_novel)
+chr_tb_novel$seqnames <- order_chromosomes(chr_tb_novel$seqnames)
+
+chr_novel_lay <- facet_layout(nlevels(chr_tb_novel$seqnames))
 ```
 
 ```{r}
-#| label: plot-novel-across-chr
-#| fig-cap: "**Figure 12: Chromosomal Distribution of Novel Transcripts.** Each panel represents a chromosome and shows the number of novel protein-coding and novel lncRNA transcripts discovered there."
-#| fig-width: 25
-#| fig-height: 30
+#| label: fig-novel-across-chr
+#| fig-cap: "**Chromosomal Distribution of Novel Transcripts.** Each panel represents a chromosome and shows the number of novel protein-coding and novel lncRNA transcripts discovered there."
+#| fig-width: !expr chr_novel_lay$width
+#| fig-height: !expr chr_novel_lay$height
 
 p21 <- ggplot(chr_tb_novel, aes(x = biotype, y = count)) +
-  geom_bar(stat = "identity", aes(fill = biotype), alpha = 1, width = 0.8) +
-  facet_wrap(~ seqnames, scales = "free_x", nrow = 5) +
+  geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
+  geom_point(aes(fill = biotype), size = lolli_size, shape = 21, colour = "grey20") +
+  facet_wrap(~ seqnames, scales = "free_x", ncol = chr_novel_lay$ncol, drop = TRUE) +
   scale_fill_viridis_d(option = "viridis", guide = "none") +
-  scale_y_log10(labels = scales::comma_format(), expand = expansion(mult = c(0, 0.2))) +
+  scale_y_log10_std(expand_top = TRUE) +
   theme(
     panel.background = element_rect(fill = "white", color = "grey90"), panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
     axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, margin = margin(t = 5, b = 10)),
     axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"),
     strip.text = element_text(face = "bold", color = "black", margin = margin(t = 8, b = 8, l = 5, r = 5)),
     strip.background = element_rect(fill = "grey85", color = "grey70", linewidth = 0.5),
-    plot.title = element_text(size = 50, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 40, hjust = 0.5),
-    plot.margin = margin(1, 1, 1, 1, "cm"), panel.spacing = unit(1.0, "cm"), axis.ticks = element_blank()
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 13, hjust = 0.5),
+    plot.margin = margin(0.4, 0.4, 0.4, 0.4, "cm"), panel.spacing = unit(0.5, "cm"), axis.ticks = element_blank()
   ) +
   labs(title = "Novel RNAs Diversity Across Chromosomes", subtitle = "Distribution of novel RNA biotypes per chromosome (log10 scale)", x = "Biotype", y = "Count (log10 scale)") +
-  geom_text(aes(label = count), vjust = -0.5, color = "black")
+  geom_text(aes(label = count), vjust = -1, color = "black")
 p21
 ```
 
@@ -942,24 +1099,24 @@ Here, we investigate the length of novel protein-coding and lncRNA transcripts a
 median_txlen_novel <- novel_tx %>% group_by(biotype) %>% summarise(median_length = median(len), .groups = 'drop')
 p22 <- ggplot(novel_tx, aes(x = biotype, y = len, fill = factor(biotype))) +
   geom_boxplot() + labs(title = "Transcript length across novel transcripts", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Biotype\n(median length)") +
-  scale_y_log10() + scale_fill_discrete(labels = paste0(median_txlen_novel$biotype, " (", round(median_txlen_novel$median_length, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_txlen_novel$biotype, " (", round(median_txlen_novel$median_length, 2), ")"))
 
 median_pc_novel <- novel_tx %>% filter(biotype == "novel protein_coding") %>% group_by(classification) %>% summarise(median_length_novel = median(len), .groups = 'drop')
 p23 <- novel_tx %>% filter(biotype == "novel protein_coding") %>%
   ggplot(aes(x = biotype, y = len, fill = classification)) +
   geom_boxplot() + labs(title = "Transcript length across novel protein-coding sub-biotypes", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Transcript sub-biotypes\n(median length)") +
-  scale_y_log10() + scale_fill_discrete(labels = paste0(median_pc_novel$classification, " (", round(median_pc_novel$median_length_novel, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_pc_novel$classification, " (", round(median_pc_novel$median_length_novel, 2), ")"))
 
 median_lnc_novel <- novel_tx %>% filter(biotype == "novel lncRNA") %>% group_by(classification) %>% summarise(median_length_novel = median(len), .groups = 'drop')
 p24 <- novel_tx %>% filter(biotype == "novel lncRNA") %>%
   ggplot(aes(x = biotype, y = len, fill = classification)) +
   geom_boxplot() + labs(title = "Transcript length across novel lncRNA sub-biotypes", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Transcript sub-biotypes\n(median length)") +
-  scale_y_log10() + scale_fill_discrete(labels = paste0(median_lnc_novel$classification, " (", round(median_lnc_novel$median_length_novel, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_lnc_novel$classification, " (", round(median_lnc_novel$median_length_novel, 2), ")"))
 ```
 
 ```{r}
-#| label: plot-panel5
-#| fig-cap: "**Figure 13: Length Distribution of Novel Transcripts.** (A) Compares the overall length of novel protein-coding vs. novel lncRNA transcripts. (B) and (C) provide a more detailed view, showing length distributions for each GFFCompare classification within the novel protein-coding and lncRNA categories, respectively."
+#| label: fig-panel5
+#| fig-cap: "**Length Distribution of Novel Transcripts.** (A) Compares the overall length of novel protein-coding vs. novel lncRNA transcripts. (B) and (C) provide a more detailed view, showing length distributions for each GFFCompare classification within the novel protein-coding and lncRNA categories, respectively."
 #| fig-width: 10
 #| fig-height: 10
 
@@ -986,20 +1143,22 @@ count_momu_novel <- novel_tx %>%
   summarise(count = n_distinct(qry_id), .groups = 'drop')
 
 p25 <- ggplot(count_momu_novel, aes(x = classification, y = count, fill = classification)) +
-  geom_bar(stat = "identity") +
+  geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
+  geom_point(size = lolli_size, shape = 21, colour = "grey20") +
   facet_grid(biotype ~ class_exon, scales = "free_x", space = "free_x") +
   labs(title = "Distribution of mono and multi-exonic novel transcripts", x = "Classification",
        y = "Count (log10 scale)", fill = "Classification") +
   theme( 
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-  scale_y_log10() + geom_text(aes(label = count), vjust = -0.5)
+  scale_y_log10_std(expand_top = TRUE) + geom_text(aes(label = count), vjust = -1) +
+  guides(fill = "none")
 
 # plot exon numbers
 
 median_exnum_novel <- novel_tx %>% group_by(biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
 p26 <- ggplot(novel_tx, aes(x = biotype, y = num_exons, fill = biotype)) +
   geom_boxplot() + labs(title = "Number of exons across novel transcripts", x = "Biotype", y = "Exon number (log10 scale)", fill = "Biotype\n(median number)") +
-  scale_y_log10() + scale_fill_discrete(labels = paste0(median_exnum_novel$biotype, " (", round(median_exnum_novel$median_exnum, 2), ")"))
+  scale_y_log10_exons() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_exnum_novel$biotype, " (", round(median_exnum_novel$median_exnum, 2), ")"))
 
 median_exnum_class_novel <- novel_tx %>% group_by(biotype, classification) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
 p27 <- ggplot(novel_tx, aes(x = classification, y = num_exons, fill = paste(biotype, classification))) +
@@ -1014,8 +1173,8 @@ p27 <- ggplot(novel_tx, aes(x = classification, y = num_exons, fill = paste(biot
     y = "Exon number (log10 scale)", 
     fill = "Classification\n(total median number)"
   ) +
-  scale_y_log10() +
-  scale_fill_discrete(labels = paste0(
+  scale_y_log10_exons() +
+  scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(
       median_exnum_class_novel$biotype, " ",
       median_exnum_class_novel$classification, " (",
       round(median_exnum_class_novel$median_exnum, 2), ")"))
@@ -1024,22 +1183,23 @@ p27 <- ggplot(novel_tx, aes(x = classification, y = num_exons, fill = paste(biot
 
 p28 <- ggplot(novel_tx, aes(x = biotype, y = len, fill = class_exon)) +
   geom_boxplot() + labs(title = "Mono and multi-exonic novel transcripts' length", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Exon classification") +
-  scale_y_log10()
+  scale_y_log10_std()
 
 p29 <- ggplot(novel_tx, aes(x = classification, y = len, fill = classification)) +
   geom_boxplot() + facet_grid(biotype ~ class_exon, scales = "free_x", space = "free_x") +
   labs(title = "Length of mono and multi-exonic novel transcripts", x = "Classification",
        y = "Transcript length (log10 scale)", fill = "Classification") +
-  theme( 
+  theme(
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-        legend.position = "right", 
+        legend.position = "right",
         plot.margin = margin(1, 1, 1, 1, "cm")) +
-  scale_y_log10()
+  scale_y_log10_std() +
+  guides(fill = "none")
 ```
 
 ```{r}
-#| fig-cap:
-#|   - "**Figure 14: Distribution of mono and multi-exonic structures in Novel Transcripts within its subtypes.** This barplot compares the distribution of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
+#| label: fig-novel-mono-multi-counts
+#| fig-cap: "**Distribution of mono and multi-exonic structures in Novel Transcripts within its subtypes.** This barplot compares the distribution of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
 #| fig-width: 10
 #| fig-height: 10
 
@@ -1047,16 +1207,16 @@ p25
 ```
 
 ```{r}
-#| fig-cap:
-#|   - "**Figure 15: Exon Number in Novel Transcripts.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA biotypes."
+#| label: fig-novel-exon-number
+#| fig-cap: "**Exon Number in Novel Transcripts.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA biotypes."
 
 
 p26
 ```
 
 ```{r}
-#| fig-cap:
-#|   - "**Figure 16: Exon Number in Novel Transcripts within subtypes.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA subtypes."
+#| label: fig-novel-exon-number-subtypes
+#| fig-cap: "**Exon Number in Novel Transcripts within subtypes.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA subtypes."
 #| fig-width: 10
 #| fig-height: 8
 
@@ -1066,15 +1226,15 @@ p27
 #### Length of mono vs multi-exonic transcripts
 
 ```{r}
-#| fig-cap:
-#|   - "**Figure 17: Length of Mono- vs. Multi-exonic Novel Transcripts.** This plot compares the final transcript length of mono- and multi-exonic novel transcripts."
+#| label: fig-novel-mono-multi-length
+#| fig-cap: "**Length of Mono- vs. Multi-exonic Novel Transcripts.** This plot compares the final transcript length of mono- and multi-exonic novel transcripts."
 
 p28
 ```
 
 ```{r}
-#| fig-cap:
-#|   - "**Figure 18: Length of mono and multi-exonic structures in Novel Transcripts within subtypes.** This boxplot compares the length of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
+#| label: fig-novel-mono-multi-length-subtypes
+#| fig-cap: "**Length of mono and multi-exonic structures in Novel Transcripts within subtypes.** This boxplot compares the length of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
 #| fig-width: 12
 #| fig-height: 8
 
@@ -1086,14 +1246,14 @@ p29
 A 2D density plot helps visualize the relationship between the number of exons in a transcript and its total length for both novel protein-coding and lncRNA transcripts.
 
 ```{r}
-#| label: plot-density-novel
-#| fig-cap: "**Figure 19: Exon Count vs. Transcript Length for Novel RNAs.** Similar to Figure 13, this 2D density plot shows the relationship between exon number and transcript length, but this time for the set of newly discovered transcripts."
+#| label: fig-density-novel
+#| fig-cap: "**Exon Count vs. Transcript Length for Novel RNAs.** Similar to @fig-density, this 2D density plot shows the relationship between exon number and transcript length, but this time for the set of newly discovered transcripts."
 #| fig-width: 8
 #| fig-height: 6
 
 p30 <- ggplot(novel_tx, aes(x = num_exons, y = len)) +
   stat_density2d(aes(fill = after_stat(level)), geom = "polygon", alpha = 0.8) +
-  scale_x_log10() + scale_y_log10() + scale_fill_viridis_c(option = "plasma") +
+  scale_x_log10_std() + scale_y_log10_std() + scale_fill_viridis_c(option = "plasma") +
   facet_wrap(~biotype, scales = "free_x") +
   labs(x = "Number of exons (log10 scale)", y = "Transcript length (log10 scale)", title = "Relationship between number of exons and transcript length across novel RNAs")
 p30
@@ -1121,8 +1281,8 @@ exlen_novel <- merge(
 ```
 
 ```{r}
-#| label: plot-exlen-novel
-#| fig-cap: "**Figure 20: Length of individual exons across novel transcripts.** This boxplot compares the individual exon length of protein-coding and lncRNA novel transcripts, separated by mono and multi-exonic structures."
+#| label: fig-exlen-novel
+#| fig-cap: "**Length of individual exons across novel transcripts.** This boxplot compares the individual exon length of protein-coding and lncRNA novel transcripts, separated by mono and multi-exonic structures."
 #| fig-width: 8
 #| fig-height: 6
 
@@ -1134,7 +1294,7 @@ p32 <- ggplot(exlen_novel, aes(x = biotype, y = width,
        x = "Biotype",
        y = "Exon length (log10 scale)",
        fill = "Exon class") +  # Set legend title
-  scale_y_log10() # Add log10 scale to y-axis
+  scale_y_log10_std() # Add log10 scale to y-axis
 
 p32
 ```

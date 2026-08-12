@@ -102,7 +102,9 @@ Both Ensembl and GENCODE annotations are accepted, and the differences between t
 | Identifiers | unversioned, with separate `gene_version` / `transcript_version` | versioned inline (e.g. `ENSG00000290825.2`) |
 | Sequence names | `1` | `chr1` |
 
-Both identifier forms are always produced, so the `ensembl_transcript_id` and `ensembl_transcript_id_version` columns are populated whichever source you use. Sequence names are normalised by stripping a leading `chr`, so `chromosome_name` reads `1` in either case.
+Both identifier forms are always produced, so the `ensembl_transcript_id` and `ensembl_transcript_id_version` columns are populated whichever source you use.
+
+Sequence names are **not** rewritten. `chromosome_name` reads `1` with an Ensembl annotation and `chr1` with GENCODE, exactly as the file you supplied names them. Stripping the prefix would have to special-case the GRC accessions (`KI270728.1`, `GL000009.2`) that both sources use for unplaced scaffolds, and it would put the metadata tables out of step with the novel-transcript outputs, which report the sequence names that reach them from the assembly untouched.
 
 > [!IMPORTANT]
 > With GENCODE, use the **CHR** or **PRI** annotation build. The **ALL** build additionally contains alternate loci, assembly patches and haplotypes, which duplicate gene and transcript identifiers. pulposeq checks for duplicated identifiers and stops with an error rather than silently double-counting them.
