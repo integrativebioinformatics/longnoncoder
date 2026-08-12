@@ -1,6 +1,6 @@
 process BAMBU {
     tag "Running Bambu"
-    label 'process_high_memory'
+    label 'process_bambu'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/longnoncoder:test3':
