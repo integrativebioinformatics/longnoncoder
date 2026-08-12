@@ -86,10 +86,21 @@ In some cases, depending on your system's permissions and configuration regardin
 You must declare your sequencing library chemistry with the `library` (`ONT_cDNA`, `ONT_DRS` or `PacBio`) and `stranded_library` (`true`/`false`) parameters. These set the `minimap2` alignment preset and Bambu's strandedness together, and a single execution must use one library type. PacBio libraries are expected to have been processed and stranded beforehand by PacBio's own standard workflows, and ONT cDNA libraries need re-orienting outside the pipeline or must be treated as unstranded. See [Library type and strandedness](docs/usage.md#library-type-and-strandedness) for the full details.
 
 
-pulposeq is configured in the copy mode for publishing the output directories, creating file replicas of your final results originally created at the `work/` directory. If pulposeq presents any errors, this configuration allows you to restart the pipeline execution from the last successfull step by using the `-resume` parameter. The `work/` directory not only contains your results, but all other intermediate execution files (e.g. temporary files, `.command.sh` and `.command.log`). After running the pipeline, remember that this setup allows you to safely delete the pipeline's `work/` directory without losing your published results.
+pulposeq publishes results in `symlink` mode by default. Every file in your output directory is a symbolic link pointing at the real file inside `work/`, rather than a copy of it. This costs no additional disk space and completes instantly, which matters when the outputs are large `BAM` and `GTF` files.
 
-> [!TIP]
-> Copying large datasets can significantly take a long time to complete or occupy a large amount of disk space. If you require other setup to optimize resource usage, follow the instructions from the [Nextflow documentation](https://docs.seqera.io/nextflow/reference/process#publishdir) to change the `publishDir` setting in the [`nextflow.config`](nextflow.config) file.
+The `work/` directory holds your actual results alongside every intermediate execution file (temporary files, `.command.sh`, `.command.log`). It is also what makes `-resume` able to restart from the last successful step if a run fails.
+
+> [!WARNING]
+> With `symlink` publishing, **deleting `work/` destroys your results** — the links in the output directory are left pointing at files that no longer exist. Before removing `work/`, or before archiving or sharing an output directory, either dereference the links or re-run with `--publish_dir_mode copy`.
+>
+> To copy rather than link, either pass `--publish_dir_mode copy` on the command line, set `publish_dir_mode: copy` in your params file, or change the default in [`nextflow.config`](nextflow.config). Bear in mind that copying large datasets takes noticeably longer and doubles the disk they occupy. The available modes are documented in the [Nextflow documentation](https://docs.seqera.io/nextflow/reference/process#publishdir).
+>
+> To turn an existing symlinked output directory into real files, dereference it into a new location:
+>
+> ``` bash
+> cp -rL results results_standalone
+> ```
+
 
 ## Citations
 

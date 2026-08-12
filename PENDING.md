@@ -89,28 +89,62 @@ anything lint flags under `modules/nf-core/*`.
 from the nf-core 4.0.2 template and written for 25.10. It was the one construct expected to trip the
 strict parser; it is among the 42 clean files, so no change is needed.
 
-### Stage 1 — config resolution (seconds)
+### Stage 1 — config resolution — **PASSED 2026-08-11** (`-profile test,apptainer`)
 
 ```bash
-nextflow config -profile test,singularity -params-file test_data/testing.yml
+nextflow config -profile test,singularity
 ```
 
-Confirms the config tree assembles and the `ext.args` closures are syntactically reachable. Check the
-resolved `process` block lists `resourceLimits` and that no `containers_*.config` is referenced
-(those eight files were deleted).
+Confirmed on an Apptainer/SLURM deployment: the tree assembles, the `MINIMAP2_ALIGN` and `BAMBU`
+`ext.args` ternaries survive the strict parser with the config actually loaded, `SUBSET_BAMBU_GTF`
+resolves to `publishDir { enabled = false }` with `ENRICH_VALIDATED_GTF` publishing in its place, and
+no `containers_*.config` is referenced. `resourceLimits` sits exactly at the largest label request
+(4 cpus / 18 GB / 2 h), so nothing is clamped — every process carries a label and `process_long` is
+unused.
 
-### Stage 2 — stub run (~minutes)
+`file = 'null/pipeline_info/...'` in the output is expected, not a defect: `params.outdir` is unset
+because this command cannot take a params file.
+
+> [!IMPORTANT]
+> `nextflow config` takes **no parameters**. Its full option list is `-flat`, `-h`, `-profile`,
+> `-properties`, `-r`, `-a`, `-sort` and `-value` — passing `-params-file` fails with
+> "Unknown option". Swap `singularity` for `apptainer` or `docker` to match your runtime.
+
+Confirms the config tree assembles, that the resolved `process` block lists `resourceLimits`, and
+that no `containers_*.config` is referenced (those eight files were deleted). A single value can be
+pulled out directly:
+
+```bash
+nextflow config -profile test,singularity -value process.resourceLimits
+```
+
+**This stage cannot check the minimap2 presets**, for two reasons: no params can be injected, so
+`params.library` is always `null` here; and `ext.args` is a closure, which `nextflow config` prints
+unevaluated rather than resolving. Preset verification only happens in a real run — see V3.
+
+### Stage 2 — stub run — **PASSED 2026-08-11** (24 tasks, 4 min, `-profile test,apptainer`)
 
 ```bash
 nextflow run main.nf -profile test,singularity -params-file test_data/testing.yml -stub-run
 ```
 
-Exercises every channel connection, input cardinality and output filename in the DAG without running
-a single real tool. Catches wiring errors in the new POST_REFINEMENT module and the M4 `collectFile`
-change for the price of a coffee, rather than after Bambu has run.
+> [!NOTE]
+> `-stub-run` is a boolean switch and takes no value. Writing `-stub-run true` leaves `true` as a
+> positional argument, which surfaces as "nf-core pipelines do not accept positional arguments". The
+> run still works; the stray argument is simply never consumed. The same warning appears for
+> `-profile test, apptainer` with a space, which *does* break — only `test` reaches `-profile`, so no
+> container runtime is enabled.
 
-Note the BAMBU stub previously touched `bambu_output.rds`, a filename `bin/bambu.R` never writes; it
-now touches `se_multiSample.rds` and `seGene_multiSample.rds` to satisfy the new named outputs.
+Exercises every channel connection, input cardinality and output filename in the DAG without running
+a single real tool. All 24 processes completed, which confirms the new `ENRICH_VALIDATED_GTF` and
+`POST_REFINEMENT` modules are wired correctly, the extra `path` inputs added to `KNOWN_TRANSCRIPTS`
+and `NOVEL_TRANSCRIPTS` stage as expected, and every stub block emits the outputs its module
+declares — including the corrected BAMBU stub, which previously touched `bambu_output.rds`, a
+filename `bin/bambu.R` never writes, and now touches `se_multiSample.rds` and
+`seGene_multiSample.rds` (V11.5).
+
+**What a stub run does not prove:** stub blocks only `touch` empty files, so no output *content* is
+exercised. Everything about correctness — V3, V4, V5, V12.1, V12.3 — still needs the real run.
 
 ### Stage 3 — the real run (hours)
 
@@ -202,8 +236,9 @@ invocations. All are cheap — none needs to run to completion.
 
 ### V12 — biomaRt removal and GTF enrichment
 
-1. **Metadata parity — the decisive check.** The new `annotated_transcriptome_metadata.csv` should
-   match the biomaRt-era one from the last successful run: same rows, same columns, same values.
+1. **Metadata parity — the decisive check. IN PROGRESS.** Being evaluated against an Ensembl 116
+   run. The GTF-derived `annotated_transcriptome_metadata.csv` should match the biomaRt-era output:
+   same rows, same columns, same values.
    ```r
    old <- read.csv("<previous>/annotated_transcripts/annotated_transcriptome_metadata.csv")
    new <- read.csv("<new>/annotated_transcripts/annotated_transcriptome_metadata.csv")
@@ -212,6 +247,16 @@ invocations. All are cheap — none needs to run to completion.
    `transcript_length` is the field most likely to diverge — biomaRt returns the **mature** length
    (sum of exon widths), not `end - start`. A systematic difference there means the exon summing in
    `read_reference_gtf()` is wrong.
+
+   > **Match the annotation release to the baseline.** Ensembl changes content between releases —
+   > new transcripts, bumped versions, reassigned biotypes. Comparing a 116 GTF against a baseline
+   > biomaRt queried at 114 will show differences that reflect Ensembl's own updates rather than
+   > anything about the parsing. Either regenerate the baseline at the same release, or restrict the
+   > comparison to transcripts present in both.
+   >
+   > `chromosome_name` will also differ against a **GENCODE** run by design, since sequence names are
+   > no longer rewritten (`chr1`, where biomaRt returned `1`). Compare against Ensembl, or exclude
+   > that column.
 2. **No network access.** `KNOWN_TRANSCRIPTS` must complete with no outbound calls; `.command.log`
    should no longer contain "Connecting to Ensembl biomaRt...".
 3. **GTF attributes present:**
