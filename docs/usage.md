@@ -123,7 +123,7 @@ Check detailed information at the [GENCODE FAQ][1].
 The typical command for running the pipeline is as follows:
 
 ``` bash
-nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --reference [fasta] --annotation [gtf] --organism [Genus_species] --library [ONT_cDNA/ONT_DRS/PacBio] --stranded_library [true/false] -profile [profile: light, medium, large, etc],[executor profile: docker/singularity]
+nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --reference [fasta] --annotation [gtf] --organism [Genus_species] --library [ONT_cDNA/ONT_DRS/PacBio] --stranded_library [true/false] -profile [test/medium/large],[container runtime: docker/singularity/apptainer]
 ```
 
 Note that the pipeline will create the following files in your working directory:
@@ -209,13 +209,11 @@ Use this parameter to choose a configuration profile. Profiles can give configur
 Several generic profiles are bundled with the pipeline which instruct the pipeline to use software packaged using different methods (Docker, Singularity, Apptainer, Conda) - see below.
 
 - `test`
-  - A profile with configuration for testing that consumes low resources
-- `light`
-  - A profile for small-scale data, consumes low resources
+  - Calibrated to the bundled chromosome 1 test data. Peaks at roughly 24 GB, so it runs on a workstation.
 - `medium`
-  - A profile for medium-scale data, consumes medium resources
+  - Full reference genome and annotation with modest sample sizes.
 - `large`
-  - A profile for large-scale data, consumes high resources
+  - Full reference with large ONT or PacBio samples, tens of GB each. Bambu alone can need several hundred GB; see [Resource requests](#resource-requests).
 - `docker`
   - A generic configuration profile to be used with [Docker](https://docker.com/)
 - `singularity`
@@ -240,9 +238,146 @@ Specify the path to a specific config file (this is a core Nextflow command). Se
 
 ### Resource requests
 
-Whilst the default requirements set within the pipeline will hopefully work for most people and with most input data, you may find that you want to customise the compute resources that the pipeline requests. Each step in the pipeline has a default set of requirements for number of CPUs, memory and time. For most of the pipeline steps, if the job exits with any of the error codes specified [here](https://github.com/nf-core/rnaseq/blob/4c27ef5610c87db00c3c5a3eed10b1d161abf575/conf/base.config#L18) it will automatically be resubmitted with higher resources request (2 x original, then 3 x original). If it still fails after the third attempt then the pipeline execution is stopped.
+Resource allocations live in `conf/`. One file is always loaded and the profile you choose overrides it:
 
-To change the resource requests, please see the [max resources](https://nf-co.re/docs/running/configuration/nextflow-for-your-system#set-max-resources) and [customise process resources](https://nf-co.re/docs/running/configuration/nextflow-for-your-system#customize-process-resources) section of the nf-core website.
+```
+conf/base.config          always loaded, defines every label
+    ↓ overridden by
+conf/{test,medium,large}.config   only the labels each one defines
+```
+
+A label that a profile does not define keeps its `base.config` value. This is worth knowing, because
+a process whose label no config matches falls back to the generic defaults **silently** — the usual
+symptom is an out-of-memory kill (exit `137`) on a step you thought you had sized. To make unmatched
+selectors report themselves, add the `debug` profile:
+
+``` bash
+nextflow run main.nf -profile large,apptainer,debug -params-file params.yml
+```
+
+#### Retries
+
+`errorStrategy` resubmits on out-of-memory and related exit codes, with `maxRetries = 1` — so at most
+one retry. Whether that retry asks for **more** than the first attempt depends on how the profile is
+written:
+
+``` groovy
+memory = { 16.GB * task.attempt }   // escalates: 16 GB, then 32 GB
+memory = 16.GB                      // does not: 16 GB, then 16 GB again
+```
+
+Fixed values are appropriate where the input is known and unchanging, such as the `test` profile.
+For real data, `task.attempt` scaling lets you allocate close to the measured requirement and still
+survive an unusual sample.
+
+#### `resourceLimits`
+
+`resourceLimits` caps every request **after** the `task.attempt` multiplier, and it clamps silently.
+Two consequences:
+
+- It must be at or above the largest request in the file, or that label is quietly cut back.
+- If you rely on retry escalation, it must be at or above **twice** the largest first attempt, or the
+  retry is clamped to the value that already failed.
+
+#### Tuning for your own system
+
+Prefer a site config passed with `-c` over editing the repository, so your settings survive
+`git pull`:
+
+``` groovy
+// ~/.nextflow/config or site.config, used with -c
+process {
+    executor       = 'slurm'
+    queue          = 'main'
+    resourceLimits = [ cpus: 256, memory: 700.GB, time: 24.h ]
+
+    withLabel:process_bambu { memory = 700.GB }   // override a single label
+}
+
+apptainer.cacheDir = '/path/to/apptainer_images'
+```
+
+### Measured resource requirements
+
+Peak resident memory observed in real runs. Use these to judge whether a dataset fits your hardware.
+
+| Process | test (chr1 subset) | medium (full reference, small samples) | large (8 ONT samples, 25–30 GB each) |
+|---|---|---|---|
+| `CHOPPER` | 7.5 GB | ~8 GB | **54.7 GB** |
+| `MINIMAP2_ALIGN` | 16.3 GB (8 cpu) | 31.1 GB (20 cpu) | 56.1 GB (32 cpu) |
+| `NANOCOMP` | 1.8 GB | 1.2 GB | 33.4 GB |
+| `NANOCOMP_MAPPING` | 1.5 GB | 3.5 GB | 48.4 GB |
+| `BAMBU` | 13.6 GB | 63.6 GB | **639.8 GB** |
+| metadata refinement | 0.9 GB | ~4 GB | 4.1 GB |
+| `RENDER_REPORT` | 1.0 GB | 1.3 GB | — |
+
+Four rules let you predict your own case rather than guessing:
+
+**Chopper is linear in input size**, at close to **0.38 × bytes read**, verified from 2.5 GB to
+143 GB of input. A 30 GB gzipped FASTQ expands to roughly 130 GB, so expect a ~50 GB peak.
+
+**Bambu grows by roughly 54 GB per additional sample** — 532 GB at 6 samples, 640 GB at 8 — because
+it holds every sample in a single object.
+
+> [!IMPORTANT]
+> This puts a ceiling on samples per run. On a 768 GB node, Bambu becomes unschedulable somewhere
+> around **10 samples**. It is a property of the assembly step, not something configuration can
+> tune away: beyond that you need a larger-memory node, or to split the run.
+
+**minimap2 and NanoComp scale with thread count**, since their memory is a fixed index plus
+per-thread buffers. Raising `cpus` raises memory too — NanoComp went from 23.8 GB on 1 CPU to
+33.4 GB on 3.
+
+**The metadata refinement steps scale with the annotation, not the data.** They parse the reference
+`GTF`, so a full human annotation costs ~4 GB whether the input is a single small sample or eight
+large ones. A chromosome-1 test run understates them by roughly fourfold.
+
+### SLURM and `--mem-per-cpu`
+
+Some clusters schedule by memory per core rather than by total. Nextflow supports this:
+
+``` groovy
+executor.perCpuMemAllocation = true   // Nextflow 23.10+, SLURM only
+```
+
+With it enabled, jobs are submitted as `--mem-per-cpu <memory / cpus>` instead of `--mem <memory>`.
+**The `memory` directive still means total memory** — Nextflow does the division at submission — so
+there is no second set of numbers to maintain, and the setting is ignored by the local executor.
+
+What changes is that `cpus` becomes load-bearing. Every memory value you raise also raises the
+per-core figure, which must stay under your partition's `MaxMemPerCPU`:
+
+``` bash
+scontrol show config | grep -iE "MaxMemPerCPU|DefMemPerCPU"
+sinfo -o "%P %c %m" | sort -u
+```
+
+Where a step needs more memory than that ratio allows, **raise `cpus` rather than lowering memory**.
+Requesting cores a single-threaded tool will not use is the price of getting the memory at all, and
+the cores are unusable by other jobs anyway once the node's memory is committed.
+
+This belongs in your site config, not in the pipeline — it describes a SLURM installation rather
+than pulposeq.
+
+### Reading the resource reports
+
+Every run writes `pipeline_info/execution_trace_*.txt`, which is more useful than the HTML report for
+this purpose: it carries `rchar` and `wchar` alongside memory, so you can relate usage to input size.
+
+A few traps worth knowing:
+
+- **Size from `peak_rss`, never `peak_vmem`.** `RENDER_REPORT` reports over 1 TB of virtual memory
+  against about 1 GB resident — address space that R and Quarto reserve without ever touching.
+- **`peak_rss` is unreliable for piped commands.** `CHOPPER` runs `zcat | chopper | gzip` and has
+  reported `0.00 GB` while genuinely using ~50 GB, because short-lived children escape Nextflow's
+  sampler. For those, ask SLURM instead:
+
+  ``` bash
+  sacct -j <jobid> --format=JobID,JobName,MaxRSS,ReqMem,State,ExitCode
+  ```
+
+- **Nextflow reads high relative to SLURM**, by around 12% on the same task. Its figures are already
+  conservative, so there is no need to add a large safety factor on top.
 
 ### Custom Containers
 

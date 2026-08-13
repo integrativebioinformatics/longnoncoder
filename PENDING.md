@@ -19,7 +19,7 @@ has the detail.
 |---|---|
 | **`nextflow lint .`** | **PASSED** — 42 files, 0 errors. The 3 warnings are all in nf-core template subworkflows tracked in `modules.json`; they are style-only and deliberately not fixed, since `nf-core subworkflows update` would overwrite any local edit. |
 | **`nextflow config -profile test,apptainer`** | **PASSED** — config tree assembles on Apptainer/SLURM. The `MINIMAP2_ALIGN` and `BAMBU` `ext.args` ternaries survive the strict parser with the config loaded, `SUBSET_BAMBU_GTF` resolves to `publishDir { enabled = false }`, and no deleted `containers_*.config` is referenced. |
-| **Label coverage** | **PASSED** — all 16 processes resolve a label in all 5 profiles, so nothing falls back silently to `base.config` defaults. Every profile's `resourceLimits` is at or above its largest request, so no allocation is clamped. |
+| **Label coverage** | **PASSED** — every process resolves a label in every profile, so nothing falls back silently to `base.config` defaults. Every profile's `resourceLimits` is at or above its largest request, so no allocation is clamped. |
 
 > `nextflow config` accepts **no parameters** — its options are `-flat`, `-h`, `-profile`,
 > `-properties`, `-r`, `-a`, `-sort`, `-value`. Passing `-params-file` fails with "Unknown option".
@@ -50,7 +50,22 @@ Three completed: chr1 test data, a GENCODE run, and a full Ensembl 116 run. Betw
 | `:test3` container | **PASSED** — serves every local module including `BAMBU_VALIDATE` |
 | Publishing after the `outputDir` removal | **PASSED** — results land in the expected subdirectories |
 | minimap2 preset for `PacBio` | **PASSED** — `-ax splice:hq -uf` |
+| minimap2 preset for unstranded `ONT_cDNA` | **PASSED** — `-ax splice`, confirmed on the 8-sample ONT run |
 | **GENCODE annotation** | **PASSED** — biotypes populate via `gene_type`. Surfaced one real defect, since fixed: `chromosome_name` was being stripped of its `chr` prefix on the annotated side but not the novel side. Sequence names are now passed through untouched on both. |
+
+## Resources
+
+Sized from measured runs and verified in execution:
+
+| Check | Result |
+|---|---|
+| `test` profile | **PASSED** — 24/24 tasks, every label between 40% and 96% utilisation |
+| `large` profile | **PASSED** through CHOPPER, MINIMAP2 and NANOCOMP on 8 ONT samples of 25–30 GB |
+| `--mem-per-cpu` | **PASSED** — `executor.perCpuMemAllocation` accepted at up to 12 GB/CPU |
+| Label coverage | **PASSED** — every process resolves a label in every profile; no silent fallback to base defaults |
+
+The measured figures, the scaling rules derived from them and the reporting caveats are documented
+in `docs/usage.md` under *Resource requests*.
 
 ## Report
 
@@ -110,8 +125,8 @@ Four deliberately bad invocations, each failing or warning at initialisation in 
 
 ### P3. Remaining minimap2 presets
 
-`PacBio` is confirmed. A large run covering `PacBio` and unstranded `ONT_cDNA` was in flight at the
-time of writing. Still outstanding:
+`PacBio` and unstranded `ONT_cDNA` are both confirmed on real runs. Still outstanding, each differing
+from a confirmed case by a single flag:
 
 | `library` | `stranded_library` | Expected preset | Bambu |
 |---|---|---|---|
@@ -148,7 +163,20 @@ The last count should approximate the number of novel transcripts without a `cmp
 validated GTFs are staged into `input/` and rewritten at the task root, and exactly one copy of each
 should exist in `bambu_validated/`, carrying the new attributes.
 
-### P6. Release decisions
+### P6. POST_REFINEMENT at large scale — unmeasured
+
+The only process with no measurement at full scale. It aborted at 60 GB on the 8-sample ONT run, so
+that value is known insufficient; it loads the Bambu `SummarizedExperiment`, which for that run was
+built from a 640 GB assembly. Size it generously and capture the peak on the next complete large run.
+
+### P7. Bambu sample-count ceiling — document, do not fix
+
+Bambu grows by roughly 54 GB per additional sample (532 GB at 6, 640 GB at 8) because it holds every
+sample in a single object. On a 768 GB node that caps a run at **about 10 samples**. This is a
+property of the assembly step rather than a defect, and it is recorded in `docs/usage.md`. Worth
+revisiting only if splitting a run and merging results becomes a requirement.
+
+### P8. Release decisions
 
 Not validations, but they gate a v1.0.0 with a DOI.
 

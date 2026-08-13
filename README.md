@@ -76,6 +76,8 @@ nextflow run main.nf -profile test,[container runtime] -params-file test_data/te
 
 Set the container runtime profile to `docker`, `singularity` or `apptainer`, according to your resources. pulposeq does **NOT** support nor recommend execution with `conda` environments for the local modules.
 
+The `test` profile is calibrated to the bundled chromosome 1 data and peaks at roughly 24 GB, so it runs on a workstation. For real datasets use `medium` or `large`, and see [Resource requests](docs/usage.md#resource-requests) for measured requirements at each scale -- Bambu in particular can need several hundred GB.
+
 In some cases, depending on your system's permissions and configuration regarding containers, you might need to set specific configurations before running. In that case, follow the instructions available at [Seqera Docs](https://docs.seqera.io/nextflow/reference/config).
 
 > *As long as you use the supported container runtimes and do not modify the pipeline architecture, pulposeq ensures ***reproducibility*** independently of your system's specific setup.*
