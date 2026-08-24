@@ -68,6 +68,7 @@ workflow CLASSIFICATION {
     )
 
     ch_predictions = RNAMINING.out.preds
+    ch_versions = ch_versions.mix(RNAMINING.out.versions)
 
     emit:
     annotated_gtf = ch_annotated_gtf

@@ -26,7 +26,7 @@ We can describe each step of the workflow as follows:
 ## Usage
 
 pulposeq is compatible with Ensembl or GENCODE reference genomes and annotations, and protein-coding potential prediction with [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining") only supports the following list of organisms:
-> *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis*, *Chrysemys picta belli, Eptatetrus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus*, *Petromyzon marinus, Sphenodon punctatus,* and *Xenopus tropicalis.*
+> *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis, Chrysemys picta bellii, Crocodylus porosus, Eptatretus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus, Petromyzon marinus, Rattus norvegicus, Sphenodon punctatus,* and *Xenopus tropicalis.*
 
 **In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
 
