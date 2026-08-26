@@ -164,6 +164,46 @@ def validateInputParameters() {
         if (params.library in ['ONT_DRS', 'PacBio'] && params.stranded_library?.toString()?.toLowerCase() != 'true') {
             log.warn("--library ${params.library} is always stranded; --stranded_library false will be ignored.")
         }
+
+        // Restranding applies only to ONT cDNA that is not already oriented. The
+        // pipeline admits no unstranded path: losing strand erases mono-exonic novel
+        // transcripts, depletes novel isoforms of known genes into the antisense
+        // class, and bleeds reads between overlapping sense/antisense pairs. Such
+        // reads are either oriented before they arrive or oriented here.
+        def restrand_active = params.library == 'ONT_cDNA' &&
+                              params.stranded_library?.toString()?.toLowerCase() != 'true'
+
+        if (restrand_active) {
+            // The kit is deliberately not defaulted: the presets differ in their
+            // TSO/RTP primer sequences, and the wrong one yields a low orientation
+            // rate rather than an error.
+            if (!params.restrand_kit && !params.restrand_config) {
+                def kits = ['PCB109', 'PCB111', 'PCB114', 'DCS109', 'DCS-LSK114', 'NEBNext', 'trimmed']
+                error(
+                    "--restrand_kit must be provided for unoriented ONT_cDNA libraries. Valid values: ${kits.join(', ')}.\n" +
+                    "Alternatively pass --restrand_config with a custom Restrander JSON.\n" +
+                    "If the reads were already oriented outside the pipeline, set --stranded_library true instead."
+                )
+            }
+
+            // A floor, not just a range check. Without one, --restrand_min_frac 0
+            // would wave through reads Restrander could not orient while minimap2
+            // and Bambu are both told the data is stranded -- worse than the
+            // unstranded path this replaced, because it fails silently.
+            def frac = params.restrand_min_frac as double
+            if (frac < 0.5 || frac > 1) {
+                error(
+                    "--restrand_min_frac must be between 0.5 and 1, got ${params.restrand_min_frac}. " +
+                    "Reads that Restrander could not orient must not reach an alignment and a quantification " +
+                    "step that assume strand is known, so this threshold cannot be disabled."
+                )
+            }
+            if (frac < 0.75) {
+                log.warn "--restrand_min_frac is set to ${params.restrand_min_frac}. Restrander reaches ~0.99 on " +
+                         "matched PCR-cDNA data, so a threshold this low usually means the kit or the trimming " +
+                         "state is wrong rather than that the threshold needs relaxing."
+            }
+        }
     }
 
     // Coding prediction requires organism

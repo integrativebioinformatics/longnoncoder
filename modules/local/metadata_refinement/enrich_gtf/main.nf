@@ -3,8 +3,8 @@ process ENRICH_VALIDATED_GTF {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test3':
-        'docker.io/itsiaguara/longnoncoder:test3' }"
+        'docker://itsiaguara/pulposeq:test':
+        'docker.io/itsiaguara/pulposeq:test' }"
 
     input:
     // The three validated GTFs are staged into input/ so the script can write its

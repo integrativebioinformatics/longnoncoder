@@ -99,6 +99,21 @@ subset_se <- function(object, ids, label) {
 se_filtered     <- subset_se(se, valid_tx_ids, "transcript")
 seGene_filtered <- subset_se(seGene, valid_gene_ids, "gene")
 
+# --- Record the validation yield as a result --------------------------------
+# A headline number for the run, so it is written as data rather than left to be
+# scraped back out of the console log.
+validation_summary <- data.frame(
+  feature_type = c("transcript", "gene"),
+  retained     = c(nrow(se_filtered), nrow(seGene_filtered)),
+  total        = c(nrow(se), nrow(seGene)),
+  stringsAsFactors = FALSE
+)
+validation_summary$fraction_retained <-
+  validation_summary$retained / validation_summary$total
+
+write.csv(validation_summary,
+          file.path(output_dir, "validation_summary.csv"), row.names = FALSE)
+
 # --- Save the filtered objects for downstream reuse ---
 saveRDS(se_filtered, file = file.path(output_dir, "se_multiSample_validated.rds"))
 saveRDS(seGene_filtered, file = file.path(output_dir, "seGene_multiSample_validated.rds"))

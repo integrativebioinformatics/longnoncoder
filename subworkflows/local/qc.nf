@@ -12,9 +12,14 @@ include { CHOPPER                           } from '../../modules/nf-core/choppe
 ========================================================================================
 */
 
-
 workflow QC_FILT {
     take:
+    // Two read channels rather than one. NanoComp's raw-read figures describe the
+    // reads as they were supplied, while filtering operates on whatever RESTRANDING
+    // produced -- which for unoriented ONT cDNA is a reverse-complemented set minus
+    // the reads that could not be oriented. When restranding does not apply the two
+    // are the same channel.
+    raw_reads
     reads
 
     main:
@@ -28,7 +33,7 @@ workflow QC_FILT {
 
     // Running nanocomp on raw reads
 
-    ch_reads
+    raw_reads
         .collect { item -> item[1] }
         .map { filelist -> [[id: "All"], filelist] }
         .set { ch_combined_raw }
@@ -41,6 +46,7 @@ workflow QC_FILT {
     ch_multiqc_raw = ch_multiqc_raw.mix(NANOCOMP_RAW.out.stats_txt.collect { item -> item[1] }.ifEmpty([]))
 
     ch_multiqc_all = ch_multiqc_all.mix(ch_multiqc_raw.ifEmpty([]))
+
 
     // Putting conditional to whether run filtering on samples
     if (!params.skip_filtering) {

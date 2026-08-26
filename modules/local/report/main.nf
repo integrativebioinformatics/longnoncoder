@@ -3,8 +3,8 @@ process RENDER_REPORT {
     label 'process_reports'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test3':
-        'docker.io/itsiaguara/longnoncoder:test3' }"
+        'docker://itsiaguara/pulposeq:test':
+        'docker.io/itsiaguara/pulposeq:test' }"
 
     input:
     // bambu outputs
@@ -22,6 +22,19 @@ process RENDER_REPORT {
     path novel_transcriptome_meta
     path novel_lncrna_exonlength
     path novel_protein_coding_exonlength
+    path novel_intron_retention_meta
+
+    // structural validation of the novel calls
+    path context_flags
+    path context_summary
+
+    // genomic context figures. The PNGs are staged rather than passed as
+    // parameters: the candidate tables carry the filenames, and the report reads
+    // them from the working directory.
+    path genomic_context_candidates
+    path genomic_context_figures
+    path intronic_context_candidates
+    path intronic_context_figures
 
     // raw bambu plots (pre-refinement assembly)
     path raw_pca
@@ -36,6 +49,9 @@ process RENDER_REPORT {
     path post_heatmap_transcript
 
     // quarto template
+    // run metrics
+    path bambu_metrics
+    path validation_summary
     path qmd_report // <- ADDED: The .qmd file is now a formal input
 
     output:
@@ -66,6 +82,11 @@ process RENDER_REPORT {
         -P novel_transcriptome_meta:${novel_transcriptome_meta} \\
         -P novel_lncrna_exonlength:${novel_lncrna_exonlength} \\
         -P novel_protein_coding_exonlength:${novel_protein_coding_exonlength} \\
+        -P novel_intron_retention_meta:${novel_intron_retention_meta} \\
+        -P context_flags:${context_flags} \\
+        -P context_summary:${context_summary} \\
+        -P genomic_context_candidates:${genomic_context_candidates} \\
+        -P intronic_context_candidates:${intronic_context_candidates} \\
         -P raw_pca:${raw_pca} \\
         -P raw_pca_grouped:${raw_pca_grouped} \\
         -P raw_heatmap_gene:${raw_heatmap_gene} \\
@@ -74,6 +95,8 @@ process RENDER_REPORT {
         -P post_pca_grouped:${post_pca_grouped} \\
         -P post_heatmap_gene:${post_heatmap_gene} \\
         -P post_heatmap_transcript:${post_heatmap_transcript} \\
+        -P bambu_metrics:${bambu_metrics} \\
+        -P validation_summary:${validation_summary} \\
         --to html
 
     cat <<-END_VERSIONS > versions.yml
@@ -95,8 +118,8 @@ process RENDER_REPORT {
     touch Bambu_lncRNA_PC_summary.csv
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
+        quarto: \$(quarto --version | head -n1 | sed 's/Quarto //')
         r-base: \$(R --version | head -n1 | sed 's/R version //; s/ .*//')
-        r-quarto: \$(Rscript -e "cat(as.character(packageVersion('quarto')))")
         r-tidyverse: \$(Rscript -e "cat(as.character(packageVersion('tidyverse')))")
         r-cowplot: \$(Rscript -e "cat(as.character(packageVersion('cowplot')))")
         r-scales: \$(Rscript -e "cat(as.character(packageVersion('scales')))")

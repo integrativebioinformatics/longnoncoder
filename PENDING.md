@@ -1,13 +1,48 @@
 # pulposeq — validation status of the `updating` branch
 
-Tracks what has been verified on this branch and what has not, ahead of merging to `dev`.
+Tracks what has been verified and what has not, ahead of merging to `dev`.
 
-**What the branch contains:** the `library` / `stranded_library` parameters driving the minimap2
-preset and Bambu strandedness; removal of the biomaRt query in favour of reading transcript metadata
-from the supplied reference annotation; biotype and classification attributes written into every
-generated GTF; the new `POST_REFINEMENT` and `ENRICH_VALIDATED_GTF` modules; a rewritten resource
-profile scheme; the Nextflow 26.04 / strict-syntax move; and a set of report fixes. Commit history
-has the detail.
+**What the branch now contains.** The `library` / `stranded_library` parameters; removal of the
+biomaRt query in favour of reading transcript metadata from the supplied annotation; biotype and
+classification attributes written into every generated GTF, now including synthesised `gene`
+features; the `POST_REFINEMENT` and `ENRICH_VALIDATED_GTF` modules; a rewritten resource profile
+scheme; the Nextflow 26.04 / strict-syntax move; report fixes; captured run metrics (`NDR`,
+validation yield); the `RESTRANDING` subworkflow with `RESTRANDER`; `BAM_COVERAGE`; `GENOMIC_CONTEXT`;
+and the `ch_index` fix that made the `.bai` files reachable. Commit history has the detail.
+
+---
+
+# 0. Pipeline structure
+
+```
+samplesheet
+   │
+   ├─ RESTRANDING ─────────────── not skippable; runs only for ONT_cDNA + stranded_library:false
+   │     └─ RESTRANDER            every sample must reach --restrand_min_frac or the run stops
+   │
+   ├─ QC_FILT ─────────────────── --skip_qc
+   │     ├─ NANOCOMP_RAW          on the reads as supplied
+   │     ├─ CHOPPER               --skip_filtering
+   │     └─ NANOCOMP_FILT
+   │
+   ├─ ALIGNMENT ───────────────── --skip_alignment
+   │     ├─ MINIMAP2_ALIGN        always -uf; every route here is oriented
+   │     └─ NANOCOMP_MAPPING      --skip_alignment_qc
+   │
+   ├─ BAM_COVERAGE ────────────── per-sample genome-wide bigWig
+   │
+   ├─ TRANSCRIPT_RECONSTRUCTION
+   │     └─ BAMBU                 always --stranded true
+   │
+   └─ CLASSIFICATION ──────────── --skip_class
+         ├─ GFFCOMPARE, GFFREAD, RNAMINING
+         ├─ SUBSET_BAMBU_COUNTS → NOVEL_TRANSCRIPTS → BAMBU_VALIDATE → KNOWN_TRANSCRIPTS
+         ├─ SUBSET_BAMBU_GTF → ENRICH_VALIDATED_GTF → GENOMIC_CONTEXT
+         └─ POST_REFINEMENT → RENDER_REPORT
+```
+
+**The pipeline processes stranded data only.** There is no unstranded path and no flag that creates
+one. `minimap2` always receives `-uf`; Bambu always receives `--stranded true`.
 
 ---
 
@@ -17,69 +52,74 @@ has the detail.
 
 | Check | Result |
 |---|---|
-| **`nextflow lint .`** | **PASSED** — 42 files, 0 errors. The 3 warnings are all in nf-core template subworkflows tracked in `modules.json`; they are style-only and deliberately not fixed, since `nf-core subworkflows update` would overwrite any local edit. |
-| **`nextflow config -profile test,apptainer`** | **PASSED** — config tree assembles on Apptainer/SLURM. The `MINIMAP2_ALIGN` and `BAMBU` `ext.args` ternaries survive the strict parser with the config loaded, `SUBSET_BAMBU_GTF` resolves to `publishDir { enabled = false }`, and no deleted `containers_*.config` is referenced. |
-| **Label coverage** | **PASSED** — every process resolves a label in every profile, so nothing falls back silently to `base.config` defaults. Every profile's `resourceLimits` is at or above its largest request, so no allocation is clamped. |
+| `nextflow lint .` | **PASSED** as of the pre-restranding state. 3 warnings, all in nf-core template subworkflows tracked in `modules.json`, style-only and deliberately unfixed. **Must be re-run** — the structure changed substantially since. |
+| `nextflow config -profile test,apptainer` | **PASSED** pre-restranding. Also needs re-running. |
+| Label coverage | **PASSED** — every label a local module declares (`process_bambu`, `process_genomic_context`, `process_low`, `process_post_refinement`, `process_reports`, `process_restrander`) resolves in `base`, `test`, `medium` and `large`. Verified after the restranding work. |
 
-> `nextflow config` accepts **no parameters** — its options are `-flat`, `-h`, `-profile`,
-> `-properties`, `-r`, `-a`, `-sort`, `-value`. Passing `-params-file` fails with "Unknown option".
-> It also cannot check the minimap2 presets: params cannot be injected, and `ext.args` is a closure
-> printed unevaluated.
+> `nextflow config` accepts **no parameters** — only `-flat`, `-h`, `-profile`, `-properties`, `-r`,
+> `-a`, `-sort`, `-value`. It also cannot check the minimap2 preset: params cannot be injected and
+> `ext.args` is a closure printed unevaluated.
 
 ## Stub run
 
-**PASSED** — 24 tasks, ~4 minutes, `-profile test,apptainer`. Confirms every channel connection,
-input cardinality and output filename, including the `ENRICH_VALIDATED_GTF` and `POST_REFINEMENT`
-wiring, the extra `path` inputs on `KNOWN_TRANSCRIPTS` / `NOVEL_TRANSCRIPTS`, and the corrected BAMBU
-stub, which previously touched a `bambu_output.rds` that `bin/bambu.R` never writes.
+**PASSED** at 24 tasks, `-profile test,apptainer` — but that predates `RESTRANDING`, `BAM_COVERAGE`,
+`GENOMIC_CONTEXT` and the `QC_FILT` signature change. Treat as stale.
 
-> `-stub-run` is a boolean switch and takes no value. `-stub-run true` leaves `true` as a positional
-> argument and warns. The same warning appears for `-profile test, apptainer` with a space — that one
-> genuinely breaks, since only `test` reaches `-profile` and no container runtime is enabled.
+> `-stub-run` is a boolean switch and takes no value. `-profile test, apptainer` with a space breaks
+> silently — only `test` reaches `-profile` and no container runtime is enabled.
 
 ## Real runs
 
-Three completed: chr1 test data, a GENCODE run, and a full Ensembl 116 run. Between them:
+Three completed before the restranding work: chr1 test data, a GENCODE run, and a full Ensembl 116
+run. Between them: end-to-end completion, strict syntax at runtime, `KNOWN_TRANSCRIPTS` without
+network access, `POST_REFINEMENT` / `ENRICH_VALIDATED_GTF`, the `:test3` container, publishing after
+the `outputDir` removal, and the `PacBio` and unstranded `ONT_cDNA` minimap2 presets.
 
-| Check | Result |
-|---|---|
-| Pipeline completes end to end | **PASSED** — all tasks reach COMPLETED, output files generated as expected |
-| Strict syntax at runtime | **PASSED** — parses and runs under Nextflow 26.x |
-| `KNOWN_TRANSCRIPTS` without biomaRt | **PASSED** — completes with no network access |
-| `POST_REFINEMENT` / `ENRICH_VALIDATED_GTF` | **PASSED** — run and produce their outputs |
-| `:test3` container | **PASSED** — serves every local module including `BAMBU_VALIDATE` |
-| Publishing after the `outputDir` removal | **PASSED** — results land in the expected subdirectories |
-| minimap2 preset for `PacBio` | **PASSED** — `-ax splice:hq -uf` |
-| minimap2 preset for unstranded `ONT_cDNA` | **PASSED** — `-ax splice`, confirmed on the 8-sample ONT run |
-| **GENCODE annotation** | **PASSED** — biotypes populate via `gene_type`. Surfaced one real defect, since fixed: `chromosome_name` was being stripped of its `chr` prefix on the annotated side but not the novel side. Sequence names are now passed through untouched on both. |
+The GENCODE run surfaced and confirmed the fix for `chromosome_name` being stripped of its `chr`
+prefix on the annotated side only.
+
+**Metadata parity — PASSED.** The GTF-derived `annotated_transcriptome_metadata.csv` matches the
+biomaRt-era output, including `transcript_length`, which was the field most at risk since biomaRt
+reports the mature length (sum of exon widths) rather than `end - start`. This was the decisive
+check for the biomaRt removal, and it closes it: reading transcript metadata from the supplied
+annotation reproduces what the network query used to return.
 
 ## Resources
-
-Sized from measured runs and verified in execution:
 
 | Check | Result |
 |---|---|
 | `test` profile | **PASSED** — 24/24 tasks, every label between 40% and 96% utilisation |
 | `large` profile | **PASSED** through CHOPPER, MINIMAP2 and NANOCOMP on 8 ONT samples of 25–30 GB |
 | `--mem-per-cpu` | **PASSED** — `executor.perCpuMemAllocation` accepted at up to 12 GB/CPU |
-| Label coverage | **PASSED** — every process resolves a label in every profile; no silent fallback to base defaults |
 
-The measured figures, the scaling rules derived from them and the reporting caveats are documented
-in `docs/usage.md` under *Resource requests*.
+Measured on the 8-sample ONT run: BAMBU **1d 13h 26m / 632 GB peak RSS / 117.9% CPU** — about
+79 GB/sample, above the earlier 54 GB/sample estimate, putting the ceiling near **9 samples** on a
+768 GB node. POST_REFINEMENT 1h40m / 82.7 GB. NANOCOMP_MAPPING 157 GB. Chopper ~51 GB each,
+consistent with the ~0.38 × bytes-read rule. Figures and caveats are in `docs/usage.md`.
 
 ## Report
 
-Verified against the rendered Ensembl 116 HTML:
+Verified against the rendered Ensembl 116 HTML: duplicated captions fixed, figure numbering fixed,
+the stale `@fig-density` cross-reference fixed, chromosome naming reconciled, chromosome figure
+scaling derived from the data. Tabsets, palette, legends, lollipops and log ticks all visible.
 
-| Check | Result |
+## Restrander, verified directly against the image
+
+Run locally against `emiyoshi/restrander:v1.1.3` on the tool's own 20,000-read PCB109 vignette
+sample. All of the following are measured, not inferred:
+
+| Finding | Value |
 |---|---|
-| Duplicated captions on the before/after figures | **FIXED** — each caption appears once, with `(a)` / `(b)` subcaptions |
-| Colliding figure numbers | **FIXED** — 25 captions numbered 1–25, no duplicates, no hand-written `**Figure N:**` left |
-| Stale cross-reference | **FIXED** — `@fig-density` resolves to Figure 14; the old hardcoded "Figure 13" pointed at the wrong figure |
-| Chromosome naming | **FIXED** — annotated and novel figures now agree, both using the annotation's own naming |
-| Chromosome figure scaling | **FIXED** — layout derived from the number of chromosomes rather than a fixed 35×30 in |
-| Tabsets, palette, legends, lollipops, log ticks | **APPLIED** — visible in the render |
-| File size | 17 MB for a whole genome at 150 dpi, against 20 MB for chr1 alone at 300 dpi |
+| Stats JSON shape | `stats.strandStats` (`+`, `-`, `?`), `stats.artefactStats`, `stats.totalReads` — parser is correct |
+| Orientation rate | **98.95%** (9,526 + 10,264 of 20,000) — `--restrand_min_frac 0.80` has real margin |
+| Unknowns filename | `-unknowns` inserted before the **first** dot, not the extension |
+| Artefact handling | 176 artefacts (47 RTP-RTP, 129 TSO-TSO) **stay** in the main output; only the 210 `?` reads are diverted |
+| Config location | `/home/restrander/config/`, all nine presets |
+| Base image | Ubuntu 24.04; `bash`, `ps`, `gzip` all present |
+| Version string | none — no `--version` flag, so `versions.yml` is pinned to the container tag |
+
+Two bugs were found and fixed by this: the unknowns output glob would never have matched, and the
+version detection produced an empty string.
 
 ---
 
@@ -87,173 +127,263 @@ Verified against the rendered Ensembl 116 HTML:
 
 ## Priorities
 
-Everything here should be settled before merging to `dev`.
+### P1. Re-run the static checks and the stub
 
-### P1. Metadata parity — **in progress**
+Everything under *Static checks* and *Stub run* above predates the restranding work and the
+structural-validation work, which between them changed `QC_FILT`'s signature, added two subworkflows
+and a module, removed a BAMBU input, and grew `RENDER_REPORT` from 23 to 30 inputs. Re-run:
 
-The decisive check for the biomaRt removal: the GTF-derived
-`annotated_transcriptome_metadata.csv` must match the biomaRt-era output.
-
-```r
-old <- read.csv("<previous>/annotated_transcripts/annotated_transcriptome_metadata.csv")
-new <- read.csv("<new>/annotated_transcripts/annotated_transcriptome_metadata.csv")
-all.equal(old[order(old$ensembl_transcript_id), ], new[order(new$ensembl_transcript_id), ])
+```bash
+nextflow lint .
+nextflow run . -profile test,docker -params-file test_data/testing.yml -stub-run
+nextflow run . -profile test,docker -params-file test_data/testing.yml -stub-run --skip_qc
+nextflow run . -profile test,docker -params-file test_data/testing.yml -stub-run --skip_filtering
 ```
 
-`transcript_length` is the field most likely to diverge — biomaRt reports the **mature** length, the
-sum of exon widths, not `end - start`. A systematic difference there means the exon summing in
-`read_reference_gtf()` is wrong.
+`--skip_qc` matters specifically: `QC_FILT` is now conditional again while `RESTRANDING` is not, and
+`ch_multiqc_files` mixes an empty channel in that case.
 
-> **The annotation release must match the baseline.** Ensembl changes content between releases: new
-> transcripts, bumped versions, reassigned biotypes. A 116 GTF compared against a baseline biomaRt
-> queried at 114 will differ for reasons that have nothing to do with the parsing. Either regenerate
-> the baseline at the same release, or restrict the comparison to transcripts present in both.
->
-> `chromosome_name` will also differ against a **GENCODE** baseline by design, since sequence names
-> are no longer rewritten. Compare against Ensembl, or exclude that column.
+Checked locally without Nextflow, since it is not installed on the dev machine — these are structural
+checks only and are **not** a substitute for the stub run above:
 
-### P2. Parameter validation — not run, needs no compute
+- module input arity matches the workflow call for `VALIDATE_NOVEL_CONTEXT` (5), `GENOMIC_CONTEXT`
+  (5), `NOVEL_TRANSCRIPTS` (9) and `RENDER_REPORT` (30)
+- every `<PROCESS>.out.<emit>` referenced in `workflows/pulposeq.nf` exists in that module
+- the report parameter contract closes: 27 declared in the qmd, 27 used, 27 passed with `-P`, all 27
+  backed by a `path` input. The 3 remaining path inputs are staged deliberately without a parameter
+  (`genomic_context_figures`, `intronic_context_figures`, `qmd_report`)
+- brackets balance in all three modified R scripts
 
-Four deliberately bad invocations, each failing or warning at initialisation in seconds:
+R and Nextflow syntax themselves are **unverified** — neither `Rscript` nor `nextflow` is available
+here, so the first real check of the R code is the stub or a live run.
+
+### P2. Restranding end to end — never run in the pipeline
+
+The module has been verified in isolation, but never inside Nextflow. Confirm:
+
+1. `RESTRANDER` appears **before** `CHOPPER` in `pipeline_dag_*.html`
+2. the config discovery loop resolves `/home/restrander/config/<kit>.json` on the first candidate
+3. `results/restrander/` contains the oriented FASTQ, the stats JSON, the unknowns FASTQ and the
+   copied config, one set per sample
+4. a deliberately wrong `--restrand_kit` produces the error, not a silent low rate
+5. `--headcrop 10` warns
+
+**The test data cannot exercise this.** `test_data/testing.yml` is PacBio, so `RESTRANDING` is inert.
+The vignette's `PCB109.fq.gz` (20,000 reads, ~13 MB) against the existing chr1 reference would make
+this testable and is small enough to commit.
+
+### P3. `restrand_kit` in `examplerun.yml` is a placeholder
+
+`examplerun.yml` shows `PCB111`, chosen only as an illustration. The preset must match the library
+preparation chemistry of whatever data is being run, and the wrong one produces a low orientation
+rate rather than an error. Replace it with a comment making clear that it has to be set per dataset,
+or leave it unset so the validation error fires.
+
+Also confirm whether demultiplexing left the primers intact:
+
+```bash
+zcat sample.fastq.gz | head -40000 | awk 'NR%4==2' | grep -c "<PCB114 tso>"
+```
+
+Near zero means `--restrand_kit trimmed`, with the reduced orientation rate and loss of artefact
+detection that implies.
+
+### P4. Internal priming has no filter, and restranding will make it worse
+
+This is the most consequential finding of the review, and it is a **new** risk created by the
+strictness change rather than a pre-existing one.
+
+The unstranded path was accidentally suppressing a class of artifact. Mono-exonic and non-canonical
+transcripts got no strand and were dropped by curation — and those are exactly the transcripts most
+likely to arise from **internal priming**, where reverse transcriptase primes on a genomic A-rich
+region instead of a real poly(A) tail. Now that restranding gives every read a strand, those models
+will pass curation and enter the validated set.
+
+Published long-read benchmarking work reports that filtering internally-primed reads substantially
+reduces the detection of intron-overlapping genes, and provides a tool for it (`PrimeSpotter`).
+pulposeq has no equivalent step.
+
+**Partly addressed.** `VALIDATE_NOVEL_CONTEXT` now runs test D (boundary read-through and host
+junctions), which catches a large share of the same population — an internally-primed fragment of
+host pre-mRNA has reads running past its boundaries and carrying the host's junctions. That is
+organism-agnostic and needs no threshold.
+
+**Still open: the direct 3'-end test (test B).** Scanning for a genomic A-run at the transcript's 3'
+end is the only test that speaks to internal priming *directly*. The published criterion — ≥8 A's in
+a 10 nt window — is an **absolute** count tuned on a ~41% GC genome, and base composition ranges from
+~19% GC (*Plasmodium*) to ~72% (*Streptomyces*). Unrecalibrated it is a human test wearing a
+general-purpose label. The fix is to make it relative: compute the A-run background across the genome
+actually supplied and flag candidates above a high quantile of it.
+
+When it lands it should be gated on **library chemistry** (`params.library != 'ONT_DRS'`), not on
+platform. Internal priming is an oligo-dT phenomenon, so after restranding it affects every supported
+library except direct RNA — a PacBio-conditional parameter would encode the wrong model.
+
+**Filtering reads (option E) is still not recommended.** It destroys the measurement — if the reads
+are removed the artifacts never become transcripts and there is no way to say how many there were —
+and it removes real discoveries, since the published criterion spares only *annotated* termination
+sites and novel transcripts have none by definition.
+
+### P5. Intronic novel lncRNAs need a confidence qualifier — **DONE**
+
+Bennett *et al.* (*Nat Commun* 2026, Matters Arising on lncDACH1) make the case directly: an
+unspliced transcript lying inside an intron of a **same-strand** gene cannot be distinguished from a
+fragment of that gene's pre-mRNA without independent evidence — a matching CAGE TSS, or an expression
+pattern uncoupled from the host.
+
+Implemented as `VALIDATE_NOVEL_CONTEXT` (`bin/validate_novel_context.R`), which writes
+`novel_context_flags.csv` with `same_strand_as_host`, `reads_crossing_boundary`,
+`reads_with_host_junction` and `reads_spliced_into_host_exon`, plus `host_gene_id` and
+`host_gene_biotype` on every novel record. The report gained a *Structural Validation of Novel Calls*
+section, and `GENOMIC_CONTEXT` now draws a deliberately chosen set of flagged intronic candidates
+windowed on the whole host intron, as a visual control against the clean ones.
+
+Nothing is filtered on the result. `i` stays in the whitelist; what changed is that its members now
+carry stated evidence.
+
+Note the third outcome test D distinguishes: reads splicing *from* the candidate *into* a host exon
+mean the candidate is an **unannotated exon of the host** — a genuine finding that simply is not a
+lncRNA one. It is reported separately from the pre-mRNA case.
+
+### P6. A cross-platform mono-exonic count is not a recovery target
+
+The Restrander brief argued from a mono-exonic novel transcript count on a stranded platform against
+a much smaller count on an unstranded run. Published benchmarking complicates that comparison:
+platforms differ in their internal priming rates, and a large share of platform-specific gene calls
+are single-exon genes overlapping introns of other genes — attributed to incompletely spliced
+overlapping transcripts rather than to real discoveries.
+
+This does not undermine the restranding decision. The `x` / `j` argument stands, and those are
+multi-exonic classes where the strand-insensitive controls (`u`, `i`) agree across platforms. But no
+cross-platform mono-exonic count should be quoted as a number to recover to, and any before/after
+comparison should say why.
+
+### P7. BAMBU still passes files as `val`
+
+`val bam_list` and `val sample_info` should be `path`. This is the same class of bug that broke
+RNAmining on NPAD: with `val`, Nextflow stages nothing and binds nothing, so the module depends on
+the site's ambient container configuration.
+
+Deeper: `bamlist.txt` holds **absolute BAM paths** that Nextflow never binds, so BAMBU relies on
+ambient config on every cluster. Hardening it means staging the BAMs *and* their `.bai` files and
+writing basenames into the list — which is only possible now that the `ch_index` fix has landed,
+since staging a BAM without its adjacent index would break random access.
+
+### P8. `BAM_COVERAGE` and `GENOMIC_CONTEXT` have never run
+
+Both are new and untested on real data.
+
+- `BAM_COVERAGE` is labelled `process_low` on the reasoning that `coverage()` returns a run-length
+  encoded `RleList`, so memory tracks coverage *changes* rather than genome size. That is a
+  hypothesis; a whole-genome ONT BAM has many transitions. Watch the first run.
+- `GENOMIC_CONTEXT` needs `txdbmaker` present in `:test3` — the script falls back to
+  `GenomicFeatures::makeTxDbFromGFF`, its home before Bioconductor 3.19. Confirm which is available.
+- Determinism check: `genomic_context_candidates.csv` must list the same five genes on a re-run.
+
+`VALIDATE_NOVEL_CONTEXT` joins them as a third never-run module. Specific things to watch on its
+first real run:
+
+- **Sequence naming.** The script harmonises `1` vs `chr1` between the BAM header and the annotation,
+  and aborts if no names are shared. A mismatch would otherwise return zero overlaps with no error.
+- **`reads_total == 0`.** Reported as `no_reads_recovered` in the summary. A large count there means
+  the region queries are not landing, not that the candidates are unsupported.
+- **`boundary_margin`.** Default 25 bp, absorbing soft-clipping and alignment wobble. If nearly every
+  candidate shows `frac_crossing_boundary` near 1, the margin is too small for this data rather than
+  every candidate being pre-mRNA.
+- **Read strand convention.** The D counts are computed over *all* overlapping reads, with
+  `reads_same_strand` reported separately, deliberately: whether a BAM's FLAG strand equals the
+  transcript strand depends on library orientation, and getting that wrong silently would be worse
+  than reporting both.
+- **`GENOMIC_CONTEXT` now shares one TxDb** across the clean and flagged window sets. If either set
+  is empty the other must still draw — both paths need exercising.
+
+### P9. Parameter validation — not run, needs no compute
 
 | Command | Expected |
 |---|---|
-| no `--library` | error: `--library must be provided when alignment is not skipped` |
-| `--library nonsense` | rejected by the schema enum **and** `validateInputParameters()` |
+| no `--library` | error naming the valid values |
+| `--library nonsense` | rejected by schema enum **and** `validateInputParameters()` |
 | `--library ONT_DRS --stranded_library false` | warning that ONT_DRS is always stranded; run proceeds |
-| `--skip_alignment`, no `--library` | no error — library is only required when alignment runs |
+| `--library ONT_cDNA --stranded_library false`, no `--restrand_kit` | error demanding the kit |
+| `--restrand_min_frac 0.2` | error — floored at 0.5 |
+| `--restrand_min_frac 0.6` | warning, run proceeds |
+| `--skip_alignment`, no `--library` | no error |
 
-### P3. Remaining minimap2 presets
+### P10. Report additions for the captured metrics
 
-`PacBio` and unstranded `ONT_cDNA` are both confirmed on real runs. Still outstanding, each differing
-from a confirmed case by a single flag:
-
-| `library` | `stranded_library` | Expected preset | Bambu |
-|---|---|---|---|
-| `ONT_DRS` | forced `true` | `-ax splice -uf -k14` | `--stranded true` |
-| `ONT_cDNA` | `true` | `-ax splice -uf` | `--stranded true` |
-
-Read the resolved value with `grep -h "minimap2" work/*/*/.command.sh` after a real run — a stub run
-does not interpolate minimap2's `args`.
-
-### P4. Sample group labels after the `collectFile` change
-
-The one outstanding check with real consequences if it fails. Row order in `bamlist.txt` changed
-from group-ordered to path-ordered; if the group mapping broke, every group-wise figure in the report
-is silently wrong and nothing else flags it.
-
-```r
-se <- readRDS("<outdir>/bambu/se_multiSample.rds")
-colData(se)$group   # must match each sample's group in the samplesheet
-```
-
-`bin/bambu.R` matches sample rows to BAMs by basename rather than by position, which is why the
-change should be safe — but it has not been confirmed on a multi-group dataset.
-
-### P5. GTF attribute contents
-
-```bash
-grep -m3 "transcript_status" results/annotated_transcripts/bambu_annotated_transcriptome.gtf
-grep -m3 "class_code" results/novel_transcripts/novel_transcripts_validated.gtf
-grep -c 'gene_biotype "novel"' results/bambu_validated/BambuOutput_annotations_validated.gtf
-```
-
-The last count should approximate the number of novel transcripts without a `cmp_ref_gene` — 630 of
-1498 in the chr1 test data. Also confirm `ENRICH_VALIDATED_GTF` did not clobber its inputs: the three
-validated GTFs are staged into `input/` and rewritten at the task root, and exactly one copy of each
-should exist in `bambu_validated/`, carrying the new attributes.
-
-### P6. POST_REFINEMENT at large scale — unmeasured
-
-The only process with no measurement at full scale. It aborted at 60 GB on the 8-sample ONT run, so
-that value is known insufficient; it loads the Bambu `SummarizedExperiment`, which for that run was
-built from a 640 GB assembly. Size it generously and capture the peak on the next complete large run.
-
-### P7. Bambu sample-count ceiling — document, do not fix
-
-Bambu grows by roughly 54 GB per additional sample (532 GB at 6, 640 GB at 8) because it holds every
-sample in a single object. On a 768 GB node that caps a run at **about 10 samples**. This is a
-property of the assembly step rather than a defect, and it is recorded in `docs/usage.md`. Worth
-revisiting only if splitting a run and merging results becomes a requirement.
-
-### P8. Release decisions
-
-Not validations, but they gate a v1.0.0 with a DOI.
-
-- **Container reproducibility.** `:test3` is a mutable tag in a personal Docker Hub namespace. If it
-  is rebuilt, this branch stops being reproducible retroactively and nothing recovers it. A digest
-  pin is a small change now that the image is known to work.
-- **`publish_dir_mode`.** Now `symlink`, which is good for iterating on large data but produces an
-  output directory that cannot be moved, archived or shared — deleting `work/` destroys it. `copy`
-  is the safer default for a release, with `symlink` as a documented opt-in. Documented either way.
-- **Release metadata.** `CHANGELOG.md` is still the unfilled nf-core stub (`## v1.0.0 - [date]`),
-  `manifest.doi` is empty, and `defaultBranch` is `main` while work happens on `updating`.
-
----
+`bambu_run_metrics.csv` and `validation_summary.csv` are produced and wired to `RENDER_REPORT`, but
+the rendered output has never been checked. Confirm the callout shows the NDR and both retention
+rows, and that the `tryCatch` fallbacks degrade cleanly against older results lacking those files.
 
 ## Non-urgent polishing
 
-Nothing here affects correctness of a run.
+| Item | Notes |
+|---|---|
+| `meta.yml` missing | `bam_coverage`, `genomic_context`, `enrich_gtf`, `post_refinement`. `restrander` has one. |
+| Report figure sizing | 6h applied but never rendered. Confirm text size is uniform between `fig-panel-1` (width 16, `theme_width(16)`) and `fig-density` (width 10). |
+| Chromosome figures | Rewritten to facet by biotype with chromosomes on x, split into assembled/scaffold tabsets. Never rendered. |
+| `dpi` | Still 300, with `REPORT_DPI` matching. Dropping both to 150 roughly quarters the file size; the YAML comment already argues for it. |
+| Genomic context report section | Not written. The module produces the figures and the candidates CSV; nothing displays them yet. |
+| lncRNA naming | Mattick *et al.* recommend the GENCODE convention, with `<gene>-AS` for antisense. Novel transcripts currently carry only `BambuTx*`. |
+| Second example params file | `examplerun.yml` covers unoriented ONT cDNA only. An already-oriented variant would help. |
+| CI / nf-test | Neither exists. Deliberately deferred. |
+| Release decisions | Container digest pin, `publish_dir_mode` default, CHANGELOG, `doi`, `defaultBranch`. |
 
-### CI and testing
+## Alignment tuning — to evaluate, not adopt blind
 
-**No `.github/workflows/` exists**, `.nf-core.yml` disables `nf_test_content` lint, and there are no
-tests for the local modules or the pipeline. Every local module already has a working `stub`, so a
-`-stub` CI job is cheap and would catch the config and wiring classes of failure automatically.
-Suggested order: stub-run workflow → linting workflow → per-module nf-tests.
+Two minimap2 options the pipeline does not currently use. Both affect **junction placement**, not
+internal priming, and both would change novel transcript structures — so they need testing on real
+data rather than adopting on principle.
 
-This is the highest-value item in this section: it is what stops the next round of changes from
-being unverified in the same way.
+### `-C5` — reduce the non-canonical splice penalty
 
-### Larger refactors
+minimap2's cookbook recommends it "for data with low error rate", citing Iso-Seq. Whether ONT
+R10.4.1 qualifies is the open question: the measured ONT run has a median read quality of Q20.7 and
+98.8% median alignment identity, which is arguably in that regime and was not when the guidance was
+written.
 
-- **Workflow output definition.** `publishDir` is not deprecated in 26.04, so this is direction
-  rather than necessity. Scope is large: every published channel must reach the entry workflow's
-  `publish:` section, but the subworkflows do not currently emit most of what gets published —
-  roughly 50 channels through 4 subworkflows, each declared twice, plus stripping all `publishDir`
-  from `conf/modules.config`. Worth doing only after CI exists.
-- **Granular step control.** "Run only QC", "QC+mapping", and so on. Independent `skip_*` booleans
-  multiply into invalid combinations quickly; a `--step` / `--from` / `--to` parameter (sarek-style)
-  scales better than more flags.
-- **`val` → `path` staging.** `BAMBU` (`val bam_list`, `val sample_info`) and `RNAMINING`
-  (`val fasta`) take files as `val`, so they are never staged and never declared as dependencies.
-  **Not a correctness bug** for Docker/Singularity on a shared filesystem — ordering and `-resume`
-  both hold. Two residual risks: `cleanup = true` or `nextflow clean` may remove work directories
-  that `bamlist.txt` still points at, and `-with-dag` will not draw the BAM → BAMBU edges.
+The reason it matters here is that junctions penalised into misalignment produce spurious novel
+structures — a different error class from internal priming, and one that inflates the same output.
 
-### Code hygiene
+Test by running a subset both ways and comparing the gffcompare class-code tally, particularly `j`.
 
-1. Change-log comments left in source: `// <- ADDED SCRIPT PATH`, `// FIXED: Put 104 in brackets`,
-   `// REMOVED the unused 'def args' line`, `// Removed the broken CHOPPER.out.versions line
-   entirely`, and a duplicated `// Running quality check in filtered reads` in `qc.nf`.
-2. Dead emits: `ALIGNMENT.out.index` is always empty; `TRANSCRIPT_RECONSTRUCTION` emits `bamlist`,
-   `samp_info`, `reference` and `annotation` with no consumer. Bambu's PNGs never reach MultiQC.
-3. Version-collection gaps, partly deliberate: `RNAMINING.out.versions` is dropped because
-   `CLASSIFICATION`'s `ch_versions` is never mixed; `SUBSET_BAMBU_COUNTS.out.versions` and
-   `BAMBU_VALIDATE.out.versions` are never mixed in `workflows/pulposeq.nf`.
-4. `.ifEmpty(null)` on version channels in `alignment.nf` and `transcript_reconstruction.nf` emits a
-   literal `null` — a deprecated pattern.
-5. The reference channel in `alignment.nf` passes a String as `meta2` and a String as the path, which
-   works only by coercion. Prefer
-   `channel.value([[id: file(params.reference).baseName], file(params.reference)])`.
-6. Inconsistent params plumbing — `ALIGNMENT` reads `params.reference` directly while other
-   subworkflows receive it via `take:`. Prefer `take:` throughout, for testability.
-7. Local modules use bare `path` inputs with no meta map, which hard-codes one sample set per run.
-8. Inconsistent script staging — R scripts are formal `path` inputs, while `.sh` / `.awk` helpers
-   rely on `bin/` being on `PATH`, and `subset_bambu_gtf` uses `$(which subset_gtf.awk)`.
-9. awk version parsing differs between sibling modules using the same container (`mawk` vs `GNU Awk`).
-10. `ext.args = {"--plot violin"}` closures in `conf/modules.config` where plain strings suffice.
-11. The README points users at `-profile test`, but the test data must be downloaded and paths filled
-    in first. Working as designed; the wording could say so.
+### `--junc-bed` — supply known junctions
 
-### Report — reviewed and deliberately not changed
+minimap2 accepts a BED of known splice junctions to guide alignment. Feeding it the reference
+annotation's junctions should improve placement at short exons and non-canonical sites. The
+annotation is already staged for other steps, so the input costs nothing; extracting the BED is one
+`rtracklayer` call.
 
-- **Count bars on a log axis.** Now drawn as lollipops so position rather than bar length carries the
-  value, which a log axis represents correctly. The remaining question is whether a linear axis with
-  free-scale facets would communicate better — a presentation decision, not a defect.
-- **`fig-format: svg`.** Would be sharper and scalable, but `showtext` draws glyphs as polygons, so
-  every label and legend entry becomes vector paths. On figures with this much text that may grow the
-  file rather than shrink it. `dpi: 150` was taken instead. Worth measuring if size matters more.
-- **Interactivity.** Tabsets are in. Anything further — sortable tables, tooltips, linked filtering —
-  needs R packages that are almost certainly not in `longnoncoder:test3`, so it is gated behind a
-  container rebuild and the reproducibility decision above.
+### A usability caveat for both
+
+Users can already pass either through `ext.args` in a custom config:
+
+```groovy
+process { withName: MINIMAP2_ALIGN { ext.args = '-ax splice -uf -C5' } }
+```
+
+But `ext.args` **replaces** the preset closure rather than appending to it, so anyone doing this must
+restate the whole preset — and gets no help if they pick the wrong one for their library type. If
+either option proves worth having, an append mechanism or a dedicated parameter would be safer than
+documenting the override.
+
+## Documentation, to be updated last
+
+These depend on the pipeline structure settling, so they are deliberately left until the end of the
+cycle rather than tracked as priorities. All three are currently out of date.
+
+| Item | What changed under it |
+|---|---|
+| **Workflow illustration** | The figure no longer matches the pipeline. `RESTRANDING` is a new subworkflow ahead of QC; `BAM_COVERAGE` and `GENOMIC_CONTEXT` are new; the unstranded branch is gone. |
+| **`docs/output.md` figures and tables** | New output directories `restrander/`, `coverage/`, `genomic_context/`; new files `bambu_run_metrics.csv`, `bambu_console.log`, `validation_summary.csv`, `genomic_context_regions.gtf`; gene features now present in the validated GTFs. |
+| **`CITATIONS.md`** | Restrander is not cited. Add it, and any tool adopted from the validation work. Also worth checking that every tool currently in the pipeline is listed. |
+
+---
+
+# 3. Reproducibility note
+
+`--restrand false` no longer exists, so runs made before this branch — including the completed
+unstranded ONT run — cannot be reproduced with the current code. That was a deliberate trade: the
+unstranded path was removed because its results are compromised in exactly the categories this
+pipeline reports. Reproducing those runs means checking out the pre-restranding commit, and it is
+worth tagging one before merging to `dev`.

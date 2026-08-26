@@ -45,6 +45,13 @@ workflow ALIGNMENT {
     MINIMAP2_ALIGN.out.bam
         .set { ch_bam }
 
+    // The .bai files were always produced and published, but ch_index was left as
+    // the empty channel declared above, so nothing downstream could consume them.
+    // An empty channel yields zero tasks rather than an error, so any process fed
+    // from here would have been skipped silently.
+    MINIMAP2_ALIGN.out.index
+        .set { ch_index }
+
     if (!params.skip_alignment_qc) {
 
         ch_bam

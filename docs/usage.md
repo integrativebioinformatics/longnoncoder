@@ -6,6 +6,58 @@
 
 <!-- TODO integrative/bioinformatics: Add documentation about anything specific to running your pipeline. For general topics, please point to (and add to) the main nf-core website. -->
 
+## Scope and assumptions
+
+Two boundaries determine what pulposeq can find. Neither is a bug, and both are
+easier to plan around than to discover in the results.
+
+### Eukaryotic organisms
+
+Splice-aware alignment, the intron-based gffcompare class codes the classification
+depends on, and RNAmining's per-organism models all assume a eukaryotic
+transcriptome. The pipeline has no meaningful behaviour on prokaryotic data.
+
+Reference annotations must come from **Ensembl or GENCODE**. Other sources use
+different attribute names for gene and transcript biotypes, and the pipeline reads
+those attributes directly.
+
+### Polyadenylated transcriptomes
+
+This is a property of the **library**, not of the pipeline, but it decides what
+can be discovered — so it belongs here rather than in the results.
+
+Every standard long-read RNA kit selects for poly(A):
+
+| Method | How it engages the transcript |
+|---|---|
+| ONT PCR-cDNA / direct cDNA | RT adapter with a poly-T overhang, or oligo-dT |
+| ONT direct RNA (RNA004) | adapter ligated onto the poly(A) tail |
+| PacBio Iso-Seq / Kinnex | oligo-dT primed reverse transcription |
+
+Reverse transcriptase extends from a primer annealed near the template's 3' end,
+so it needs a 3' handle, and in every standard kit the poly(A) tail is that handle.
+
+Two consequences follow:
+
+- **Non-polyadenylated transcripts are under-represented.** This includes a
+  structurally distinct and well-characterised class of lncRNA — `MALAT1` and
+  `NEAT1_2` are both triple-helix terminated rather than polyadenylated, as are
+  replication-dependent histone mRNAs and sno-lncRNAs. Ribo-depleted short-read
+  data is the usual way to find out what a poly(A)-selected library missed.
+- **Oligo-dT can bind genomic A-runs, not only poly(A) tails.** When it does,
+  reverse transcription starts from an internal position and the resulting cDNA
+  is a truncated fragment that appears to end inside an intron. This is *internal
+  priming*, and it produces exactly the profile of a candidate intronic lncRNA:
+  unspliced, intronic, no ORF, a few hundred bases to a few kb. The pipeline
+  flags the affected population (see `novel_context_flags.csv` in the
+  [output documentation](output.md)) rather than filtering it, because filtering
+  would destroy the measurement and remove real transcripts alongside artifacts.
+
+Neither constraint is fundamental to long-read sequencing. Protocols exist that
+capture 3' ends independently of polyadenylation, and being free of oligo-dT they
+are also free of internal priming — but they are published protocols rather than
+off-the-shelf kits, and the pipeline assumes a standard library.
+
 ## Samplesheet input
 
 You will need to create a samplesheet with information about the samples you would like to analyse before running the pipeline. Use the parameter `--input` in the bash command to specify its location. It has to be a comma-separated file with 3 columns, and a header row as shown in the examples below.
@@ -66,7 +118,10 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `reference` | Full path to a reference genome `FASTA` file from Ensembl |
 | `annotation` | Full path to a reference annotation `GTF` file from Ensembl |
 | `library` | Sequencing library type: `ONT_cDNA`, `ONT_DRS` or `PacBio` |
-| `stranded_library` | Whether the library is stranded (`true`/`false`) |
+| `stranded_library` | Whether the reads **on disk** are already oriented (`true`/`false`) |
+| `restrand_kit` | Sequencing kit whose primers Restrander should look for — **required** for unoriented ONT cDNA |
+| `restrand_config` | Optional custom Restrander configuration JSON; overrides `restrand_kit` |
+| `restrand_min_frac` | Minimum oriented fraction, per sample; below it the run stops (default `0.80`, minimum `0.5`) |
 | `skip_class` | Skip transcriptome characterization (runs MultiQC, then finishes pipeline execution) |
 | `organism` | Organism scientific name (e.g. `"Homo_sapiens"`) |
 
@@ -74,12 +129,20 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 
 The `library` and `stranded_library` parameters are **required** whenever alignment is not skipped. Together they set the `minimap2` alignment preset and Bambu's `stranded` argument — the two are deliberately driven from a single declaration of library chemistry, so they cannot be configured independently.
 
-| `library` | `stranded_library` | `minimap2` preset |
-|--------------|-----------------------|----------------------------|
-| `ONT_DRS` | automatically `true` | `-ax splice -uf -k14` |
-| `PacBio` | automatically `true` | `-ax splice:hq -uf` |
-| `ONT_cDNA` | `true` | `-ax splice -uf` |
-| `ONT_cDNA` | `false` | `-ax splice` |
+> [!IMPORTANT]
+> `stranded_library` describes **the reads on disk**, not the library chemistry. ONT PCR-cDNA chemistry *is* strand-specific, but its basecalled reads are *not* oriented, because the protocol sequences either cDNA strand at random. Conflating the two is the most common way to get this wrong.
+
+> [!IMPORTANT]
+> **The pipeline processes stranded data only.** There is no unstranded path. Unoriented reads reaching alignment and quantification erase mono-exonic novel transcripts, push novel isoforms of known genes into the antisense class, and bleed reads between overlapping sense/antisense pairs — the three things an isoform-level lncRNA pipeline is least able to absorb. ONT cDNA is therefore either oriented before it arrives, or oriented by the pipeline.
+
+| `library` | `stranded_library` | Restrander | `minimap2` preset | Bambu `stranded` |
+|---|---|---|---|---|
+| `ONT_DRS` | automatically `true` | no | `-ax splice -uf -k14` | `TRUE` |
+| `PacBio` | automatically `true` | no | `-ax splice:hq -uf` | `TRUE` |
+| `ONT_cDNA` | `true` | no | `-ax splice -uf` | `TRUE` |
+| `ONT_cDNA` | `false` | **yes** | `-ax splice -uf` | `TRUE` |
+
+If restranding does not reach `restrand_min_frac` on **every** sample, the run stops. It does not continue unstranded.
 
 > [!IMPORTANT]
 > A single execution must use one library type. Running PacBio and ONT samples together in the same run is not supported, as the difference in error profiles and library chemistry makes joint assembly difficult to interpret.
@@ -88,7 +151,109 @@ The `library` and `stranded_library` parameters are **required** whenever alignm
 
 **ONT_DRS.** Direct RNA sequencing reads the native RNA molecule, so these libraries are considered automatically stranded. Setting `stranded_library: false` for `ONT_DRS` is ignored, and the pipeline emits a warning.
 
-**ONT_cDNA.** This covers both PCR-cDNA and direct-cDNA protocols. Standard ONT cDNA library preparation protocols can sequence either the first or second cDNA strand, leaving read direction mixed or unaligned to the original mRNA's 5'-to-3' orientation. Such libraries must either go through a manual orienting process outside the pipeline, or be treated as unstranded by setting `stranded_library: false`. Tools like [Pychopper](https://github.com/epi2me-labs/pychopper) and [Restrander](https://github.com/mainguyenanhvu/Restrander) are used to detect poly(A) tails and primer signatures to fix this.
+**ONT_cDNA.** This covers both PCR-cDNA and direct-cDNA protocols. Standard ONT cDNA library preparation sequences either the first or second cDNA strand, so read direction is roughly 50/50 with respect to the RNA strand. Set `stranded_library: false` for such reads — the pipeline then orients them itself with [Restrander](https://github.com/mritchielab/restrander), as described below. Set `stranded_library: true` only if you have already oriented the reads yourself, for example with [Pychopper](https://github.com/epi2me-labs/pychopper).
+
+### Restranding ONT cDNA libraries
+
+When `library` is `ONT_cDNA` and `stranded_library` is `false`, the pipeline runs [Restrander](https://github.com/mritchielab/restrander) before filtering. It orients reads using poly(A)/poly(T) tails and the protocol's primer sequences, then reverse-complements the reverse-strand reads so that every read matches the orientation of the transcript it came from.
+
+This matters more than it sounds. Without it, `minimap2` can only infer orientation from the splice signal, which it reports in the `ts:A` tag. Its own documentation is explicit about the limit:
+
+> This tag is inferred from the GT-AG signal and is thus only available to spliced reads.
+> — [minimap2 cookbook](https://github.com/lh3/minimap2/blob/master/cookbook.md)
+
+So every unspliced read reaches Bambu with no transcript strand, and the curation step drops it. Spliced reads whose junctions are all non-canonical should be affected the same way, since there is no GT-AG signal to infer from — though minimap2 does not document that case explicitly, so treat it as expected rather than established.
+
+The result is that mono-exonic novel transcripts disappear almost entirely, and correctly-stranded isoforms get misclassified as antisense. Poly(A) tails and primers are present on unspliced reads too, which is exactly why restranding recovers what splice-signal inference cannot.
+
+> [!NOTE]
+> The same documentation warns against the shortcut of simply declaring raw reads stranded: *"some intermediate reads are not stranded. For these reads, option `-uf` will lead to more errors."* Under `-ax splice` minimap2 defaults to `-ub`, searching both strands, which is correct for unoriented reads. `-uf` is only safe once the reads genuinely are oriented — which is what Restrander establishes.
+
+Restranding is not optional for unoriented ONT cDNA. If the reads were already oriented outside the pipeline — with Pychopper, or with Restrander run before demultiplexing — declare that with `stranded_library: true` and the pipeline will trust it and skip this step.
+
+`--skip_qc` cannot be combined with unoriented ONT cDNA, since Restrander runs inside the QC subworkflow; the pipeline rejects that combination at startup rather than sending unoriented reads to an alignment that assumes otherwise.
+
+#### Choosing a kit
+
+`restrand_kit` is **required** and has no default, because the presets differ in their primer sequences and the wrong one produces a low orientation rate rather than an error.
+
+| `restrand_kit` | Library preparation |
+|---|---|
+| `PCB109`, `PCB111`, `PCB114` | PCR-cDNA barcoding kits |
+| `DCS109`, `DCS-LSK114` | Direct cDNA sequencing (no PCR) |
+| `NEBNext` | NEBNext low-input / single-cell cDNA |
+| `trimmed` | Any of the above, with the primers already removed |
+
+Restrander also ships 10X Genomics presets. They are deliberately not accepted here — pulposeq is a bulk transcriptome pipeline and does not support single-cell data.
+
+#### Barcoded, multiplexed libraries
+
+**Demultiplex before running the pipeline.** The samplesheet takes one FASTQ per sample, so by the time pulposeq sees the data, one barcode is one row. Restrander then runs once per sample, independently, and never looks for barcodes at all.
+
+Two things follow, and the second one catches people out.
+
+**The kit is a property of the library preparation, not of demultiplexing.** A barcoded PCR-cDNA library is still a PCB library after demultiplexing. Selecting a `DCS` preset for it makes Restrander search for direct-cDNA primers that were never in those reads, orientation collapses, and the run silently falls back to unstranded.
+
+**What demultiplexing does affect is whether the primers survived.** Demuxers trim to varying depths: some remove only the barcode, others take the surrounding adapter and primer with it. Restrander searches the first and last 200 bases of each read, so a barcode left in place is harmless — but a trimmed-away primer is invisible to every preset except `trimmed`.
+
+Check rather than assume. Read the primer out of the preset that matches your chemistry:
+
+```bash
+docker run --rm emiyoshi/restrander:v1.1.3 cat /home/restrander/config/PCB114.json
+```
+
+Then count it, and its reverse complement, across the first 10,000 reads:
+
+```bash
+zcat sample.fastq.gz | head -40000 | awk 'NR%4==2' | grep -c "<tso sequence>"
+```
+
+Thousands of hits means the primers survived — use the chemistry preset. Near zero means use `trimmed`.
+
+`trimmed` has two costs worth planning for. It classifies on poly(A)/poly(T) alone, so the orientation rate is lower than a primer-based preset can reach and may fall under `restrand_min_frac`. And artefact detection lives inside the primer stage, so `artefactStats` comes back empty — that is the configuration, not a failure.
+
+#### Trimming parameters
+
+Set `headcrop` and `tailcrop` to `0` when restranding. Restrander locates primers and poly(A)/poly(T) tails at exactly the read positions those crop. It runs before `chopper`, so cropping does not break it — but primer removal is Restrander's job, and the pipeline warns if either value is non-zero while restranding is active.
+
+#### The success gate
+
+Restranding is not assumed to have worked. Restrander reports how many reads it oriented, and the pipeline checks that fraction against `restrand_min_frac` (default `0.80`) **for every sample**. Any sample below the threshold stops the run, with an error listing every sample's fraction.
+
+The check runs immediately after restranding rather than before Bambu, so a failure costs minutes rather than the hours Chopper and minimap2 would have spent first.
+
+For reference, Restrander's own PCR-cDNA example data orients at **98.95%** with a matched preset. A run landing anywhere near `0.80` is telling you the kit or the trimming state is wrong, not that the threshold needs relaxing — which is why `restrand_min_frac` cannot be set below `0.5`, and warns below `0.75`.
+
+When it fires, the fractions in the error message usually make the cause obvious:
+
+- **all samples clustered just under the threshold** — the configuration doesn't match the reads. Check `restrand_kit` against your chemistry, and whether demultiplexing trimmed the primers.
+- **one sample far below the rest** — that library has a problem. Excluding it is almost always better than lowering the threshold to accommodate it.
+
+#### Why there is no unstranded fallback
+
+Earlier versions continued with `-ax splice` and Bambu `stranded = FALSE` when strand could not be established. That behaviour has been removed, because the damage it causes is invisible in the outputs:
+
+- **Mono-exonic novel transcripts disappear.** With no splice junctions there is nothing for minimap2 to infer orientation from, so these models get no strand and the curation step drops them. In matched runs over the same cell lines, an unstranded ONT run yielded **2** mono-exonic novel transcripts against PacBio's **462**.
+- **Novel isoforms of known genes are misclassified as antisense.** GffCompare's `x` class means exonic overlap *on the opposite strand*, so every strand error converts a `j` into an `x`. The same matched runs show `x` inflated (13.7% against 9.8%) and `j` depleted by a corresponding amount (61.1% against 64.6%), while the strand-insensitive classes agree — `u` at 10.0% against 9.2%.
+- **Quantification bleeds between overlapping transcripts.** Without strand, a read at a locus with sense and antisense transcription is compatible with both, so counts leak between them. This affects **annotated** transcripts too, not only novel ones, and it is worst exactly where a lncRNA pipeline cares most: every `*-AS1` lncRNA in the annotation is defined by overlapping a protein-coding gene on the opposite strand.
+
+None of this raises a warning in the results. A transcript that was never called leaves no trace, and a misassigned read looks like any other read. Stopping the run is the only failure mode that is actually visible.
+
+#### Reads that could not be oriented
+
+Reads whose orientation cannot be determined are written to a separate `*-unknowns.fastq.gz` in `results/restrander/` instead of being passed on with an arbitrary strand. This is intentional: everything downstream treats the reads as genuinely oriented, so a read of unknown orientation surviving into that path would be assigned a coin-flip strand that the rest of the pipeline is instructed to trust.
+
+Artefactual reads — those with the wrong combination of ends, reported as `TSO-TSO` or `RTP-RTP` — are counted in the report but **kept** in the main output. They are flagged, not discarded, so read counts are not silently perturbed and Bambu's automatically selected NDR is not shifted by the restranding step.
+
+#### Custom configurations
+
+For a protocol none of the presets cover, pass your own configuration with `restrand_config`, which overrides `restrand_kit`:
+
+```bash
+--restrand_config /path/to/my_protocol.json
+```
+
+`assets/restrander/` contains a working template and a field reference. Whichever configuration a run resolves to is copied into `results/restrander/` as `<sample>.restrander_config.json`, so the primer sequences behind every orientation call stay with the results.
 
 ### Ensembl vs GENCODE annotations
 

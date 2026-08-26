@@ -3,8 +3,8 @@ process KNOWN_TRANSCRIPTS {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test3':
-        'docker.io/itsiaguara/longnoncoder:test3' }"
+        'docker://itsiaguara/pulposeq:test':
+        'docker.io/itsiaguara/pulposeq:test' }"
 
     input:
     path transcript_counts

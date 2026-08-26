@@ -128,6 +128,83 @@ attr_cols <- setdiff(names(attrs), "key")
 
 # --- Apply to each validated GTF ----------------------------------------------
 
+#' Synthesise one `gene` feature per gene_id, spanning all of its records.
+#'
+#' Bambu emits only transcript and exon rows, and subset_bambu_gtf.sh drops any
+#' line without a transcript_id, so the validated GTFs reach here with no gene
+#' features at all. Everything in this pipeline derives gene extent from the
+#' transcript rows and does not need them, but tools fed the published GTF do:
+#' IGV cannot collapse a locus without a gene row, and several browsers and
+#' converters assume the canonical gene/transcript/exon hierarchy.
+add_gene_features <- function(gr) {
+    gene_ids <- as.character(mcols(gr)$gene_id)
+    ok <- !is.na(gene_ids) & nzchar(gene_ids)
+    if (!any(ok)) {
+        warning("No gene_id values found; no gene features were added.")
+        return(gr)
+    }
+
+    sub <- gr[ok]
+    gid <- gene_ids[ok]
+
+    # range() over a split keeps seqname and strand with each group, so a gene whose
+    # records somehow land on two contigs yields one row per fragment rather than a
+    # single span across both. That should not happen, so say so if it does.
+    spans <- unlist(range(split(sub, gid)), use.names = TRUE)
+    if (anyDuplicated(names(spans))) {
+        dups <- unique(names(spans)[duplicated(names(spans))])
+        warning(sprintf("%d gene(s) span more than one sequence or strand; one gene row emitted per fragment.",
+                        length(dups)))
+    }
+
+    # Gene-level values are constant within a gene: annotate_gtf keys on
+    # transcript_id, and every transcript of a gene resolves to the same gene
+    # metadata. So the first matching record is representative.
+    md <- mcols(sub)[match(names(spans), gid), , drop = FALSE]
+
+    # Blank the isoform-level fields. Carrying transcript_id or class_code onto a
+    # gene row would assert that the locus has one isoform's identity.
+    # `x[] <- NA` rather than `x <- NA`: the former keeps the column's type, the
+    # latter would turn a character column logical and then c() below would refuse
+    # to bind it against the original.
+    for (nm in intersect(c("transcript_id", "transcript_name", "transcript_biotype",
+                           "transcript_status", "exon_number", "exon_id",
+                           "class_code", "classification", "score", "phase"),
+                         colnames(md))) {
+        md[[nm]][] <- NA
+    }
+    md$gene_id <- names(spans)
+
+    # import() returns source and type as factors, neither carrying a "gene" or
+    # "pulposeq" level -- assigning to them directly would silently yield NA and
+    # export a typeless row. Character on both sides sidesteps the level juggling,
+    # and export() coerces either way.
+    mcols(gr)$type   <- as.character(mcols(gr)$type)
+    mcols(gr)$source <- as.character(mcols(gr)$source)
+    md$type   <- "gene"
+    md$source <- "pulposeq"
+
+    mcols(spans) <- md
+    names(spans) <- NULL
+
+    combined <- c(spans, gr)
+
+    # Canonical GTF ordering: loci by position, and within a locus gene, then
+    # transcript, then exons. Without this every gene row would sit in one block at
+    # the head of the file -- still valid GTF, but it breaks the contiguity that
+    # readers streaming a locus at a time rely on.
+    key_gene   <- as.character(mcols(combined)$gene_id)
+    gene_start <- start(spans)[match(key_gene, mcols(spans)$gene_id)]
+    type_rank  <- match(as.character(mcols(combined)$type),
+                        c("gene", "transcript", "exon"))
+
+    combined <- combined[order(as.character(seqnames(combined)),
+                               gene_start, key_gene, type_rank, start(combined))]
+
+    cat(sprintf("  added %d gene features\n", length(spans)))
+    combined
+}
+
 enrich <- function(path) {
     if (is.null(path) || !file.exists(path)) {
         cat("Skipping missing file:", path, "\n")
@@ -152,6 +229,8 @@ enrich <- function(path) {
                                "Check that the transcript identifiers agree."),
                         basename(path)))
     }
+
+    gr <- add_gene_features(gr)
 
     export(gr, basename(path))
     invisible(NULL)

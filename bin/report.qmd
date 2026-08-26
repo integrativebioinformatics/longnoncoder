@@ -83,6 +83,11 @@ params:
     novel_transcriptome_meta: "novel_pc_lnc_RNAs_metadata.csv"
     novel_lncrna_exonlength: "novel_lncRNA_exon_lengths.csv"
     novel_protein_coding_exonlength: "novel_protein-coding_exon_lengths.csv"
+    novel_intron_retention_meta: "novel_intron_retention_metadata.csv"
+    context_flags: "novel_context_flags.csv"
+    context_summary: "novel_context_summary.csv"
+    genomic_context_candidates: "genomic_context_candidates.csv"
+    intronic_context_candidates: "intronic_context_candidates.csv"
     raw_pca: "pca.png"
     raw_pca_grouped: "pca_grouped.png"
     raw_heatmap_gene: "heatmap_gene.png"
@@ -91,6 +96,8 @@ params:
     post_pca_grouped: "pca_grouped_validated.png"
     post_heatmap_gene: "heatmap_gene_validated.png"
     post_heatmap_transcript: "heatmap_transcript_validated.png"
+    bambu_metrics: "bambu_run_metrics.csv"
+    validation_summary: "validation_summary.csv"
 knitr:
   opts_chunk:
     fig.showtext: true
@@ -117,8 +124,18 @@ library(RColorBrewer)
 library(viridis)
 library(showtext)
 
+# Keep in step with `dpi:` in the YAML header above. If they disagree, showtext
+# sizes every glyph against the wrong resolution and all text scales wrongly.
+REPORT_DPI <- 300
+REF_WIDTH  <- 10
+BASE_SIZE  <- 12
+
 font_add_google("Source Sans 3", "Source Sans 3")
 showtext_auto()
+# showtext sizes glyphs against its own dpi setting, not the device's. Left at the
+# 96 dpi default while the device renders higher, every axis label, strip and
+# legend entry comes out proportionally too small across the whole report.
+showtext_opts(dpi = REPORT_DPI)
 
 base_theme <- theme(
   strip.text = element_text(face = "bold"),
@@ -128,9 +145,19 @@ base_theme <- theme(
   panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
 )
 
-theme_set(theme_bw(base_family = "Source Sans 3", base_size = 12) + base_theme)
-update_geom_defaults("text", list(family = "Source Sans 3", size = 11 /.pt))
-update_geom_defaults("label", list(family = "Source Sans 3", size = 11))
+theme_set(theme_bw(base_family = "Source Sans 3", base_size = BASE_SIZE) + base_theme)
+
+# Apparent text size in the rendered HTML is base_size / fig-width, because Quarto
+# scales every figure to the same container width. A 16-inch figure is downscaled
+# twice as hard as an 8-inch one, so with a fixed base_size its labels land at half
+# the size. Scaling base_size with the width keeps text constant across figures.
+theme_width <- function(w) {
+  theme_bw(base_family = "Source Sans 3", base_size = BASE_SIZE * w / REF_WIDTH) +
+    base_theme
+}
+
+update_geom_defaults("text",  list(family = "Source Sans 3", size = 11 / .pt))
+update_geom_defaults("label", list(family = "Source Sans 3", size = 11 / .pt))
 
 # --- Shared log axes ---------------------------------------------------------
 # Every log-scaled axis in this report goes through these, so tick labels read
@@ -202,36 +229,234 @@ order_chromosomes <- function(x) {
   droplevels(factor(x, levels = c(numeric_sorted, other_sorted)))
 }
 
-# --- Faceted figure sizing ---------------------------------------------------
-# The chromosome figures were a fixed 35 x 30 inches regardless of the data. A
-# single-chromosome test run got a five-column layout with four empty slots, and
-# a whole genome produced an image so much larger than the page that the browser
-# scaled it down about fourfold, shrinking every label -- which is why the titles
-# had been pushed to size 50 to compensate.
-#
-# Size the figure from the number of panels instead: a squarish grid, a fixed
-# allowance per panel, and floors and ceilings so one chromosome is not
-# microscopic and twenty-five is not thirty inches tall. Rendering near the
-# display size keeps text at its intended size.
-facet_layout <- function(n, panel_w = 3.0, panel_h = 2.8,
-                         max_ncol = 5, min_w = 6, max_w = 16,
-                         min_h = 4, max_h = 22) {
-  n <- max(1L, as.integer(n))
-  ncol <- min(max_ncol, max(1L, ceiling(sqrt(n))))
-  nrow <- ceiling(n / ncol)
-
-  list(
-    n      = n,
-    ncol   = ncol,
-    nrow   = nrow,
-    width  = min(max_w, max(min_w, ncol * panel_w + 1)),
-    height = min(max_h, max(min_h, nrow * panel_h + 1.5))
-  )
+# --- Chromosome distribution figures -----------------------------------------
+# Ensembl and GENCODE both mix hundreds of unplaced contigs (GL000195.1,
+# KI270728.1) in with the real chromosomes. On a GENCODE v50 run, 47 of 72
+# seqnames were scaffolds carrying 1-12 transcripts each. Pattern rather than a
+# fixed list: the pipeline runs on any Ensembl/GENCODE organism, so this also has
+# to cover roman-numeral (yeast I-XVI), arm-suffixed (fly 2L/3R) and organelle
+# names.
+is_assembled_chromosome <- function(x) {
+  bare <- toupper(sub("^chr", "", as.character(x), ignore.case = TRUE))
+  grepl("^([0-9]{1,2}[A-Z]?|[IVXL]{1,6}|[XYZW]|M|MT|MITO|MTDNA|PT|PLTD)$", bare)
 }
 
-# Point size for the lollipop plots. One value so the whole report stays
-# consistent; raise it here if the dots read too small.
-lolli_size <- 3.6
+# Width follows the number of chromosomes on the x axis, height the number of
+# biotype rows. One row per biotype rather than one panel, so a genome-wide figure
+# is a single grid instead of five stacked panels sharing an axis.
+chr_dist_layout <- function(n_x, n_rows, x_w = 0.34, row_h = 0.42,
+                            min_w = 7, max_w = 16, min_h = 3, max_h = 12) {
+  w_want <- n_x * x_w + 2.4
+  if (w_want > max_w) {
+    warning(sprintf("chr_dist_layout: %d x categories want %.1f in, capped at %.1f; labels may collide.",
+                    n_x, w_want, max_w))
+  }
+  list(width  = min(max_w, max(min_w, w_want)),
+       height = min(max_h, max(min_h, n_rows * row_h + 2.0)))
+}
+
+# --- Count grids -------------------------------------------------------------
+# Counts across two categorical axes, drawn as a heatmap with the value printed in
+# each cell.
+#
+# This replaced a family of log10 lollipop grids, for a reason the data made
+# plain: some cells are genuinely zero -- chr13 has no novel protein-coding calls
+# on the ONT run -- and log10 has no zero, so those points were simply absent from
+# the figure. An absent lollipop reads identically to a category that was never in
+# the data. Bars would have the mirror-image problem: a log axis gives a bar no
+# honest baseline, which is why lollipops were used in the first place.
+#
+# A heatmap has neither problem. Colour carries the order of magnitude
+# perceptually, the printed number carries the exact value including zero, and
+# there is no baseline to be arbitrary about. Three of the plots this replaced
+# already printed the count as text, so the lollipop was carrying no information
+# the number did not.
+#
+# `df` needs one row per cell with a count column. Missing combinations are
+# completed to zero rather than dropped -- that is the point of the change.
+plot_count_heatmap <- function(df, x, y, title = NULL, subtitle = NULL,
+                               x_lab = NULL, y_lab = NULL, facet = NULL,
+                               legend_name = "Transcripts", angle_x = 90) {
+
+  # The facet variable is completed too, otherwise a combination present in one
+  # panel and absent from another leaves a gap in the second -- the same silent
+  # omission the log axis used to cause.
+  full <- if (is.null(facet)) {
+    tidyr::complete(df, {{ x }}, {{ y }}, fill = list(count = 0))
+  } else {
+    tidyr::complete(df, {{ x }}, {{ y }}, .data[[facet]], fill = list(count = 0))
+  }
+  cap <- max(full$count, 1)
+
+  p <- ggplot(full, aes(x = {{ x }}, y = forcats::fct_rev(as.factor({{ y }})))) +
+    geom_tile(aes(fill = ifelse(count > 0, count, NA_real_)),
+              colour = "white", linewidth = 0.6) +
+    geom_text(aes(label = format(count, big.mark = ",", trim = TRUE),
+                  # White ink only on the dark end of the ramp. The threshold is
+                  # on the log scale, because that is what the fill is mapped on.
+                  colour = count > 0 & log10(pmax(count, 1)) > 0.62 * log10(cap)),
+              size = 2.6, show.legend = FALSE) +
+    scale_colour_manual(values = c(`TRUE` = "white", `FALSE` = "grey20"),
+                        na.value = "grey55", guide = "none") +
+    # Log-transformed fill: counts span orders of magnitude, and a linear ramp
+    # would render everything except the largest cell as the same pale tile.
+    scale_fill_viridis_c(option = "mako", direction = -1, trans = "log10",
+                         na.value = NA, labels = scales::label_number(big.mark = ","),
+                         name = legend_name) +
+    scale_x_discrete(expand = c(0, 0)) +
+    scale_y_discrete(expand = c(0, 0)) +
+    theme(
+      panel.grid        = element_blank(),
+      panel.border      = element_blank(),
+      axis.ticks        = element_blank(),
+      axis.text.x       = element_text(angle = angle_x,
+                                       hjust = if (angle_x == 0) 0.5 else 1,
+                                       vjust = 0.5),
+      axis.title.x      = element_text(face = "bold"),
+      axis.title.y      = element_text(face = "bold"),
+      legend.position   = "right",
+      legend.key.height = unit(1.1, "cm"),
+      legend.key.width  = unit(0.35, "cm"),
+      strip.text        = element_text(face = "bold"),
+      plot.title        = element_text(size = rel(1.33), face = "bold", hjust = 0.5),
+      plot.subtitle     = element_text(size = rel(1.08), hjust = 0.5)
+    ) +
+    labs(title = title, subtitle = subtitle, x = x_lab, y = y_lab)
+
+  if (!is.null(facet)) p <- p + facet_grid(cols = vars(.data[[facet]]),
+                                           scales = "free_x", space = "free_x")
+  p
+}
+
+# Chromosomes along x, biotypes down y. Expects columns: chromosome, biotype, count.
+#
+# fig_width is taken here rather than appended by the caller: theme_width() returns
+# a *complete* theme, and a complete theme replaces everything set before it. Added
+# after the fact it would silently wipe the heatmap's panel, axis and legend
+# settings, leaving gridlines and ticks over the tiles.
+plot_chr_distribution <- function(df, title, subtitle, fig_width = 10) {
+  base <- plot_count_heatmap(df, x = chromosome, y = biotype,
+                             title = title, subtitle = subtitle,
+                             x_lab = "Chromosome", y_lab = NULL)
+
+  base +
+    theme_width(fig_width) +
+    theme(
+      panel.grid        = element_blank(),
+      panel.border      = element_blank(),
+      axis.ticks        = element_blank(),
+      axis.text.x       = element_text(angle = 90, hjust = 1, vjust = 0.5),
+      axis.title.x      = element_text(face = "bold"),
+      axis.title.y      = element_blank(),
+      legend.position   = "right",
+      legend.key.height = unit(1.1, "cm"),
+      legend.key.width  = unit(0.35, "cm"),
+      plot.title        = element_text(size = rel(1.33), face = "bold", hjust = 0.5),
+      plot.subtitle     = element_text(size = rel(1.08), hjust = 0.5)
+    )
+}
+
+# --- UpSet ------------------------------------------------------------------
+# Hand-rolled rather than pulled from ComplexUpset, which is not in the container.
+# Two aligned ggplots: intersection sizes on top, membership matrix below.
+#
+# Sets must be attributes an item can hold *simultaneously*. Mutually exclusive
+# categories -- biotype, class code, chromosome -- are not sets: every
+# non-singleton intersection would be empty by construction and the matrix would
+# be dead space. Those belong in `fill_col` instead, which stacks each bar.
+#
+# `df` needs one row per item, a logical column per entry in `sets`, and
+# optionally `fill_col` naming a categorical column.
+plot_upset <- function(df, sets, fill_col = NULL, title = NULL, subtitle = NULL,
+                       max_intersections = 12, empty_label = "no flags") {
+
+  present <- sets[vapply(sets, function(s) s %in% names(df), logical(1))]
+  if (!length(present) || !nrow(df)) return(NULL)
+
+  mat <- as.data.frame(lapply(df[present], function(x) !is.na(x) & x))
+  names(mat) <- present
+
+  # The signature is the set of memberships, so identical combinations collapse.
+  sig <- apply(mat, 1, function(r) paste(present[r], collapse = " & "))
+  sig[!nzchar(sig)] <- empty_label
+
+  counted <- data.frame(sig = sig, stringsAsFactors = FALSE)
+  counted$fill <- if (!is.null(fill_col) && fill_col %in% names(df)) {
+    as.character(df[[fill_col]])
+  } else {
+    "all"
+  }
+
+  totals <- sort(table(counted$sig), decreasing = TRUE)
+  keep   <- names(totals)[seq_len(min(max_intersections, length(totals)))]
+
+  bars <- counted[counted$sig %in% keep, , drop = FALSE] %>%
+    dplyr::count(sig, fill, name = "n")
+  bars$sig <- factor(bars$sig, levels = keep)
+
+  set_sizes <- vapply(present, function(s) sum(mat[[s]]), integer(1))
+  set_lab   <- sprintf("%s  (%s)", present, format(set_sizes, big.mark = ",", trim = TRUE))
+
+  # Matrix: one dot per (intersection, set). Filled where the set is a member.
+  grid_df <- expand.grid(sig = keep, set = present, stringsAsFactors = FALSE)
+  grid_df$member <- mapply(function(s, k) {
+    k != empty_label && s %in% strsplit(k, " & ", fixed = TRUE)[[1]]
+  }, grid_df$set, grid_df$sig)
+  grid_df$sig   <- factor(grid_df$sig, levels = keep)
+  grid_df$set_f <- factor(set_lab[match(grid_df$set, present)], levels = rev(set_lab))
+
+  # The connecting segment spans the members of each intersection, which is what
+  # makes a combination readable at a glance rather than dot by dot.
+  spans <- grid_df[grid_df$member, ] %>%
+    dplyr::group_by(sig) %>%
+    dplyr::summarise(lo = min(as.integer(set_f)), hi = max(as.integer(set_f)),
+                     .groups = "drop")
+
+  n_fill <- length(unique(bars$fill))
+
+  p_bar <- ggplot(bars, aes(x = sig, y = n, fill = fill)) +
+    geom_col(width = 0.62) +
+    geom_text(data = dplyr::summarise(dplyr::group_by(bars, sig),
+                                      n = sum(n), .groups = "drop"),
+              aes(x = sig, y = n, label = format(n, big.mark = ",", trim = TRUE)),
+              inherit.aes = FALSE, vjust = -0.35, size = 2.9) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.18)),
+                       labels = scales::label_number(big.mark = ",")) +
+    { if (n_fill > 1) scale_fill_viridis_d(option = "viridis", end = 0.9, name = NULL)
+      else scale_fill_manual(values = "#3B6FB6", guide = "none") } +
+    theme(
+      axis.text.x      = element_blank(),
+      axis.ticks.x     = element_blank(),
+      axis.title.x     = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor   = element_blank(),
+      legend.position  = if (n_fill > 1) "top" else "none",
+      plot.title       = element_text(size = rel(1.33), face = "bold", hjust = 0.5),
+      plot.subtitle    = element_text(size = rel(1.08), hjust = 0.5),
+      plot.margin      = margin(5.5, 5.5, 0, 5.5)
+    ) +
+    labs(title = title, subtitle = subtitle, y = "Transcripts")
+
+  p_mat <- ggplot(grid_df, aes(x = sig, y = set_f)) +
+    geom_segment(data = spans, inherit.aes = FALSE,
+                 aes(x = sig, xend = sig, y = lo, yend = hi),
+                 colour = "grey25", linewidth = 0.7) +
+    geom_point(aes(colour = member), size = 2.8) +
+    scale_colour_manual(values = c(`TRUE` = "grey15", `FALSE` = "grey85"),
+                        guide = "none") +
+    theme(
+      panel.grid.major.y = element_line(colour = "grey93"),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor   = element_blank(),
+      axis.title         = element_blank(),
+      axis.text.x        = element_blank(),
+      axis.ticks         = element_blank(),
+      plot.margin        = margin(0, 5.5, 5.5, 5.5)
+    )
+
+  cowplot::plot_grid(p_bar, p_mat, ncol = 1, align = "v", axis = "lr",
+                     rel_heights = c(1, 0.16 + 0.09 * length(present)))
+}
 ```
 
 ## Introduction
@@ -284,6 +509,17 @@ pulposeq adresses this conceptual bottleneck when classifying novel isoforms tha
 2.  Structural features identified based on their length, relationship with reference transcripts and their exon-intron structures.
 
 Consequently, a newly discovered isoform lacking coding potential but originating from a known protein-coding locus or any other gene biotype is classified strictly as a novel lncRNA transcript. This standardization process follows the current recommendations of the consensus statement of Mattick and colleagues [^5] for lncRNA classification and naming.
+
+#### Why the report says *candidate*
+
+A transcript labelled a **novel lncRNA candidate** satisfies five conditions: it is absent from the reference annotation, at least 200 nt long, assembled on a declared strand, carries an accepted gffcompare class code, and is predicted non-coding. That is a well-defined set, and it is the set this report counts.
+
+It is not a set of validated lncRNAs. A coding-potential prediction is evidence about composition, not about whether a transcript is an independent transcriptional unit, and for some class codes it says less than it appears to. The [Structural Validation of Novel Calls](#structural-validation-of-novel-calls) section reports what other evidence each candidate carries. Two class codes are handled separately for exactly this reason:
+
+- `m` and `n` (**intron retention**) are routed to their own category rather than sorted by coding potential, because a retained intron is non-coding sequence and therefore determines that prediction in advance.
+- `i` (**intronic**) transcripts on the host gene's strand are sequence-identical to part of that host's pre-mRNA, so position alone cannot distinguish an independent transcript from a fragment of the host. These are flagged, never dropped.
+
+Nothing is filtered on this basis. A candidate set with the evidence stated per member is a stronger result than an unqualified count.
 :::
 
 [^5]: Mattick, J.S., Amaral, P.P., Carninci, P. et al. Long non-coding RNAs: definitions, functions, challenges and recommendations. Nat Rev Mol Cell Biol 24, 430–447 (2023). https://doi.org/10.1038/s41580-022-00566-8
@@ -299,6 +535,44 @@ This section presents a quantitative isoform-level overview of the transcriptome
 ::: callout-warning
 Bambu Read Classes (RCs) that are not compatible with any transcript are classified as incompatible and not considered for isoform-level quantification, but all incompatible RCs are still assignable to genes, and Bambu uses them for gene quantification by default. In order to generate a final curated and relevant subset of gene counts, only genes transcribing compatible and effectively quantified isoforms are kept after the validation process.
 :::
+
+```{r}
+#| label: run-metrics
+#| echo: false
+#| output: asis
+
+metrics <- tryCatch(read.csv(params$bambu_metrics, stringsAsFactors = FALSE),
+                    error = function(e) NULL)
+vsum    <- tryCatch(read.csv(params$validation_summary, stringsAsFactors = FALSE),
+                    error = function(e) NULL)
+
+get_metric <- function(k) {
+  if (is.null(metrics)) return(NA_character_)
+  v <- metrics$value[metrics$metric == k]
+  if (length(v)) as.character(v[1]) else NA_character_
+}
+
+cat('::: {.callout-note appearance="simple"}\n')
+cat("## Run parameters and validation yield\n\n")
+
+ndr <- get_metric("ndr_used")
+cat(sprintf("**Novel discovery rate (NDR):** %s%s\n\n",
+            ifelse(is.na(ndr), "not recorded", ndr),
+            if (identical(get_metric("ndr_requested"), "auto"))
+              " — selected automatically by Bambu" else " — set explicitly"))
+
+if (!is.null(vsum)) {
+  cat(knitr::kable(
+    data.frame(
+      Feature      = vsum$feature_type,
+      Retained     = format(vsum$retained, big.mark = ","),
+      Total        = format(vsum$total, big.mark = ","),
+      `Retained %` = sprintf("%.1f%%", 100 * vsum$fraction_retained),
+      check.names  = FALSE
+    ), format = "markdown"), sep = "\n")
+}
+cat("\n:::\n")
+```
 
 ```{r}
 #| label: get-overall-assembly-stats
@@ -421,13 +695,33 @@ tryCatch({
   stop("Critical Error reading novel transcript metadata file: ", e$message)
 })
 
-# Standardize biotypes in novel_tx based on prediction
-novel_tx$biotype[novel_tx$prediction == "coding"] <- "novel protein_coding"
-novel_tx$biotype[novel_tx$prediction == "non-coding"] <- "novel lncRNA"
+# Display biotype comes from the category the transcript was routed into, not from
+# the coding prediction. The two agree for u/i/x/j, where the prediction is real
+# information. They must not be conflated for m and n: a retained intron is
+# non-coding sequence, so the prediction there restates the structure rather than
+# adding to it, and reading it back off `prediction` would put those transcripts
+# among the lncRNA candidates after the classification deliberately took them out.
+NOVEL_BIOTYPE_LABELS <- c(
+  novel_lncRNA          = "novel lncRNA candidate",
+  novel_protein_coding  = "novel protein_coding",
+  novel_retained_intron = "novel retained intron"
+)
+
+if ("transcript_biotype" %in% names(novel_tx)) {
+  novel_tx$biotype <- unname(NOVEL_BIOTYPE_LABELS[novel_tx$transcript_biotype])
+  novel_tx$biotype[is.na(novel_tx$biotype)] <- "novel (unclassified)"
+} else {
+  # Metadata written before the intron-retention split carries no biotype column.
+  novel_tx$biotype <- ifelse(novel_tx$prediction == "coding",
+                             "novel protein_coding", "novel lncRNA candidate")
+}
+
+is_retained <- novel_tx$biotype == "novel retained intron"
 
 # Separate the raw transcript IDs first
-raw_nov_pc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "coding"])
-raw_nov_lnc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "non-coding"])
+raw_nov_pc_tx  <- unique(novel_tx$qry_id[novel_tx$prediction == "coding"    & !is_retained])
+raw_nov_lnc_tx <- unique(novel_tx$qry_id[novel_tx$prediction == "non-coding" & !is_retained])
+raw_nov_ir_tx  <- unique(novel_tx$qry_id[is_retained])
 
 # --- 3. Read Bambu IDs from the output files ---
 bambu_ids <- list()
@@ -464,9 +758,13 @@ ids <- list(
 
   # Filter to only include true novel protein-coding features (starting with "Bambu")
   nov_pc_tx = raw_nov_pc_tx[startsWith(raw_nov_pc_tx, "Bambu")],
-  
+
   # Filter to only include true novel lncRNA features (starting with "Bambu")
-  nov_lnc_tx = raw_nov_lnc_tx[startsWith(raw_nov_lnc_tx, "Bambu")]
+  nov_lnc_tx = raw_nov_lnc_tx[startsWith(raw_nov_lnc_tx, "Bambu")],
+
+  # Intron-retention events are a third category, not a subset of either of the
+  # above -- omitting them here would drop them from every summary below.
+  nov_ir_tx = raw_nov_ir_tx[startsWith(raw_nov_ir_tx, "Bambu")]
 )
 
 # Helper function to count overlaps between Bambu outputs and our target IDs
@@ -478,11 +776,15 @@ count_overlap <- function(bambu_set, target_ids) {
 # --- 5. Quantify across categories ---
 results_biotype <- list()
 
-for (bt in c("pc", "lnc")) {
-  biotype_label <- ifelse(bt == "pc", "Protein-coding", "lncRNA")
-  
+BIOTYPE_LABELS <- c(pc = "Protein-coding", lnc = "lncRNA", ir = "Intron retention")
+
+for (bt in names(BIOTYPE_LABELS)) {
+  biotype_label <- unname(BIOTYPE_LABELS[bt])
+
   # Transcript Level (Check all three transcript files)
   for (tx_cat in c("transcripts", "fullLength", "uniquelyMapped")) {
+    # Intron retention exists only as a novel category -- there is no annotated
+    # counterpart to look up, so ann_pc/ann_lnc have no ann_ir sibling.
     ann_t <- count_overlap(bambu_ids[[tx_cat]], ids[[paste0("ann_", bt, "_tx")]])
     nov_t <- count_overlap(bambu_ids[[tx_cat]], ids[[paste0("nov_", bt, "_tx")]])
     tot_t <- ann_t + nov_t
@@ -509,42 +811,67 @@ if (length(results_biotype) > 0) {
 }
 ```
 
+Bambu reports each transcript in three matrices: all assigned reads, reads spanning the transcript's full structure, and reads mapping to it uniquely. The three are **nested** — full-length and unique support are both subsets of total — so the informative question is not how many transcripts appear in each, but which transcripts appear in *both*.
+
+A transcript with full-length **and** unique support is evidenced directly. One with neither was quantified entirely from expectation-maximisation over reads that never spanned it, and is the weakest thing in the assembly.
+
+```{r}
+#| label: support-sets-prep
+#| include: false
+
+# One row per detected transcript, with membership of the two support matrices as
+# logical columns. Membership, not counts: this figure answers "which transcripts
+# have which kinds of evidence", and the count distributions come later.
+support_category <- c(
+  ann_pc_tx  = "annotated protein-coding",
+  ann_lnc_tx = "annotated lncRNA",
+  nov_pc_tx  = "novel protein-coding",
+  nov_lnc_tx = "novel lncRNA candidate",
+  nov_ir_tx  = "novel retained intron"
+)
+
+detected <- unique(bambu_ids$transcripts)
+
+cat_of <- rep(NA_character_, length(detected))
+for (k in names(support_category)) {
+  hit <- is.na(cat_of) & detected %in% ids[[k]]
+  cat_of[hit] <- support_category[[k]]
+}
+
+support_sets <- data.frame(
+  transcript_id            = detected,
+  category                 = cat_of,
+  `full-length support`    = detected %in% bambu_ids$fullLength,
+  `unique support`         = detected %in% bambu_ids$uniquelyMapped,
+  check.names              = FALSE,
+  stringsAsFactors         = FALSE
+)
+
+# Transcripts in the counts matrix that belong to none of the five categories are
+# biotypes this figure does not track (small RNAs, pseudogenes and so on). Kept,
+# and named, rather than silently dropped.
+support_sets$category[is.na(support_sets$category)] <- "other biotypes"
+support_sets$category <- factor(
+  support_sets$category,
+  levels = c("annotated protein-coding", "annotated lncRNA", "other biotypes",
+             "novel protein-coding", "novel lncRNA candidate", "novel retained intron")
+)
+```
+
 ```{r}
 #| label: fig-bambu-lnc-pc-stats
-#| fig-cap: "**Summary of Assembled Protein-coding and lncRNA Transcripts.** Total counts of lncRNA and protein-coding transcripts identified by Bambu. Counts are broken down into 'Total', 'Annotated' (known), and 'Novel' (newly discovered). Transcript counts are further detailed for all transcripts, only full-length and uniquely mapped transcripts."
-#| fig-width: 10
-#| fig-height: 5
+#| fig-cap: "**Read support for every transcript in the validated assembly.** Each bar is a distinct combination of evidence, with the dot matrix below showing which kinds of support that combination has. Bars are stacked by transcript category. The rightmost bar — neither full-length nor unique support — is quantified purely from expectation-maximisation. Set sizes are given in the row labels."
+#| fig-width: 11
+#| fig-height: 6.5
 
-# 1. Data Preparation
-custom_labels <- c("transcripts" = "Total", "fullLength" = "Full length", "uniquelyMapped" = "Uniquely mapped")
-
-# Transcript Data & Factor Leveling
-bambu_transcript_biotype_data <- biotype_df %>% 
-  filter(FeatureType == "Transcript")
-
-bambu_transcript_biotype_data$Bambu <- factor(
-  bambu_transcript_biotype_data$Bambu, 
-  levels = names(custom_labels)
+plot_upset(
+  support_sets,
+  sets      = c("full-length support", "unique support"),
+  fill_col  = "category",
+  title     = "Which transcripts have which kinds of read support",
+  subtitle  = "Full-length and unique support are both subsets of total, so no transcript can have either without being detected",
+  empty_label = "neither"
 )
-levels(bambu_transcript_biotype_data$Bambu) <- custom_labels
-
-# 2. Build Transcript Plot
-lnc_pc_bambu_plot <- ggplot(bambu_transcript_biotype_data, aes(x = Bambu, y = Count, fill = Status)) +
-  geom_col(position = "dodge") +
-  geom_text(aes(label = Count), position = position_dodge(width = 0.9), vjust = -0.3) +
-  scale_fill_viridis_d(option = "D", end = 0.92) +
-  facet_wrap(~ Biotype, scales = "free_y") +
-  labs(title = "Transcripts", x = "\nAssembly", y = "No. of transcripts\n", fill = "Status") +
-  theme(
-    plot.title = element_text(hjust = 0.5, face = "bold"),
-    axis.text.x = element_text(angle = 0, hjust = 0.5),
-    legend.position = "right",
-    legend.title = element_text(margin = margin(b = 10)),
-    strip.text = element_text(face = "bold")
-  )
-
-# Final Output
-lnc_pc_bambu_plot
 ```
 
 ------------------------------------------------------------------------
@@ -584,8 +911,7 @@ show_plots <- function(keys) {
 
 ### Principal Component Analysis
 
-::: {.panel-tabset}
-
+::: panel-tabset
 #### All samples
 
 ```{r}
@@ -613,13 +939,11 @@ show_plots(c("raw_pca", "post_pca"))
 
 show_plots(c("raw_pca_grouped", "post_pca_grouped"))
 ```
-
 :::
 
 ### Expression Heatmaps
 
-::: {.panel-tabset}
-
+::: panel-tabset
 #### Transcript level
 
 ```{r}
@@ -647,7 +971,6 @@ show_plots(c("raw_heatmap_transcript", "post_heatmap_transcript"))
 
 show_plots(c("raw_heatmap_gene", "post_heatmap_gene"))
 ```
-
 :::
 
 ------------------------------------------------------------------------
@@ -699,51 +1022,56 @@ all_other_RNAs <- bind_rows(pseudogene_RNAs, Tcell_RNAs, IG_RNAs, other_RNAs_exp
 
 all_other_RNAs$category <- factor(all_other_RNAs$category, levels = c("Pseudogene", "TCR elements", "Immunoglobulin elements", "all other biotypes"))
 
-# Plotting function
-create_plot <- function(data, x, fill, title) {
-  ggplot(data, aes(x = {{x}}, y = count, fill = {{fill}})) +
-    # Lollipop rather than bars. A bar reads its value from the length of the
-    # bar, measured from zero -- but a log axis has no zero, so bar length stops
-    # being proportional to the count and comparisons between bars mislead. A
-    # point reads its value from position alone, which a log axis represents
-    # correctly, and the counts here genuinely span several orders of magnitude.
-    geom_linerange(aes(ymin = 1, ymax = count), position = position_dodge(width = 0.9),
-                   colour = "grey65", linewidth = 0.5) +
-    geom_point(position = position_dodge(width = 0.9), size = lolli_size, shape = 21, colour = "grey20") +
-    labs(x = "\nGene biotypes", y = "Count (log10 scale)\n", fill = "Transcript biotypes", title = title) +
+# Plotting function.
+#
+# Transcript biotypes across the columns, the gene biotype they belong to as the
+# row, count printed in each cell. `row` and `col` keep the argument order the
+# lollipop version used, so the call sites below are unchanged apart from p4.
+create_plot <- function(data, row, col, title, fig_width = 16) {
+  plot_count_heatmap(data, x = {{ col }}, y = {{ row }},
+                     title = title,
+                     x_lab = "Transcript biotypes", y_lab = "Gene biotype",
+                     legend_name = "Transcripts") +
+    # Base size scaled to the width these panels are actually drawn at, and applied
+    # here rather than at the call site: adding a complete theme replaces everything
+    # set before it, so appending it later would wipe the tweaks below.
+    theme_width(fig_width) +
     theme(
-      panel.background = element_rect(fill = "white"), 
-      axis.text.x = element_text(hjust = 0.5), 
-      legend.position = "right",
-      legend.text = element_text(size = 12), 
-      legend.title = element_text(face = "bold", size = 12), 
-      plot.title = element_text(hjust = 0.5, face = "bold"), 
-      axis.title.y = element_text(face = "bold"), 
-      axis.title.x = element_text(face = "bold"), 
-      plot.margin = margin(1, 1, 1, 1, "cm")
-    ) +
-    scale_y_log10_std(expand_top = TRUE) +
-    # position_dodge, matching the geoms above, so labels sit over their points
-    geom_text(aes(label = count), position = position_dodge(width = 0.9), vjust = -1, hjust = 0.5)
+      panel.grid       = element_blank(),
+      panel.border     = element_blank(),
+      axis.ticks       = element_blank(),
+      axis.text.x      = element_text(angle = 45, hjust = 1, vjust = 1),
+      legend.position  = "right",
+      legend.key.height = unit(0.9, "cm"),
+      legend.key.width  = unit(0.3, "cm"),
+      plot.title       = element_text(hjust = 0.5, face = "bold"),
+      axis.title.y     = element_text(face = "bold"),
+      axis.title.x     = element_text(face = "bold"),
+      plot.margin      = margin(0.4, 1, 0.4, 1, "cm")
+    )
 }
 
-# Generate plots
-p1 <- create_plot(protein_coding, gene_biotype, transcript_biotype, "Protein-coding RNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
-p2 <- create_plot(lncRNAs, gene_biotype, transcript_biotype, "LncRNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
-p3 <- create_plot(small_RNAs, gene_biotype, transcript_biotype, "Small RNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
-p4 <- create_plot(all_other_RNAs, category,  category, "All Other RNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
-p5 <- create_plot(pseudogene_RNAs, gene_biotype, transcript_biotype, "Pseudogene RNA diversity") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
-p6 <- create_plot(other_RNAs_explicit, gene_biotype, transcript_biotype, "Other RNAs (detailed)") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
-p7 <- create_plot(Tcell_RNAs, gene_biotype, transcript_biotype, "TCR element RNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
-p8 <- create_plot(IG_RNAs, gene_biotype, transcript_biotype, "Immunoglobulin element RNAs") + theme(axis.text.x = element_blank(), axis.title.x = element_blank())
+# Generate plots. The x-axis labels are kept on every panel: they name the
+# transcript biotypes, which differ between panels and are the point of the
+# figure. Under the lollipop layout x was the gene biotype, identical down every
+# panel, which is why it used to be blanked.
+p1 <- create_plot(protein_coding, gene_biotype, transcript_biotype, "Protein-coding RNAs")
+p2 <- create_plot(lncRNAs, gene_biotype, transcript_biotype, "LncRNAs")
+p3 <- create_plot(small_RNAs, gene_biotype, transcript_biotype, "Small RNAs")
+# x and fill were the same column here, which as a grid would draw a diagonal.
+# A constant row turns it into the single strip the data actually is.
+p4 <- create_plot(mutate(all_other_RNAs, group = "all other"), group, category, "All Other RNAs")
+p5 <- create_plot(pseudogene_RNAs, gene_biotype, transcript_biotype, "Pseudogene RNA diversity")
+p6 <- create_plot(other_RNAs_explicit, gene_biotype, transcript_biotype, "Other RNAs (detailed)")
+p7 <- create_plot(Tcell_RNAs, gene_biotype, transcript_biotype, "TCR element RNAs")
+p8 <- create_plot(IG_RNAs, gene_biotype, transcript_biotype, "Immunoglobulin element RNAs")
 ```
 
 #### Overview of Major RNA Categories
 
-The plots below summarize the counts of transcripts grouped into four major categories. The y-axis is on a log10 scale to accommodate the wide range of counts, so each count is shown as a point rather than a bar.
+The plots below summarize the counts of transcripts grouped into four major categories. Counts span several orders of magnitude, so colour is mapped on a log10 scale while the exact number is printed in each cell.
 
-::: {.panel-tabset}
-
+::: panel-tabset
 #### Major RNA categories
 
 ```{r}
@@ -771,7 +1099,6 @@ bottom_row_panel2 <- plot_grid(p7, p8, p6, ncol = 3, labels = c("B", "C", "D"), 
 panel2 <- plot_grid(top_row_panel2, bottom_row_panel2, nrow = 2, rel_heights = c(1, 1))
 panel2
 ```
-
 :::
 
 #### Gene Biotype Diversity Across Chromosomes
@@ -787,43 +1114,61 @@ This visualization maps the distribution of different gene biotypes across all c
 chr_gb <- ann_txome %>%
   mutate(gene_biotype = if_else(str_detect(gene_biotype, "pseudogene"), "pseudogene", gene_biotype)) %>%
   mutate(gene_biotype = if_else(gene_biotype %in% c("snoRNA", "snRNA", "scaRNA", "sRNA", "rRNA", "misc_RNA", "miRNA"), "small_RNA", gene_biotype)) %>%
-  mutate(gene_biotype = if_else(gene_biotype != "pseudogene" & gene_biotype != "small_RNA" & gene_biotype != "protein_coding" & gene_biotype != "lncRNA", "other", gene_biotype)) %>%
-  group_by(chromosome_name, gene_biotype) %>%
+  mutate(gene_biotype = if_else(!gene_biotype %in% c("pseudogene", "small_RNA", "protein_coding", "lncRNA"), "other", gene_biotype)) %>%
+  mutate(chr_class = if_else(is_assembled_chromosome(chromosome_name), "assembled", "scaffold")) %>%
+  group_by(chr_class, chromosome = chromosome_name, biotype = gene_biotype) %>%
   summarise(count = n(), .groups = "drop")
-chr_gb$gene_biotype <- factor(chr_gb$gene_biotype, levels = c("protein_coding", "lncRNA", "small_RNA", "pseudogene", "other"))
-chr_gb$chromosome_name <- order_chromosomes(chr_gb$chromosome_name)
-chr_gb$gene_biotype <- droplevels(chr_gb$gene_biotype)
 
-chr_lay <- facet_layout(nlevels(chr_gb$chromosome_name))
+# droplevels so a biotype absent from the data never reserves an empty panel row
+chr_gb$biotype <- droplevels(factor(chr_gb$biotype,
+  levels = c("protein_coding", "lncRNA", "small_RNA", "pseudogene", "other")))
+
+chr_gb_asm <- chr_gb %>% filter(chr_class == "assembled") %>%
+  mutate(chromosome = order_chromosomes(chromosome))
+chr_gb_scf <- chr_gb %>% filter(chr_class == "scaffold") %>%
+  mutate(chromosome = factor(chromosome, levels = sort(unique(chromosome))))
+
+chr_asm_lay <- chr_dist_layout(nlevels(chr_gb_asm$chromosome), nlevels(chr_gb_asm$biotype))
+chr_scf_lay <- chr_dist_layout(nlevels(chr_gb_scf$chromosome), nlevels(chr_gb_scf$biotype))
+has_scaffolds <- nrow(chr_gb_scf) > 0
 ```
+
+::: panel-tabset
+##### Assembled chromosomes
 
 ```{r}
 #| label: fig-gb-across-chr
-#| fig-cap: "**Chromosomal Distribution of Gene Biotypes.** Each panel represents a chromosome, showing the count of transcript isoforms for each biotype found there. This provides a genome-wide view of how different functional classes of genes are organized and transcribed across chromosomes."
-#| fig-width: !expr chr_lay$width
-#| fig-height: !expr chr_lay$height
+#| fig-cap: "**Chromosomal Distribution of Gene Biotypes.** Transcript isoforms of each biotype annotated on every assembled chromosome. Colour carries the order of magnitude, the printed number the exact count -- including the zeros a log axis cannot show."
+#| fig-width: !expr chr_asm_lay$width
+#| fig-height: !expr chr_asm_lay$height
 
-p9 <- ggplot(chr_gb, aes(x = gene_biotype, y = count)) +
-  geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
-  geom_point(aes(fill = gene_biotype), size = lolli_size, shape = 21, colour = "grey20") +
-  facet_wrap(~ chromosome_name, scales = "free_x", ncol = chr_lay$ncol, drop = TRUE) +
-  scale_fill_viridis_d(option = "viridis", guide = "none") +
-  scale_y_log10_std(expand_top = TRUE) +
-  theme(
-    panel.background = element_rect(fill = "white", color = "grey90"), panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
-    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, margin = margin(t = 5, b = 10)),
-    axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"),
-    strip.text = element_text(face = "bold", color = "black", margin = margin(t = 8, b = 8, l = 5, r = 5)),
-    strip.background = element_rect(fill = "grey85", color = "grey70", linewidth = 0.5),
-    # Normal sizes now the figure is rendered near its display size and no
-    # longer scaled down by the browser
-    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 13, hjust = 0.5),
-    plot.margin = margin(0.4, 0.4, 0.4, 0.4, "cm"), panel.spacing = unit(0.5, "cm")
-  ) +
-  labs(title = "Gene Biotype Diversity Across Chromosomes", subtitle = "Distribution of different gene types per chromosome (log10 scale)", x = "Gene Biotype", y = "Count (log10 scale)") +
-  geom_text(aes(label = count), vjust = -1, color = "black")
-p9
+plot_chr_distribution(
+  chr_gb_asm,
+  "Gene Biotype Diversity Across Chromosomes",
+  "Transcript isoforms per biotype on each assembled chromosome",
+  fig_width = chr_asm_lay$width
+)
 ```
+
+##### Unplaced scaffolds
+
+```{r}
+#| label: fig-gb-across-scaffolds
+#| fig-cap: "**Gene Biotypes on Unplaced Scaffolds.** The same breakdown for contigs not assigned to an assembled chromosome. These typically carry a handful of transcripts each."
+#| fig-width: !expr chr_scf_lay$width
+#| fig-height: !expr chr_scf_lay$height
+#| eval: !expr has_scaffolds
+
+plot_chr_distribution(
+  chr_gb_scf,
+  "Gene Biotype Diversity Across Unplaced Scaffolds",
+  sprintf("%d unplaced contigs carrying annotated transcripts",
+          nlevels(chr_gb_scf$chromosome))
+,
+  fig_width = chr_scf_lay$width
+)
+```
+:::
 
 ### Transcript Length Analysis
 
@@ -857,8 +1202,8 @@ p12 <- selected_tx %>% filter(gene_biotype == "lncRNA") %>%
 ```{r}
 #| label: fig-panel3
 #| fig-cap: "**Transcript Length Distributions.** This panel of boxplots compares transcript lengths (on a log10 scale) across different biotypes. (A) Compares major gene biotypes. (B) Details the lengths of different transcript types within the protein-coding category. (C) Does the same for lncRNAs. Median lengths for each category are shown in the legend."
-#| fig-width: 8
-#| fig-height: 15
+#| fig-width: 10
+#| fig-height: 13
 
 panel3 <- plot_grid(p10, p11, p12, nrow = 3, labels="AUTO", label_y = 1, rel_widths = c(1.5,2,1.5))
 panel3
@@ -892,8 +1237,8 @@ p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcr
 ```{r}
 #| label: fig-panel4
 #| fig-cap: "**Exon Number Distributions.** This panel examines the number of exons per transcript. (A) A direct comparison between protein-coding and lncRNA gene biotypes. (B) A detailed view of exon numbers for different protein-coding transcript types. (C) A similar detailed view for lncRNA transcript types."
-#| fig-width: 8
-#| fig-height: 15
+#| fig-width: 10
+#| fig-height: 13
 
 panel4 <- plot_grid(
   p13, p14, p15, 
@@ -917,15 +1262,11 @@ panel4
 ann_pc_lnc_txome$class_exon <- ifelse(ann_pc_lnc_txome$num_exons == 1, "mono-exonic", "multi-exonic")
 count_momu <- ann_pc_lnc_txome %>% group_by(gene_biotype, transcript_biotype, class_exon) %>% summarise(count = n_distinct(ensembl_transcript_id_version), .groups = 'drop')
 
-p16 <- ggplot(count_momu, aes(x = transcript_biotype, y = count, fill = transcript_biotype)) +
-  geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
-  geom_point(size = lolli_size, shape = 21, colour = "grey20") +
-  facet_grid(gene_biotype ~ class_exon, scales = "free_x", space = "free_x") +
-  labs(title = "Distribution of mono and multi-exonic transcripts", x = "\nTranscript biotype", y = "Count (log10 scale)", fill = "Transcript biotype") +
-  theme(,
-      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-  scale_y_log10_std(expand_top = TRUE) + geom_text(aes(label = count), vjust = -1) +
-  guides(fill = "none")
+p16 <- plot_count_heatmap(
+  count_momu, x = transcript_biotype, y = gene_biotype, facet = "class_exon",
+  title = "Distribution of mono and multi-exonic transcripts",
+  x_lab = "Transcript biotype", y_lab = "Gene biotype"
+)
 
 p17 <- ggplot(ann_pc_lnc_txome, aes(x = gene_biotype, y = transcript_length, fill = class_exon)) +
   geom_boxplot() + labs(title = "Mono and multi-exonic transcript length", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Exon class") +
@@ -955,8 +1296,8 @@ A 2D density plot helps visualize the relationship between the number of exons i
 ```{r}
 #| label: fig-density
 #| fig-cap: "**Relationship Between Exon Count and Transcript Length.** This plot shows the density of transcripts based on their exon count (x-axis) and total length (y-axis). Higher density (brighter color) indicates a common combination of exon number and length. The analysis is shown separately for protein-coding genes and lncRNAs."
-#| fig-width: 8
-#| fig-height: 6
+#| fig-width: 10
+#| fig-height: 7.5
 
 p18 <- ggplot(ann_pc_lnc_txome, aes(x = num_exons, y = transcript_length)) +
   stat_density2d(aes(fill = after_stat(level)), geom = "polygon", alpha = 0.8) +
@@ -988,8 +1329,8 @@ ann_pc_lnc_exon <- merge(
 ```{r}
 #| label: fig-indiv-exlen
 #| fig-cap: "**Length of individual exons.** This boxplot compares the individual exon length of protein-coding and lncRNA transcripts, separeted by mono and multi-exonic structures."
-#| fig-width: 8
-#| fig-height: 6
+#| fig-width: 10
+#| fig-height: 7.5
 
 p19 <- ggplot(ann_pc_lnc_exon, aes(x = gene_biotype, y = width,
                                    fill = class_exon)) +
@@ -1006,9 +1347,9 @@ p19
 
 ------------------------------------------------------------------------
 
-## Novel Protein-Coding and lncRNAs Overview
+## Novel Protein-Coding and lncRNA Candidates Overview
 
-This section focuses on the characterization of newly identified protein-coding and lncRNA transcripts that were not present in the reference annotation.
+This section focuses on the characterization of newly identified protein-coding and lncRNA transcripts that were not present in the reference annotation. Every count below is a count of **candidates**: transcripts that meet the classification criteria and have not yet been shown to be independent transcriptional units. The evidence gathered for them is reported in [Structural Validation of Novel Calls](#structural-validation-of-novel-calls).
 
 > **About the Tools:**
 >
@@ -1031,18 +1372,11 @@ class_counts <- novel_tx %>% group_by(biotype, classification) %>% summarise(cou
 #| fig-width: 10
 #| fig-height: 7
 
-p20 <- ggplot(class_counts, aes(x = classification, y = count, fill = classification)) +
-  geom_linerange(aes(ymin = 1, ymax = count), position = position_dodge(width = 0.9),
-                 colour = "grey65", linewidth = 0.5) +
-  geom_point(position = position_dodge(width = 0.9), size = lolli_size, shape = 21, colour = "grey20") +
-  geom_text(aes(label = count, y = count), vjust = -1, position = position_dodge(width = 0.9), angle = 0) +
-  facet_grid(~ biotype, scales = "free_x", space = "free_x") +
-  labs(title = "GFFCompare classification stats overview of novel protein-coding and lncRNAs", x = "\n\nClassification", y = "Count (log10)", fill = "Classification") +
-  theme(,
-        axis.text.x = element_text(angle = 90, vjust = 0.3, hjust =1),
-        legend.position = "right") +
-scale_y_log10_std() +
-  guides(fill = "none")
+p20 <- plot_count_heatmap(
+  class_counts, x = classification, y = biotype,
+  title = "GFFCompare classification of novel protein-coding and lncRNA candidates",
+  x_lab = "Classification", y_lab = "Category", angle_x = 45
+)
 p20
 ```
 
@@ -1056,37 +1390,61 @@ This visualization maps the distribution of novel protein-coding and lncRNA tran
 #| label: prep-novel-chr-data
 #| include: false
 
-chr_tb_novel <- novel_tx %>% group_by(seqnames, biotype) %>% summarise(count = n(), .groups = 'drop')
-chr_tb_novel$seqnames <- order_chromosomes(chr_tb_novel$seqnames)
+chr_tb_novel <- novel_tx %>%
+  mutate(chr_class = if_else(is_assembled_chromosome(seqnames), "assembled", "scaffold")) %>%
+  group_by(chr_class, chromosome = seqnames, biotype) %>%
+  summarise(count = n(), .groups = "drop")
 
-chr_novel_lay <- facet_layout(nlevels(chr_tb_novel$seqnames))
+chr_tb_novel$biotype <- droplevels(factor(chr_tb_novel$biotype))
+
+chr_novel_asm <- chr_tb_novel %>% filter(chr_class == "assembled") %>%
+  mutate(chromosome = order_chromosomes(chromosome))
+chr_novel_scf <- chr_tb_novel %>% filter(chr_class == "scaffold") %>%
+  mutate(chromosome = factor(chromosome, levels = sort(unique(chromosome))))
+
+chr_novel_asm_lay <- chr_dist_layout(nlevels(chr_novel_asm$chromosome),
+                                     nlevels(chr_novel_asm$biotype))
+chr_novel_scf_lay <- chr_dist_layout(nlevels(chr_novel_scf$chromosome),
+                                     nlevels(chr_novel_scf$biotype))
+has_novel_scaffolds <- nrow(chr_novel_scf) > 0
 ```
+
+::: panel-tabset
+##### Assembled chromosomes
 
 ```{r}
 #| label: fig-novel-across-chr
-#| fig-cap: "**Chromosomal Distribution of Novel Transcripts.** Each panel represents a chromosome and shows the number of novel protein-coding and novel lncRNA transcripts discovered there."
-#| fig-width: !expr chr_novel_lay$width
-#| fig-height: !expr chr_novel_lay$height
+#| fig-cap: "**Chromosomal Distribution of Novel Transcripts.** Novel transcripts of each category discovered on every assembled chromosome. Cells reading zero are chromosomes where that category was genuinely not found, which a log-scaled point plot could not represent."
+#| fig-width: !expr chr_novel_asm_lay$width
+#| fig-height: !expr chr_novel_asm_lay$height
 
-p21 <- ggplot(chr_tb_novel, aes(x = biotype, y = count)) +
-  geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
-  geom_point(aes(fill = biotype), size = lolli_size, shape = 21, colour = "grey20") +
-  facet_wrap(~ seqnames, scales = "free_x", ncol = chr_novel_lay$ncol, drop = TRUE) +
-  scale_fill_viridis_d(option = "viridis", guide = "none") +
-  scale_y_log10_std(expand_top = TRUE) +
-  theme(
-    panel.background = element_rect(fill = "white", color = "grey90"), panel.grid.major.x = element_blank(), panel.grid.minor = element_blank(),
-    axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5, margin = margin(t = 5, b = 10)),
-    axis.title.x = element_text(face = "bold"), axis.title.y = element_text(face = "bold"),
-    strip.text = element_text(face = "bold", color = "black", margin = margin(t = 8, b = 8, l = 5, r = 5)),
-    strip.background = element_rect(fill = "grey85", color = "grey70", linewidth = 0.5),
-    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), plot.subtitle = element_text(size = 13, hjust = 0.5),
-    plot.margin = margin(0.4, 0.4, 0.4, 0.4, "cm"), panel.spacing = unit(0.5, "cm"), axis.ticks = element_blank()
-  ) +
-  labs(title = "Novel RNAs Diversity Across Chromosomes", subtitle = "Distribution of novel RNA biotypes per chromosome (log10 scale)", x = "Biotype", y = "Count (log10 scale)") +
-  geom_text(aes(label = count), vjust = -1, color = "black")
-p21
+plot_chr_distribution(
+  chr_novel_asm,
+  "Novel RNA Diversity Across Chromosomes",
+  "Novel transcripts per biotype on each assembled chromosome",
+  fig_width = chr_novel_asm_lay$width
+)
 ```
+
+##### Unplaced scaffolds
+
+```{r}
+#| label: fig-novel-across-scaffolds
+#| fig-cap: "**Novel Transcripts on Unplaced Scaffolds.** The same breakdown for contigs not assigned to an assembled chromosome."
+#| fig-width: !expr chr_novel_scf_lay$width
+#| fig-height: !expr chr_novel_scf_lay$height
+#| eval: !expr has_novel_scaffolds
+
+plot_chr_distribution(
+  chr_novel_scf,
+  "Novel RNA Diversity Across Unplaced Scaffolds",
+  sprintf("%d unplaced contigs carrying novel transcripts",
+          nlevels(chr_novel_scf$chromosome))
+,
+  fig_width = chr_novel_scf_lay$width
+)
+```
+:::
 
 ### Transcript Length Analysis
 
@@ -1107,8 +1465,8 @@ p23 <- novel_tx %>% filter(biotype == "novel protein_coding") %>%
   geom_boxplot() + labs(title = "Transcript length across novel protein-coding sub-biotypes", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Transcript sub-biotypes\n(median length)") +
   scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_pc_novel$classification, " (", round(median_pc_novel$median_length_novel, 2), ")"))
 
-median_lnc_novel <- novel_tx %>% filter(biotype == "novel lncRNA") %>% group_by(classification) %>% summarise(median_length_novel = median(len), .groups = 'drop')
-p24 <- novel_tx %>% filter(biotype == "novel lncRNA") %>%
+median_lnc_novel <- novel_tx %>% filter(biotype == "novel lncRNA candidate") %>% group_by(classification) %>% summarise(median_length_novel = median(len), .groups = 'drop')
+p24 <- novel_tx %>% filter(biotype == "novel lncRNA candidate") %>%
   ggplot(aes(x = biotype, y = len, fill = classification)) +
   geom_boxplot() + labs(title = "Transcript length across novel lncRNA sub-biotypes", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Transcript sub-biotypes\n(median length)") +
   scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_lnc_novel$classification, " (", round(median_lnc_novel$median_length_novel, 2), ")"))
@@ -1142,16 +1500,11 @@ count_momu_novel <- novel_tx %>%
   group_by(biotype, classification, class_exon) %>%
   summarise(count = n_distinct(qry_id), .groups = 'drop')
 
-p25 <- ggplot(count_momu_novel, aes(x = classification, y = count, fill = classification)) +
-  geom_linerange(aes(ymin = 1, ymax = count), colour = "grey65", linewidth = 0.5) +
-  geom_point(size = lolli_size, shape = 21, colour = "grey20") +
-  facet_grid(biotype ~ class_exon, scales = "free_x", space = "free_x") +
-  labs(title = "Distribution of mono and multi-exonic novel transcripts", x = "Classification",
-       y = "Count (log10 scale)", fill = "Classification") +
-  theme( 
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
-  scale_y_log10_std(expand_top = TRUE) + geom_text(aes(label = count), vjust = -1) +
-  guides(fill = "none")
+p25 <- plot_count_heatmap(
+  count_momu_novel, x = classification, y = biotype, facet = "class_exon",
+  title = "Distribution of mono and multi-exonic novel transcripts",
+  x_lab = "Classification", y_lab = "Category", angle_x = 45
+)
 
 # plot exon numbers
 
@@ -1189,6 +1542,9 @@ p29 <- ggplot(novel_tx, aes(x = classification, y = len, fill = classification))
   geom_boxplot() + facet_grid(biotype ~ class_exon, scales = "free_x", space = "free_x") +
   labs(title = "Length of mono and multi-exonic novel transcripts", x = "Classification",
        y = "Transcript length (log10 scale)", fill = "Classification") +
+  # Drawn at fig-width 12 rather than the report's reference 10, so the base size
+  # is scaled to match before the local theme tweaks are layered on top.
+  theme_width(12) +
   theme(
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
         legend.position = "right",
@@ -1248,8 +1604,8 @@ A 2D density plot helps visualize the relationship between the number of exons i
 ```{r}
 #| label: fig-density-novel
 #| fig-cap: "**Exon Count vs. Transcript Length for Novel RNAs.** Similar to @fig-density, this 2D density plot shows the relationship between exon number and transcript length, but this time for the set of newly discovered transcripts."
-#| fig-width: 8
-#| fig-height: 6
+#| fig-width: 10
+#| fig-height: 7.5
 
 p30 <- ggplot(novel_tx, aes(x = num_exons, y = len)) +
   stat_density2d(aes(fill = after_stat(level)), geom = "polygon", alpha = 0.8) +
@@ -1266,7 +1622,7 @@ p30
 exlen_novel_lncRNA <- read.csv(params$novel_lncrna_exonlength)
 exlen_novel_pc <- read.csv(params$novel_protein_coding_exonlength)
 
-exlen_novel_lncRNA$biotype <- "novel lncRNA"
+exlen_novel_lncRNA$biotype <- "novel lncRNA candidate"
 exlen_novel_pc$biotype <- "novel protein-coding"
 
 exlen_novel <- rbind(exlen_novel_lncRNA, exlen_novel_pc)
@@ -1283,8 +1639,8 @@ exlen_novel <- merge(
 ```{r}
 #| label: fig-exlen-novel
 #| fig-cap: "**Length of individual exons across novel transcripts.** This boxplot compares the individual exon length of protein-coding and lncRNA novel transcripts, separated by mono and multi-exonic structures."
-#| fig-width: 8
-#| fig-height: 6
+#| fig-width: 10
+#| fig-height: 7.5
 
 p32 <- ggplot(exlen_novel, aes(x = biotype, y = width,
                                    fill = class_exon)) +
@@ -1297,4 +1653,442 @@ p32 <- ggplot(exlen_novel, aes(x = biotype, y = width,
   scale_y_log10_std() # Add log10 scale to y-axis
 
 p32
+```
+## Structural Validation of Novel Calls
+
+Novel transcripts are candidates, not findings. This section reports the
+structural evidence gathered for each one, and nothing here filters the output:
+every transcript counted above is still present. The point is to say which
+candidates carry warning signs and which do not, so that a count is never quoted
+without knowing what sits behind it.
+
+Two tests run over the alignments, both asking structural questions that need no
+threshold tuned to a particular genome:
+
+- **Strand versus host.** A transcript inside a host gene's intron, on the
+  *opposite* strand, cannot be explained by that host's pre-mRNA. On the *same*
+  strand it can, and position alone cannot tell the two apart.
+- **Boundary read-through and host junctions.** A discrete transcript has reads
+  that end where it ends. Reads running past its boundaries, or carrying splice
+  junctions belonging to the host rather than to the candidate, came from a
+  longer molecule.
+
+```{r}
+#| label: context-prep
+#| echo: false
+
+read_csv_safe <- function(path) {
+  if (is.null(path) || !file.exists(path)) return(NULL)
+  df <- tryCatch(read.csv(path, stringsAsFactors = FALSE), error = function(e) NULL)
+  if (is.null(df) || !nrow(df)) NULL else df
+}
+
+ctx_flags   <- read_csv_safe(params$context_flags)
+ctx_summary <- read_csv_safe(params$context_summary)
+novel_ir    <- read_csv_safe(params$novel_intron_retention_meta)
+
+ctx_metric <- function(key) {
+  if (is.null(ctx_summary)) return(NA_integer_)
+  v <- ctx_summary$value[ctx_summary$metric == key]
+  if (length(v)) as.integer(v[1]) else NA_integer_
+}
+
+fmt_n <- function(x) if (is.na(x)) "not recorded" else format(x, big.mark = ",")
+```
+
+```{r}
+#| label: context-callout
+#| echo: false
+#| output: asis
+
+if (is.null(ctx_flags)) {
+  cat('::: {.callout-warning appearance="simple"}\n')
+  cat("## Structural validation did not run\n\n")
+  cat("No `novel_context_flags.csv` was available, so the candidates in this report ")
+  cat("carry no structural evidence. Every count above should be read as unvalidated.\n")
+  cat(":::\n")
+} else {
+  same  <- ctx_metric("same_strand_as_host")
+  opp   <- ctx_metric("opposite_strand_to_host")
+  isame <- ctx_metric("intronic_same_strand")
+  ijunc <- ctx_metric("intronic_same_strand_with_host_junction")
+  none  <- ctx_metric("no_reads_recovered")
+
+  cat('::: {.callout-note appearance="simple"}\n')
+  cat("## Structural evidence, in short\n\n")
+  cat(sprintf("- **%s** candidates evaluated.\n", fmt_n(ctx_metric("candidates_evaluated"))))
+  cat(sprintf("- **%s** lie within a host gene: %s on the same strand, %s on the opposite strand.\n",
+              fmt_n(ctx_metric("with_host_gene")), fmt_n(same), fmt_n(opp)))
+  cat(sprintf("- **%s** are intronic *and* on the host's strand, which is the ambiguous population.\n",
+              fmt_n(isame)))
+  cat(sprintf("- Of those, **%s** are supported by reads carrying one of the host's splice junctions, which is evidence those reads came from the host.\n",
+              fmt_n(ijunc)))
+  if (!is.na(none) && none > 0) {
+    cat(sprintf("- **%s** recovered no overlapping reads at all and cannot be assessed either way.\n",
+                fmt_n(none)))
+  }
+  cat("\n:::\n")
+}
+```
+
+### Strand relative to the host gene
+
+```{r}
+#| label: fig-context-strand
+#| fig-cap: "**Strand of each novel transcript relative to its host gene, by class code.** Opposite-strand transcripts are unambiguous: the host's pre-mRNA cannot produce them. Same-strand intronic transcripts are the population that needs the read-level evidence below. Transcripts with no host gene are intergenic and have nothing to compare against."
+#| fig-width: 10
+#| fig-height: 6
+#| eval: !expr !is.null(ctx_flags)
+
+strand_df <- ctx_flags %>%
+  mutate(relation = case_when(
+    is.na(same_strand_as_host) ~ "no host gene",
+    same_strand_as_host        ~ "same strand as host",
+    TRUE                       ~ "opposite strand to host"
+  )) %>%
+  count(class_code, relation, name = "count")
+
+ggplot(strand_df, aes(x = class_code, y = count, fill = relation)) +
+  geom_col(position = position_dodge2(preserve = "single")) +
+  scale_fill_manual(values = c(
+    "same strand as host"     = "#D95F02",
+    "opposite strand to host" = "#1B9E77",
+    "no host gene"            = "grey70"
+  )) +
+  scale_y_log10_std(expand_top = TRUE) +
+  labs(title = "Novel transcript strand relative to the host gene",
+       subtitle = "Same-strand intronic transcripts cannot be separated from host pre-mRNA by position alone",
+       x = "gffcompare class code", y = "Transcripts (log10 scale)", fill = NULL) +
+  theme(legend.position = "top")
+```
+
+### Read-level evidence
+
+```{r}
+#| label: fig-context-reads
+#| fig-cap: "**Fraction of supporting reads that run past a transcript's boundaries, and fraction carrying one of the host gene's splice junctions.** A discrete transcript sits near zero on both. Values near one mean the reads supporting the call belong to a longer molecule, most likely the host's unspliced pre-mRNA. Only transcripts with a host gene and at least one recovered read are shown."
+#| fig-width: 10
+#| fig-height: 6
+#| eval: !expr !is.null(ctx_flags)
+
+reads_df <- ctx_flags %>%
+  filter(!is.na(same_strand_as_host), reads_total > 0) %>%
+  select(class_code, frac_crossing_boundary, frac_with_host_junction) %>%
+  pivot_longer(cols = c(frac_crossing_boundary, frac_with_host_junction),
+               names_to = "measure", values_to = "fraction") %>%
+  mutate(measure = recode(measure,
+    frac_crossing_boundary  = "reads crossing a boundary",
+    frac_with_host_junction = "reads carrying a host junction"))
+
+ggplot(reads_df, aes(x = class_code, y = fraction, fill = measure)) +
+  geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3) +
+  scale_fill_viridis_d(option = "viridis", begin = 0.25, end = 0.75) +
+  labs(title = "Read-level evidence against each novel transcript",
+       subtitle = "Higher is worse: the supporting reads do not stop where the transcript does",
+       x = "gffcompare class code", y = "Fraction of supporting reads", fill = NULL) +
+  theme(legend.position = "top")
+```
+
+### Which warning signs occur together
+
+The figures above each show one signal at a time. What decides whether a candidate
+is worth distrusting is whether the signals **agree** — and that is a question
+about combinations, not about any single distribution.
+
+Each bar below is one exact combination of flags. The transcripts to look at first
+are in the bar carrying the most flags at once: intronic, on the host's strand,
+unspliced, supported by reads that run past its boundaries and carry the host's
+junctions. That is the profile of a pre-mRNA fragment, and it is one bar you can
+point at rather than a conjunction you have to assemble from five figures.
+
+Every flag here is structural and threshold-free — each is a count being zero or
+non-zero, not a value crossing a cutoff.
+
+```{r}
+#| label: evidence-sets-prep
+#| include: false
+
+evidence_sets <- NULL
+
+if (!is.null(ctx_flags)) {
+  ev <- ctx_flags
+  if (exists("novel_tx") && "exon" %in% names(novel_tx)) {
+    ev <- dplyr::left_join(ev, novel_tx[, c("qry_id", "exon")], by = "qry_id")
+  } else {
+    ev$exon <- NA_character_
+  }
+
+  # Full-length support is membership of Bambu's fullLengthCounts matrix, which is
+  # a zero/non-zero fact rather than a threshold on a fraction.
+  fl_ids <- if (exists("bambu_ids") && !is.null(bambu_ids$fullLength)) {
+    bambu_ids$fullLength
+  } else {
+    character(0)
+  }
+
+  evidence_sets <- ev %>%
+    dplyr::mutate(
+      `mono-exonic`                 = !is.na(exon) & exon == "mono-exonic",
+      `same strand as host`         = same_strand_as_host %in% TRUE,
+      `reads cross a boundary`      = reads_crossing_boundary > 0,
+      `reads carry a host junction` = reads_with_host_junction > 0,
+      `no full-length support`      = !(qry_id %in% fl_ids),
+      class_code                    = factor(class_code)
+    )
+
+  if (!nrow(evidence_sets)) evidence_sets <- NULL
+}
+```
+
+```{r}
+#| label: fig-evidence-upset
+#| fig-cap: "**Combinations of structural warning signs across novel transcript candidates.** Each bar is one exact combination; the dot matrix below names it. Bars are stacked by gffcompare class code, which is a mutually exclusive attribute and therefore a fill rather than a set. Set sizes are in the row labels. A candidate appearing in the leftmost bar carries no warning signs at all."
+#| fig-width: 11
+#| fig-height: 7
+#| eval: !expr !is.null(evidence_sets)
+
+plot_upset(
+  evidence_sets,
+  sets = c("mono-exonic", "same strand as host", "reads cross a boundary",
+           "reads carry a host junction", "no full-length support"),
+  fill_col = "class_code",
+  title    = "Structural warning signs, by combination",
+  subtitle = "More flags at once means less of the evidence is explained by the candidate being a real, discrete transcript",
+  empty_label = "no warning signs"
+)
+```
+
+```{r}
+#| label: evidence-upset-note
+#| echo: false
+#| output: asis
+
+if (!is.null(evidence_sets)) {
+  n_all <- sum(evidence_sets$`same strand as host` &
+               evidence_sets$`reads cross a boundary` &
+               evidence_sets$`reads carry a host junction`, na.rm = TRUE)
+  n_clean <- sum(!evidence_sets$`same strand as host` &
+                 !evidence_sets$`reads cross a boundary` &
+                 !evidence_sets$`reads carry a host junction`, na.rm = TRUE)
+  cat(sprintf(paste0(
+    "Of %s candidates, **%s** carry all three host-relationship flags at once ",
+    "(same strand, boundary read-through, host junctions), and **%s** carry none ",
+    "of them. Neither number is a verdict: the first is the set to inspect, the ",
+    "second is the set with nothing arguing against it.\n"),
+    format(nrow(evidence_sets), big.mark = ","),
+    format(n_all, big.mark = ","),
+    format(n_clean, big.mark = ",")))
+}
+```
+
+
+### Full-length and uniquely-mapped support
+
+Bambu reports, per transcript, how many reads support it in total, how many span
+its full structure, and how many map to it uniquely. Read alongside the class
+code, these separate a transcript that reads *fit* from one that reads merely
+*overlap*.
+
+::: {.callout-important appearance="simple"}
+## Read the low tail, not the high one
+
+A novel model was built from the very reads then counted against it, so a high
+full-length fraction is partly circular and is not confirmation of anything. The
+informative direction is the **low** tail: a candidate whose supporting reads
+mostly fail to span it is a fragment of something longer. Treat this as a screen
+that points at transcripts worth inspecting, not as a verdict on any of them.
+:::
+
+```{r}
+#| label: support-prep
+#| echo: false
+
+# Per-transcript totals across all samples. The first column is the transcript id
+# and every numeric column after it is one sample.
+read_support <- function(path, label) {
+  df <- tryCatch(read.delim(path, header = TRUE, sep = "\t", check.names = FALSE),
+                 error = function(e) NULL)
+  if (is.null(df) || !nrow(df)) return(NULL)
+  num <- df[, vapply(df, is.numeric, logical(1)), drop = FALSE]
+  if (!ncol(num)) return(NULL)
+  out <- data.frame(transcript_id = as.character(df[[1]]),
+                    value = rowSums(num, na.rm = TRUE),
+                    stringsAsFactors = FALSE)
+  names(out)[2] <- label
+  out
+}
+
+sup_total <- read_support(params$counts_transcript,    "reads_total")
+sup_full  <- read_support(params$fl_counts_transcript, "reads_full_length")
+sup_uniq  <- read_support(params$u_counts_transcript,  "reads_unique")
+
+support <- NULL
+if (!is.null(sup_total) && !is.null(sup_full) && !is.null(sup_uniq)) {
+  support <- sup_total %>%
+    inner_join(sup_full, by = "transcript_id") %>%
+    inner_join(sup_uniq, by = "transcript_id") %>%
+    inner_join(novel_tx[, c("qry_id", "class_code", "biotype", "exon")],
+               by = c("transcript_id" = "qry_id")) %>%
+    filter(reads_total > 0) %>%
+    mutate(full_length_fraction = reads_full_length / reads_total,
+           unique_fraction      = reads_unique      / reads_total)
+  if (!nrow(support)) support <- NULL
+}
+```
+
+```{r}
+#| label: fig-support-fraction
+#| fig-cap: "**Full-length and uniquely-mapped read support for novel transcripts, by class code and exon structure.** Each panel is one support measure. Low full-length support means the reads behind a call do not span it; low unique support means those reads are compatible with other transcripts too, so the count came largely from expectation-maximisation rather than from unambiguous evidence."
+#| fig-width: 12
+#| fig-height: 7
+#| eval: !expr !is.null(support)
+
+support_long <- support %>%
+  select(class_code, exon, full_length_fraction, unique_fraction) %>%
+  pivot_longer(cols = c(full_length_fraction, unique_fraction),
+               names_to = "measure", values_to = "fraction") %>%
+  mutate(measure = recode(measure,
+    full_length_fraction = "full-length / total",
+    unique_fraction      = "uniquely mapped / total"))
+
+ggplot(support_long, aes(x = class_code, y = fraction, fill = exon)) +
+  geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3) +
+  facet_wrap(~measure, ncol = 2) +
+  scale_fill_viridis_d(option = "viridis", begin = 0.3, end = 0.8) +
+  labs(title = "Read support for novel transcripts",
+       subtitle = "Low values mark candidates whose supporting reads fit them poorly",
+       x = "gffcompare class code", y = "Fraction of supporting reads",
+       fill = "Exon class") +
+  theme(legend.position = "top") +
+  theme_width(12)
+```
+
+```{r}
+#| label: tbl-support-summary
+#| tbl-cap: "Median read support by novel transcript category and class code."
+#| echo: false
+#| eval: !expr !is.null(support)
+
+support %>%
+  group_by(biotype, class_code) %>%
+  summarise(n = n(),
+            `median full-length` = sprintf("%.2f", median(full_length_fraction)),
+            `median unique`      = sprintf("%.2f", median(unique_fraction)),
+            .groups = "drop") %>%
+  arrange(biotype, class_code) %>%
+  knitr::kable(format = "markdown")
+```
+
+### Intron retention as its own category
+
+```{r}
+#| label: intron-retention-note
+#| echo: false
+#| output: asis
+
+if (is.null(novel_ir)) {
+  cat("No intron-retention events were found in this run.\n")
+} else {
+  n_m <- sum(novel_ir$class_code == "m")
+  n_n <- sum(novel_ir$class_code == "n")
+  hosts <- sort(table(novel_ir$host_gene_biotype, useNA = "ifany"), decreasing = TRUE)
+  host_names <- names(hosts)
+  host_names[is.na(host_names)] <- "no host gene"
+  host_txt <- paste(sprintf("%s (%d)", host_names, as.integer(hosts)), collapse = ", ")
+
+  cat('::: {.callout-note appearance="simple"}\n')
+  cat("## Why these are reported separately\n\n")
+  cat(sprintf("This run produced **%d** intron-retention transcripts: %d with every reference intron accounted for (`m`) and %d that additionally fail to cover the full reference structure (`n`).\n\n",
+              nrow(novel_ir), n_m, n_n))
+  cat("They are **not** sorted by coding potential. RNAmining scores length-normalised trinucleotide composition, and retained intronic sequence has never been under coding selection, so it pulls the composition toward non-coding in proportion to how much of the transcript it makes up. Filing these as lncRNA candidates on that basis would restate their structure rather than add evidence. The prediction is kept as a column in `novel_intron_retention_metadata.csv`; it is simply not used to route them.\n\n")
+  cat(sprintf("Host gene biotypes here: %s. This matters, because a retained-intron transcript of a lncRNA gene and one of a protein-coding gene are different findings, and hosts are frequently not protein-coding.\n",
+              host_txt))
+  cat("\n:::\n")
+}
+```
+
+## Genomic Context
+
+Coverage and transcript models drawn together at selected loci. The bigWig tracks
+behind these figures are published alongside the report, so any region can be
+opened in IGV to explore beyond the windows chosen here.
+
+```{r}
+#| label: genomic-context-prep
+#| echo: false
+
+gc_clean   <- read_csv_safe(params$genomic_context_candidates)
+gc_flagged <- read_csv_safe(params$intronic_context_candidates)
+
+# A figure is embedded only when its PNG was actually staged, so a stub run or a
+# partially failed draw leaves a gap rather than a broken image.
+embed_figures <- function(df, file_col, tab_col, caption_fn) {
+  if (is.null(df) || !(file_col %in% names(df)) || !(tab_col %in% names(df))) {
+    cat("No figures were produced for this section.\n\n")
+    return(invisible(NULL))
+  }
+  present <- df[!is.na(df[[file_col]]) & file.exists(df[[file_col]]), , drop = FALSE]
+  if (!nrow(present)) {
+    cat("No figures were produced for this section.\n\n")
+    return(invisible(NULL))
+  }
+  cat("::: {.panel-tabset}\n\n")
+  for (i in seq_len(nrow(present))) {
+    cat(sprintf("## %s\n\n", present[[tab_col]][i]))
+    cat(sprintf("![%s](%s)\n\n", caption_fn(present[i, ]), present[[file_col]][i]))
+  }
+  cat(":::\n\n")
+  invisible(NULL)
+}
+```
+
+### Known genes carrying novel isoforms
+
+Each panel shows the gene's full exonic footprint, then every isoform at the
+locus with novel ones highlighted, then one coverage track per sample on a shared
+scale.
+
+```{r}
+#| label: fig-genomic-context-clean
+#| echo: false
+#| output: asis
+
+embed_figures(gc_clean, "figure", "label", function(r) {
+  sprintf("%s at %s:%s-%s. %d isoforms, %d novel.",
+          r$label, r$chrom, format(r$win_s, big.mark = ","),
+          format(r$win_e, big.mark = ","), r$n_tx, r$n_novel)
+})
+```
+
+### Flagged intronic candidates
+
+These are chosen for the opposite reason: each is an intronic candidate on its
+host's strand whose supporting reads run past its boundaries or carry the host's
+splice junctions. They are drawn windowed on the **whole host intron**, because a
+window drawn tightly around a truncated fragment looks like a discrete transcript
+whatever it is. The flanking intron is where the difference shows.
+
+::: {.callout-tip appearance="simple"}
+## What to look for
+
+A candidate that really is host pre-mRNA shows coverage running flat across the
+entire intron and continuous with the flanking exons. A candidate that is a
+genuine independent transcript shows a discrete block of coverage with quiet
+intron either side. If a flagged candidate looks discrete here, the flag is what
+needs revisiting, not the transcript.
+:::
+
+```{r}
+#| label: fig-genomic-context-flagged
+#| echo: false
+#| output: asis
+
+embed_figures(gc_flagged, "figure", "qry_id", function(r) {
+  sprintf("%s inside an intron of %s (%s). %d reads: %d cross a boundary, %d carry a host junction.",
+          r$qry_id,
+          ifelse(is.na(r$host_gene_name) | !nzchar(r$host_gene_name),
+                 r$host_gene_id, r$host_gene_name),
+          r$host_gene_biotype, r$reads_total,
+          r$reads_crossing_boundary, r$reads_with_host_junction)
+})
 ```

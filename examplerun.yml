@@ -1,40 +1,120 @@
-# input your full path to the samplesheet.csv file and the output directory where you want the results to be saved
+# ==============================================================================
+#  pulposeq run configuration
+#  Copy this file, edit the paths and settings below, then run with:
+#      nextflow run integrativebioinformatics/pulposeq -profile <docker|singularity|apptainer> -params-file <this file>
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+#  Input and output
+# ------------------------------------------------------------------------------
+# Full paths to the samplesheet and the directory where results should be written
 input: "/your/path/to/samplesheet.csv"
 outdir: "/your/path/to/results"
 
-# set the following parameters to true if you want to skip the corresponding steps, otherwise set them to false
-skip_qc: false
-skip_filtering: false
+# ------------------------------------------------------------------------------
+#  Steps to skip
+# ------------------------------------------------------------------------------
+# Set to true to skip the corresponding stage, false to run it
+skip_qc: false            # raw-read QC, restranding and filtering
+skip_filtering: false     # chopper only; raw QC still runs
 skip_alignment: false
 skip_alignment_qc: false
-skip_class: false
+skip_class: false         # coding-potential prediction and novel transcript classification
 
-# set the following QC and filtering parameters 
+# ------------------------------------------------------------------------------
+#  Sequencing library
+# ------------------------------------------------------------------------------
+# ONT_cDNA (PCR-cDNA or direct cDNA), ONT_DRS (direct RNA-seq), or PacBio
+library: "ONT_cDNA"
+
+# Whether the reads ON DISK are already oriented, i.e. whether read strand matches
+# RNA strand. This describes the FASTQ, not the chemistry: ONT PCR-cDNA chemistry
+# is strand-specific, but its basecalled reads are NOT oriented, because the
+# protocol sequences either cDNA strand at random.
+#
+# Automatically true for ONT_DRS and PacBio. For ONT_cDNA, leave this false unless
+# you have already re-oriented the reads yourself.
+stranded_library: false
+
+# ------------------------------------------------------------------------------
+#  Restranding (unoriented ONT cDNA only)
+# ------------------------------------------------------------------------------
+# Applies only when library is ONT_cDNA and stranded_library is false. Every other
+# combination ignores this section entirely.
+#
+# Restrander orients reads using polyA/polyT tails and the protocol's primers, which
+# unlike minimap2's splice-signal inference also works on unspliced reads and on
+# non-canonical junctions.
+#
+# The pipeline has no unstranded path. Unoriented reads erase mono-exonic novel
+# transcripts, push novel isoforms of known genes into the antisense class, and bleed
+# reads between overlapping sense/antisense pairs. So ONT cDNA is either already
+# oriented (stranded_library: true) or oriented here -- and if restranding does not
+# reach restrand_min_frac on every sample, the run stops rather than continuing
+# without strand.
+
+# REQUIRED when restranding is active. The presets differ in their TSO/RTP primer
+# sequences, so the wrong one produces a low orientation rate rather than an error.
+#   PCB109, PCB111, PCB114   PCR-cDNA barcoding kits
+#   DCS109, DCS-LSK114       direct cDNA sequencing kits
+#   NEBNext                  NEBNext single-cell / low-input cDNA
+#   trimmed                  reads whose primers were already removed
+#
+# If reads were demultiplexed outside the pipeline, check whether that step also
+# trimmed the primers. If it did, the kit presets cannot find them and you want
+# "trimmed", which orients on polyA/polyT alone. Confirm with, for PCB109:
+#   zcat sample.fastq.gz | head -40000 | awk 'NR%4==2' \
+#     | grep -cE "TTTCTGTTGGTGCTGATATTGCTGGG|CCCAGCAATATCAGCACCAACAGAAA"
+# A few thousand hits means the primers survived; near zero means use "trimmed".
+restrand_kit: "PCB111"
+
+# Optional. A custom Restrander config JSON for a protocol none of the presets cover.
+# Overrides restrand_kit when set. See assets/restrander/ for a template and a field
+# reference.
+restrand_config: null
+
+# Minimum fraction of reads that must be oriented, checked per sample. Any sample
+# below this stops the run. Restrander reaches ~0.99 on matched PCR-cDNA data, so a
+# failure almost always means the kit or the trimming state is wrong rather than that
+# the threshold needs relaxing. Note that "trimmed" orients on polyA/polyT alone and
+# so reaches a lower fraction than a primer-based preset. Minimum 0.5.
+restrand_min_frac: 0.80
+
+# ------------------------------------------------------------------------------
+#  QC and filtering
+# ------------------------------------------------------------------------------
 minqual: 0
-minlen: 300 # default value
-maxlen: null # optional upper read length limit, e.g. 10000
+minlen: 300          # default
+maxlen: null         # optional upper read length limit, e.g. 10000
 maxgc: 1
 mingc: 0
+
+# Keep both at 0 when restranding is active. Restrander locates primers and polyA/T
+# tails at exactly the positions these crop, and it runs before chopper, so cropping
+# does not break it -- but primer removal is Restrander's job, not chopper's.
 headcrop: 0
 tailcrop: 0
 
-# set the sequencing library type: ONT_cDNA (PCR-cDNA or direct cDNA), ONT_DRS (direct RNAseq) or PacBio
-library: "ONT_cDNA"
-
-# set whether the library is stranded (automatically true for ONT_DRS and PacBio)
-# ONT_cDNA libraries must be re-oriented outside the pipeline (e.g. Pychopper, Restrander) to be set as true
-stranded_library: false
-
-# set the full path to your genome and annotation reference files
-# recommendation: always use the latest ensembl release version available
+# ------------------------------------------------------------------------------
+#  Reference files
+# ------------------------------------------------------------------------------
+# Only Ensembl and GENCODE annotations are supported. Transcript metadata is read
+# directly from the annotation GTF, so no Ensembl release or BioMart dataset needs
+# to be declared.
 reference: "/your/path/to/references/dna.primary_assembly.fa"
-annotation: "/your/path/to/references/ensembl_annotation.release.chr.gtf" 
+annotation: "/your/path/to/references/ensembl_annotation.release.chr.gtf"
 
-# set the NDR threshold for Bambu (optional, default is NULL for autoadjustment)
-ndr: null # e.g. 0.2
+# ------------------------------------------------------------------------------
+#  Transcript discovery
+# ------------------------------------------------------------------------------
+# Novel discovery rate threshold for Bambu. Leave null to let Bambu choose one from
+# the data; the value it selects is recorded in results/bambu/bambu_run_metrics.csv.
+# Pin it when comparing runs, since a shifting NDR makes before/after comparisons
+# meaningless.
+ndr: null            # e.g. 0.2
 
-# set organism scientific name for ncRNA prediction by RNAmining (check the list of available organisms)
-organism: "Genus_species" # e.g. "Mus_musculus"
-
-# transcript metadata is read directly from the annotation GTF set above, so no
-# Ensembl release or BioMart dataset needs to be declared
+# ------------------------------------------------------------------------------
+#  Coding potential prediction
+# ------------------------------------------------------------------------------
+# Scientific name, used by RNAmining. Check its list of supported organisms.
+organism: "Genus_species"     # e.g. "Mus_musculus"

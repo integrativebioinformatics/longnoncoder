@@ -3,8 +3,8 @@ process POST_REFINEMENT {
     label 'process_post_refinement'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test3':
-        'docker.io/itsiaguara/longnoncoder:test3' }"
+        'docker://itsiaguara/pulposeq:test':
+        'docker.io/itsiaguara/pulposeq:test' }"
 
     input:
     path se_rds
@@ -21,6 +21,7 @@ process POST_REFINEMENT {
     path "se_multiSample_validated.rds"     , emit: rds_transcript
     path "seGene_multiSample_validated.rds" , emit: rds_gene
     path "versions.yml"                     , emit: versions
+    path "validation_summary.csv"           , emit: validation_summary
 
     when:
     task.ext.when == null || task.ext.when
@@ -54,6 +55,7 @@ process POST_REFINEMENT {
     touch heatmap_transcript_validated.png
     touch se_multiSample_validated.rds
     touch seGene_multiSample_validated.rds
+    printf 'feature_type,retained,total,fraction_retained\\ntranscript,1,2,0.5\\ngene,1,2,0.5\\n' > validation_summary.csv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

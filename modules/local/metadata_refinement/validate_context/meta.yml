@@ -1,0 +1,81 @@
+name: validate_novel_context
+description: |
+  Structural evidence for novel transcripts, read from the alignments they were
+  assembled from.
+
+  Answers two questions that need no organism-specific threshold:
+
+    A  Is the novel transcript on the same strand as the gene whose intron it
+       lies in? On the opposite strand, the host's pre-mRNA cannot explain it.
+
+    D  Do the supporting reads stop at the transcript's boundaries, and do they
+       carry the host gene's splice junctions? Reads running past the boundaries,
+       or carrying junctions the candidate does not have, came from a longer
+       molecule.
+
+  Every output is a count or a flag, reported per transcript. Nothing is filtered
+  and no score is collapsed: the cases worth inspecting are the ones where the
+  signals disagree.
+keywords:
+  - lncRNA
+  - novel transcripts
+  - intron retention
+  - pre-mRNA
+  - internal priming
+  - validation
+tools:
+  - R:
+      description: Rsamtools / GenomicAlignments read the alignments; rtracklayer reads the annotation.
+      homepage: https://www.r-project.org/
+      licence: ["GPL-2.0-or-later"]
+
+input:
+  - metadata:
+      type: file
+      description: Novel transcript metadata CSV, carrying seqnames, start, end, strand, class_code and host_gene_id
+      pattern: "*.csv"
+  - annotation:
+      type: file
+      description: Reference annotation GTF (Ensembl or GENCODE), used for host gene extent, exons and introns
+      pattern: "*.{gtf,gtf.gz}"
+  - bams:
+      type: file
+      description: Coordinate-sorted alignments, one per sample
+      pattern: "*.bam"
+  - bais:
+      type: file
+      description: Index for each BAM, staged alongside it so random access works
+      pattern: "*.bai"
+  - r_script:
+      type: file
+      description: bin/validate_novel_context.R
+      pattern: "*.R"
+
+output:
+  - flags:
+      type: file
+      description: |
+        One row per novel transcript: host gene and its biotype and strand,
+        same_strand_as_host, and the read counts behind test D.
+      pattern: "novel_context_flags.csv"
+  - summary:
+      type: file
+      description: Aggregate counts for the report
+      pattern: "novel_context_summary.csv"
+  - versions:
+      type: file
+      description: Software versions
+      pattern: "versions.yml"
+
+args:
+  - --boundary_margin:
+      description: |
+        Bases a read must extend past a transcript boundary before it counts as
+        read-through. Absorbs soft-clipping and alignment wobble, which would
+        otherwise make nearly every read look like read-through. Default 25.
+  - --junction_tolerance:
+      description: |
+        Slack when matching a read's junction to a host intron. Default 5.
+
+authors:
+  - "@borgessbarbara"

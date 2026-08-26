@@ -3,8 +3,8 @@ process NOVEL_TRANSCRIPTS {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://itsiaguara/longnoncoder:test3':
-        'docker.io/itsiaguara/longnoncoder:test3' }"
+        'docker://itsiaguara/pulposeq:test':
+        'docker.io/itsiaguara/pulposeq:test' }"
 
     input:
     path bambu_gtf
@@ -21,9 +21,11 @@ process NOVEL_TRANSCRIPTS {
     path "novel_transcripts_metadata.csv"          , emit: novel_transcripts_metadata
     path "novel_lncRNAs_metadata.csv"              , emit: novel_lncrnas_metadata
     path "novel_protein-coding_metadata.csv"       , emit: novel_mrnas_metadata
+    path "novel_intron_retention_metadata.csv"     , emit: novel_intron_retention_metadata
     path "novel_pc_lnc_RNAs_metadata.csv"          , emit: novel_combined_metadata
     path "novel_lncRNAs.gtf"                       , emit: novel_lncrnas_gtf
     path "novel_protein-coding.gtf"                , emit: novel_mrnas_gtf
+    path "novel_intron_retention.gtf"              , emit: novel_intron_retention_gtf
     path "novel_transcripts_validated.gtf"         , emit: novel_gtf
     path "novel_lncRNA_exon_lengths.csv"           , emit: novel_lncrna_exon_lengths
     path "novel_protein-coding_exon_lengths.csv"   , emit: novel_mrna_exon_lengths
@@ -65,9 +67,11 @@ process NOVEL_TRANSCRIPTS {
     touch novel_transcripts_metadata.csv
     touch novel_lncRNAs_metadata.csv
     touch novel_protein-coding_metadata.csv
+    touch novel_intron_retention_metadata.csv
     touch novel_pc_lnc_RNAs_metadata.csv
     touch novel_lncRNAs.gtf
     touch novel_protein-coding.gtf
+    touch novel_intron_retention.gtf
     touch novel_transcripts_validated.gtf
     touch novel_lncRNA_exon_lengths.csv
     touch novel_protein-coding_exon_lengths.csv

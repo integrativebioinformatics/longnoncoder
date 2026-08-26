@@ -308,7 +308,65 @@ Class_codes description figure below retrieved from the official [documentation]
 | `novel_protein-coding_metadata.csv` | Metadata table for novel protein-coding RNA isoform candidates. |
 | `novel_transcripts_metadata.csv` | Metadata table for all novel RNA isoform candidates. |
 | `novel_transcripts.gtf` | GTF file containing only the validated set of novel isoform candidates. |
+| `novel_intron_retention_metadata.csv` | Metadata table for intron-retention events (class codes `m` and `n`). Kept out of the lncRNA and protein-coding tables on purpose — see the note below. |
+| `novel_intron_retention.gtf` | GTF file containing the intron-retention transcripts, with `transcript_biotype "novel_retained_intron"`. |
+| `novel_context_flags.csv` | Structural evidence per novel transcript: host gene and its biotype and strand, `same_strand_as_host`, and the read counts behind the boundary and junction tests. |
+| `novel_context_summary.csv` | Aggregate counts from the same tests, as rendered in the report. |
 
+### Why intron retention is a separate category
+
+`m` and `n` transcripts retain at least one reference intron. Retained intronic
+sequence has never been under coding selection, so it carries no codon bias — and
+because RNAmining scores length-normalised trinucleotide composition, it pulls the
+prediction toward non-coding in proportion to how much of the transcript it makes
+up. Sorting these by coding potential would therefore file them as lncRNA
+candidates on the strength of a determination their own structure already made.
+
+They are routed to their own output instead. The coding prediction is kept as a
+**column** in `novel_intron_retention_metadata.csv`, so nothing is lost; it is
+simply not used as the routing key. `novel_retained_intron` follows GENCODE, which
+carries `retained_intron` alongside `protein_coding` and `lncRNA` rather than
+beneath either.
+
+`host_gene_biotype` is recorded on every novel record. It is not decorative: an
+intron-retention transcript of a lncRNA gene and one of a protein-coding gene are
+different findings, and hosts are frequently neither.
+
+### Reading `novel_context_flags.csv`
+
+| Column | Meaning |
+|--------------------------|----------------------------------------------|
+| `same_strand_as_host` | `TRUE` where the transcript shares its host gene's strand. Empty for intergenic transcripts, which have no host — this is deliberately distinct from `FALSE`. |
+| `reads_crossing_boundary` | Supporting reads extending past either end of the transcript. A discrete transcript has few; a fragment of a longer molecule has many. |
+| `reads_with_host_junction` | Supporting reads carrying a splice junction belonging to the host gene. Evidence that the read came from the host, not from the candidate. |
+| `reads_spliced_into_host_exon` | Supporting reads spliced from the candidate into one of the host's exons. This is a **finding**, not an artifact: the candidate is most likely an unannotated exon of the host. |
+| `frac_*` | The corresponding count over `reads_total`. `NA` where no reads were recovered. |
+
+No transcript is removed on the basis of these columns. They are reported so that
+a count is never quoted without the evidence behind it.
+
+
+## `genomic_context/` (coverage and transcript models at selected loci)
+
+| File | Description |
+|--------------------------|----------------------------------------------|
+| `genomic_context_<gene>.png` | Gene structure, every isoform at the locus with novel ones highlighted, and one coverage track per sample on a shared scale. Selected from genes carrying both known and novel isoforms. |
+| `genomic_context_candidates.csv` | The loci drawn, with their windows and isoform counts. |
+| `genomic_context_regions.gtf` | The plotted regions as a small GTF. Built to feed `makeTxDbFromGFF`, but useful on its own — load it in IGV beside the published bigWigs. |
+| `intronic_context_<transcript>.png` | The flagged set: intronic candidates on their host's strand whose supporting reads run past the boundaries or carry host junctions. Windowed on the **whole host intron**, because a window drawn tightly around a truncated fragment looks discrete whatever it is. |
+| `intronic_context_candidates.csv` | The flagged candidates drawn, with the read counts behind their selection. |
+
+The two sets exist to be read against each other. A candidate that really is host
+pre-mRNA shows coverage running flat across the whole intron and continuous with
+the flanking exons; a genuine independent transcript shows a discrete block with
+quiet intron either side. If a flagged candidate looks discrete, the flag is what
+needs revisiting — not the transcript.
+
+## `bam_coverage/` (per-sample coverage tracks)
+
+| File | Description |
+|--------------------------|----------------------------------------------|
+| `<sample>.bw` | Genome-wide coverage in bigWig format. Two to three orders of magnitude smaller than the alignments they come from, so this is the form of the data that travels off the cluster. Load them in IGV to explore any region beyond the windows the pipeline chose to draw. |
 
 ## `pipeline_info/` (workflow run metadata)
 

@@ -10,9 +10,13 @@ include { SUBSET_BAMBU_COUNTS               } from '../modules/local/metadata_re
 include { SUBSET_BAMBU_GTF                  } from '../modules/local/metadata_refinement/subset_bambu_gtf/main'
 include { BAMBU_VALIDATE                    } from '../modules/local/metadata_refinement/validate_counts/main'
 include { KNOWN_TRANSCRIPTS                 } from '../modules/local/metadata_refinement/known_transcripts/main'
+include { VALIDATE_NOVEL_CONTEXT            } from '../modules/local/metadata_refinement/validate_context/main'
 include { ENRICH_VALIDATED_GTF              } from '../modules/local/metadata_refinement/enrich_gtf/main'
+include { BAM_COVERAGE                      } from '../modules/local/bam_coverage/main'
+include { GENOMIC_CONTEXT                   } from '../modules/local/genomic_context/main'
 include { POST_REFINEMENT                   } from '../modules/local/post_refinement/main'
 include { RENDER_REPORT                     } from '../modules/local/report/main'
+include { RESTRANDING                       } from '../subworkflows/local/restranding'
 include { QC_FILT                           } from '../subworkflows/local/qc'
 include { ALIGNMENT                         } from '../subworkflows/local/alignment'
 include { TRANSCRIPT_RECONSTRUCTION         } from '../subworkflows/local/transcript_reconstruction'
@@ -39,16 +43,46 @@ workflow PULPOSEQ {
     ch_versions             = channel.empty()
     ch_multiqc_files        = channel.empty()
     ch_gtf_new_transcripts  = channel.empty()
-    ch_reads_for_alignment  = ch_samplesheet
     def run_alignment       = !params.skip_alignment
     def run_classification  = run_alignment && !params.skip_class
+
+    // What the user asserted about the reads on disk. ONT_DRS is native RNA and
+    // PacBio is oriented upstream by lima, so both are stranded by construction;
+    // ONT_cDNA is whatever the user declares, and if they declare it unoriented the
+    // pipeline restrands it rather than proceeding without strand.
+    //
+    // Note this describes the FASTQ, not the library chemistry. ONT PCR-cDNA
+    // chemistry is strand-specific while its basecalled reads are not oriented,
+    // which is why the two must not be conflated.
+    def declared_stranded = params.library in ['ONT_DRS', 'PacBio'] ||
+                            params.stranded_library?.toString()?.toLowerCase() == 'true'
+
+    //
+    // Orientation correction, before any QC or filtering
+    //
+    // Its own subworkflow, and outside every skip. Restranding is not quality
+    // control -- it is what makes read strand equal RNA strand, which the alignment
+    // preset and Bambu both assume. There is deliberately no flag that turns it off
+    // for reads that need it.
+    //
+    RESTRANDING (
+        ch_samplesheet,
+        declared_stranded
+    )
+    ch_reads_for_alignment = RESTRANDING.out.reads
+    ch_versions = ch_versions.mix(RESTRANDING.out.versions)
 
     //
     // Run QC workflow
     //
+    // Takes the reads as supplied for the raw-read report, and the restranded ones
+    // for filtering, so NanoComp still describes the input rather than the oriented
+    // subset.
+    //
     if (!params.skip_qc) {
         QC_FILT (
-            ch_samplesheet
+            ch_samplesheet,
+            RESTRANDING.out.reads
         )
         ch_reads_for_alignment = QC_FILT.out.filt_reads
         ch_multiqc_files = ch_multiqc_files.mix(QC_FILT.out.multiqc)
@@ -65,6 +99,18 @@ workflow PULPOSEQ {
             ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT.out.multiqc)
         }
         ch_versions = ch_versions.mix(ALIGNMENT.out.versions)
+
+        //
+        // Per-sample coverage tracks. bigWig rather than BAM: plotgardener's
+        // plotSignal cannot read BAM, and the tracks are two to three orders of
+        // magnitude smaller than the alignments they come from, so they are also
+        // the only form of this data that travels off the cluster.
+        //
+        BAM_COVERAGE (
+            ALIGNMENT.out.bam.join(ALIGNMENT.out.index),
+            file("${projectDir}/bin/bam_coverage.R", checkIfExists: true)
+        )
+        ch_versions = ch_versions.mix(BAM_COVERAGE.out.versions)
 
         TRANSCRIPT_RECONSTRUCTION (
             ALIGNMENT.out.bam,
@@ -106,6 +152,21 @@ workflow PULPOSEQ {
             file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
         )
         ch_versions = ch_versions.mix(NOVEL_TRANSCRIPTS.out.versions)
+
+        //
+        // Structural evidence for the novel calls: strand relative to the host
+        // gene, and whether the supporting reads stop at the transcript's
+        // boundaries or run through carrying the host's junctions. Annotates
+        // only -- nothing is filtered on the result.
+        //
+        VALIDATE_NOVEL_CONTEXT (
+            NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
+            params.annotation,
+            ALIGNMENT.out.bam.map { _meta, bam -> bam }.collect(),
+            ALIGNMENT.out.index.map { _meta, bai -> bai }.collect(),
+            file("${projectDir}/bin/validate_novel_context.R", checkIfExists: true)
+        )
+        ch_versions = ch_versions.mix(VALIDATE_NOVEL_CONTEXT.out.versions)
 
         BAMBU_VALIDATE (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
@@ -150,6 +211,21 @@ workflow PULPOSEQ {
         ch_versions = ch_versions.mix(ENRICH_VALIDATED_GTF.out.versions)
 
         //
+        // Genomic context figures: known genes carrying novel isoforms, plus a
+        // deliberately chosen set of flagged intronic candidates. The second set
+        // is the visual control -- a candidate flagged as host pre-mRNA should
+        // look like it when drawn, and if it does not, the flag is wrong.
+        //
+        GENOMIC_CONTEXT (
+            ENRICH_VALIDATED_GTF.out.annotations_validated_gtf,
+            BAM_COVERAGE.out.bigwig.map { _meta, bw -> bw }.collect(),
+            VALIDATE_NOVEL_CONTEXT.out.flags,
+            params.annotation,
+            file("${projectDir}/bin/genomic_context.R", checkIfExists: true)
+        )
+        ch_versions = ch_versions.mix(GENOMIC_CONTEXT.out.versions)
+
+        //
         // Regenerate the Bambu PCA and heatmaps from the validated transcriptome
         //
         POST_REFINEMENT (
@@ -174,6 +250,13 @@ workflow PULPOSEQ {
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
             NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
+            NOVEL_TRANSCRIPTS.out.novel_intron_retention_metadata,
+            VALIDATE_NOVEL_CONTEXT.out.flags,
+            VALIDATE_NOVEL_CONTEXT.out.summary,
+            GENOMIC_CONTEXT.out.candidates,
+            GENOMIC_CONTEXT.out.figures.ifEmpty([]),
+            GENOMIC_CONTEXT.out.intronic_candidates,
+            GENOMIC_CONTEXT.out.intronic_figures.ifEmpty([]),
             TRANSCRIPT_RECONSTRUCTION.out.pca,
             TRANSCRIPT_RECONSTRUCTION.out.pca_grouped,
             TRANSCRIPT_RECONSTRUCTION.out.h_gene,
@@ -182,7 +265,9 @@ workflow PULPOSEQ {
             POST_REFINEMENT.out.pca_grouped,
             POST_REFINEMENT.out.h_gene,
             POST_REFINEMENT.out.h_transcript,
-            file("${projectDir}/bin/report.qmd", checkIfExists: true) // <- ADDED SCRIPT PATH
+            TRANSCRIPT_RECONSTRUCTION.out.bambu_metrics,     // ← new
+            POST_REFINEMENT.out.validation_summary,          // ← new
+            file("${projectDir}/bin/report.qmd", checkIfExists: true)
         )
         ch_versions = ch_versions.mix(RENDER_REPORT.out.versions)
     }

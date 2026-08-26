@@ -9,6 +9,7 @@ workflow TRANSCRIPT_RECONSTRUCTION {
     main:
     ch_versions              = channel.empty()
     ch_bamlist               = channel.empty()
+    ch_bambu_metrics         = channel.empty()
     ch_samp_info             = channel.empty()
     ch_reference             = channel.empty()
     ch_annotation            = channel.empty()
@@ -88,6 +89,9 @@ workflow TRANSCRIPT_RECONSTRUCTION {
     BAMBU.out.rds_gene
         .set { ch_rds_gene }
 
+    BAMBU.out.metrics
+        .set { ch_bambu_metrics }
+
     ch_versions = ch_versions.mix(BAMBU.out.versions.ifEmpty(null))
 
     emit:
@@ -109,4 +113,5 @@ workflow TRANSCRIPT_RECONSTRUCTION {
     samp_info           = ch_samp_info
     reference           = ch_reference
     annotation          = ch_annotation
+    bambu_metrics       = ch_bambu_metrics
 }

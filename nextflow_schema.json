@@ -167,7 +167,29 @@
         "stranded_library": {
             "type": "boolean",
             "default": false,
-            "description": "Whether the library is stranded. Forced to true for ONT_DRS and PacBio; only meaningful for ONT_cDNA."
+            "description": "Whether the reads on disk are already oriented. Forced to true for ONT_DRS and PacBio; only meaningful for ONT_cDNA. This describes the FASTQ, not the chemistry: ONT PCR-cDNA is strand-specific chemistry whose basecalled reads are not oriented.",
+            "fa_icon": "fas fa-arrows-alt-h"
+        },
+        "restrand_kit": {
+            "type": "string",
+            "enum": ["PCB109", "PCB111", "PCB114", "DCS109", "DCS-LSK114", "NEBNext", "trimmed"],
+            "description": "Sequencing kit whose primer configuration Restrander should use. Required when restranding is active, unless --restrand_config is given. Choosing the wrong kit gives a low orientation rate rather than an error. 'trimmed' is for reads whose primers were already removed.",
+            "fa_icon": "fas fa-vial"
+        },
+        "restrand_config": {
+            "type": "string",
+            "format": "file-path",
+            "mimetype": "application/json",
+            "description": "Optional custom Restrander config JSON, for protocols not covered by --restrand_kit. Overrides the kit preset when set.",
+            "fa_icon": "fas fa-file-code"
+        },
+        "restrand_min_frac": {
+            "type": "number",
+            "default": 0.8,
+            "minimum": 0.5,
+            "maximum": 1,
+            "description": "Minimum fraction of reads Restrander must orient, per sample. Any sample below this stops the run: there is no unstranded path, because unoriented reads reaching alignment and quantification erase mono-exonic novel transcripts and misclassify novel isoforms of known genes as antisense. Restrander reaches ~0.99 on matched PCR-cDNA data, so a failure usually means the kit or the trimming state is wrong.",
+            "fa_icon": "fas fa-percent"
         },
         "bam_format": {
             "type": "boolean"
