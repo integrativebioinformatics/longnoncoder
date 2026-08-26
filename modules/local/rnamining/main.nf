@@ -3,11 +3,11 @@ process RNAMINING {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/rnamining:1.0.4--pyhdfd78af_0':
-        'biocontainers/rnamining:1.0.4--pyhdfd78af_0' }"
+        'docker://docker.io/samuelismael/rnamining:1.1.0@sha256:ad3e7c65d27c011ae1a80fbe798bc9a48c469b31d086c80b60e7275bc9a6f4dc':
+        'docker.io/samuelismael/rnamining:1.1.0@sha256:ad3e7c65d27c011ae1a80fbe798bc9a48c469b31d086c80b60e7275bc9a6f4dc' }"
 
     input:
-    val fasta
+    path fasta
 
     output:
     path 'codings.txt'        , emit: coding
@@ -28,7 +28,7 @@ process RNAMINING {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        rnamining: \$(echo "v1.0.4")
+        rnamining: \$(rnamining --version 2>&1 | sed 's/^rnamining[[:space:]]*//')
     END_VERSIONS
     """
 
@@ -36,10 +36,16 @@ process RNAMINING {
     """
     touch codings.txt
     touch noncodings.txt
-    touch predictions.txt
+    cat <<-END_PREDICTIONS > predictions.txt
+    # RNAmining predictions
+    # ID	prediction	score
+    # RNAmining 1.1.0
+    # FASTA transcript predictions
+    transcript_stub	coding	0.5
+    END_PREDICTIONS
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        rnamining: \$(echo "v1.0.4")
+        rnamining: 1.1.0
     END_VERSIONS
     """
 }
