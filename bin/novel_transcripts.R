@@ -61,11 +61,28 @@ tmap <- read_table(opt$tmap_file)
 
 # Load rnamining prediction results
 cat("Loading rnamining predictions...\n")
+# RNAmining writes a free-text header before the TSV body, and its shape differs
+# between releases: 1.0.4 emits four title lines then a blank, so the body starts
+# at line 6, while the 1.1.0 module stub shows four "#"-prefixed lines and no
+# blank. Skipping a fixed number of lines silently drops the first prediction
+# whenever that count is wrong -- no error, just one transcript missing its
+# coding call -- so the body is identified by matching it instead.
 rnamres <- readLines(opt$rnamining_predictions)
-rnamres <- rnamres[6:length(rnamres)]
 
-rnam <- read.table(text = rnamres, header = FALSE, sep = "\t")
+is_data <- grepl("^[^#[:space:]][^\t]*\t(coding|non-coding)\t", rnamres)
+
+if (!any(is_data)) {
+    stop("No prediction rows found in ", opt$rnamining_predictions,
+         ". Expected tab-separated <id> <coding|non-coding> <score> lines.",
+         call. = FALSE)
+}
+
+rnam <- read.table(text = rnamres[is_data], header = FALSE, sep = "\t",
+                   stringsAsFactors = FALSE)
 colnames(rnam) <- c("transcript_id", "prediction", "rnamining_score")
+
+cat(sprintf("Read %d RNAmining predictions (%d header lines skipped)\n",
+            nrow(rnam), sum(!is_data)))
 
 # Select relevant information from gtf
 tx_table <- dplyr::select(tx_table, seqnames, transcript_id, gene_name, start, end, strand)
