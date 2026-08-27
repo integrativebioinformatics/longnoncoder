@@ -1,6 +1,9 @@
 process BAM_COVERAGE {
     tag "$meta.id"
-    label 'process_low'
+    // Not process_low. That label is for the small R metadata scripts, which hold
+    // the annotation and peak around 4 GB. This reads alignments, and even chunked
+    // per contig its peak tracks the largest chromosome's reads.
+    label 'process_bam_coverage'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/pulposeq:test':

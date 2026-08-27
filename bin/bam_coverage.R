@@ -43,14 +43,42 @@ if (!file.exists(paste0(opt$bam, ".bai")) &&
                opt$bam), call. = FALSE)
 }
 
-bam <- Rsamtools::BamFile(opt$bam)
+bam  <- Rsamtools::BamFile(opt$bam)
+lens <- GenomeInfoDb::seqlengths(Rsamtools::seqinfo(bam))
 
-cat("Computing coverage for", basename(opt$bam), "\n")
+if (!length(lens)) {
+    stop("No sequences in the BAM header of ", opt$bam, call. = FALSE)
+}
 
-# coverage() returns an RleList: run-length encoded, so memory scales with the
-# number of coverage *changes*, not with genome length or read count. That is why
-# a 30 GB BAM does not need anything like 30 GB of RAM here.
-cov <- GenomicAlignments::coverage(bam)
+cat("Computing coverage for", basename(opt$bam), "over", length(lens), "contigs\n")
+
+# One contig at a time, via the index.
+#
+# The obvious call is coverage(bam) on the whole BamFile, and the earlier version
+# did exactly that on the reasoning that the *result* is a run-length encoded
+# RleList, so memory should track coverage changes rather than read count. That
+# reasoning was wrong about the wrong thing: the result is indeed compact, but
+# getting there materialises every alignment in the file first. On a genome-wide
+# ONT BAM that is tens of gigabytes of GAlignments before a single Rle exists,
+# and it OOM-killed the task.
+#
+# Reading through the index one contig at a time bounds peak memory to the largest
+# chromosome's alignments instead of the whole file, which for GRCh38 is chr1 --
+# roughly an eighth of the total. The per-contig Rle is appended to the result and
+# the alignments are released, so memory stays flat across the loop.
+cov <- lapply(names(lens), function(chr) {
+    which <- GenomicRanges::GRanges(chr, IRanges::IRanges(1L, lens[[chr]]))
+    ga <- GenomicAlignments::readGAlignments(
+        bam, param = Rsamtools::ScanBamParam(which = which))
+
+    # An empty contig still needs a full-length zero track, or export.bw writes a
+    # bigWig whose contig lengths disagree with the BAM header.
+    if (length(ga) == 0L) return(S4Vectors::Rle(0L, lens[[chr]]))
+
+    GenomicAlignments::coverage(ga)[[chr]]
+})
+names(cov) <- names(lens)
+cov <- IRanges::RleList(cov, compress = TRUE)
 
 out_bw <- file.path(opt$outdir, paste0(prefix, ".bw"))
 rtracklayer::export.bw(cov, out_bw)

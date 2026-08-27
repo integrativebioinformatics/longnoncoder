@@ -369,9 +369,19 @@ since staging a BAM without its adjacent index would break random access.
 
 Both are new and untested on real data.
 
-- `BAM_COVERAGE` is labelled `process_low` on the reasoning that `coverage()` returns a run-length
-  encoded `RleList`, so memory tracks coverage *changes* rather than genome size. That is a
-  hypothesis; a whole-genome ONT BAM has many transitions. Watch the first run.
+- `BAM_COVERAGE` — **the `process_low` hypothesis was wrong, and the first run OOM-killed it.**
+  The reasoning had been that `coverage()` returns a run-length encoded `RleList`, so memory should
+  track coverage *changes* rather than read count. The output is indeed compact; the mistake was
+  about the path to it. `coverage()` on a whole `BamFile` with no `yieldSize` materialises every
+  alignment before producing a single `Rle`, so peak memory tracked BAM size, not track size.
+
+  Two changes followed. `bin/bam_coverage.R` now reads through the index **one contig at a time**
+  and appends each contig's `Rle`, bounding peak memory to the largest chromosome rather than the
+  whole file. And the module has its own `process_bam_coverage` label — `process_low` is for the
+  small R metadata steps that hold the annotation and peak near 4 GB, which is a different kind of
+  work. Allocations are 8 GB (test) / 24 GB (base) / 32 GB (medium) / 48 GB (large), all still
+  estimates: **this module has no measured peak yet**, and the trace from the next real run should
+  replace them.
 - `GENOMIC_CONTEXT` needs `txdbmaker` present in `:test3` — the script falls back to
   `GenomicFeatures::makeTxDbFromGFF`, its home before Bioconductor 3.19. Confirm which is available.
 - Determinism check: `genomic_context_candidates.csv` must list the same five genes on a re-run.
