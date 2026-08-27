@@ -165,6 +165,33 @@ def validateInputParameters() {
             log.warn("--library ${params.library} is always stranded; --stranded_library false will be ignored.")
         }
 
+        // splice:hq is `splice` with -C5 -O6,24 -B4: it trusts the read, treating a
+        // discrepancy as real biology rather than basecalling error. -k14 exists for
+        // the opposite reason, so the two cannot both be right about the same data.
+        if (params.map_hq != null && params.library == 'ONT_DRS') {
+            error(
+                "--map_hq cannot be used with --library ONT_DRS. splice:hq assumes a low error " +
+                "rate, while the ONT_DRS preset sets -k14 to cope with a high one, so the two " +
+                "cannot both be right about the same reads.\n" +
+                "Drop --map_hq, or use --library ONT_cDNA if these are cDNA reads."
+            )
+        }
+        // Left unset, the preset follows the library. Say which was chosen, since it
+        // changes junction placement and therefore the novel transcript calls, and a
+        // reader of the log should not have to infer it from the library type.
+        if (params.map_hq == null) {
+            log.info("--map_hq unset: using minimap2 " +
+                     (params.library == 'PacBio' ? 'splice:hq' : 'splice') +
+                     " for --library ${params.library}.")
+        }
+        else if (params.map_hq && params.library == 'PacBio') {
+            log.info("--map_hq true for --library PacBio matches the default preset; no change.")
+        }
+        else if (!params.map_hq && params.library == 'PacBio') {
+            log.warn("--map_hq false overrides PacBio's default splice:hq preset with plain splice. " +
+                     "splice:hq is minimap2's documented preset for Iso-Seq reads.")
+        }
+
         // Restranding applies only to ONT cDNA that is not already oriented. The
         // pipeline admits no unstranded path: losing strand erases mono-exonic novel
         // transcripts, depletes novel isoforms of known genes into the antisense

@@ -63,8 +63,25 @@ one. `minimap2` always receives `-uf`; Bambu always receives `--stranded true`.
 
 ## Stub run
 
-**PASSED** at 24 tasks, `-profile test,apptainer` — but that predates `RESTRANDING`, `BAM_COVERAGE`,
-`GENOMIC_CONTEXT` and the `QC_FILT` signature change. Treat as stale.
+**PASSED** on 27 Aug 2026: **30 tasks, 11 succeeded and 19 cached**, `-profile test,singularity`,
+SLURM executor on NPAD, PacBio chr1 test data. The previous pass was 24 tasks across a smaller
+pipeline.
+
+The line that matters is `BAM_COVERAGE — 4 of 4`, one task per sample. Before the `ch_index` fix
+`ALIGNMENT.out.index` was an empty channel, so `BAM_COVERAGE` would have produced **zero** tasks and
+the run would still have reported success. A non-zero count is the only thing that distinguishes
+wired from silently skipped, which is why it is the number to check rather than the exit status.
+
+`VALIDATE_NOVEL_CONTEXT`, `GENOMIC_CONTEXT` and `RENDER_REPORT` each ran 1 of 1. `RENDER_REPORT`
+accepting all 30 inputs without a channel-arity error confirms the report wiring end to end.
+
+Run with trace, report and timeline disabled, because the RNAmining image was then missing `procps`
+(P0, since resolved). Re-runs should leave them enabled — the trace is what the resource profiles are
+sized from.
+
+> **What a stub run does not prove.** `-stub-run` substitutes the `stub:` block for `script:`, so no
+> R code executed. Nothing in `validate_novel_context.R`, `genomic_context.R` or the new `report.qmd`
+> sections has run against real data. This verifies channel topology and cardinality, nothing more.
 
 > `-stub-run` is a boolean switch and takes no value. `-profile test, apptainer` with a space breaks
 > silently — only `test` reaches `-profile` and no container runtime is enabled.
@@ -128,23 +145,60 @@ version detection produced an empty string.
 
 ## Priorities
 
-### P1. Re-run the static checks and the stub — **lint done, stub still pending**
+### P0. RNAmining image missing `procps` — **RESOLVED upstream**
 
-`nextflow lint .` has been re-run against the current tree and passes: 46 files clean, the only 3
-warnings being style-only ones in nf-core template subworkflows. See *Static checks* above.
+Fixed by `samuelismael/rnamining:1.1.0-nextflow`, wired in by commit `1d6f311` and confirmed working
+by its author. Recorded here because the failure mode is not obvious and will recur with any future
+container.
 
-The stub run has **not** been re-done, and it is the one that matters most here. Lint parses the DSL;
-it does not check that a channel actually carries anything. The structure changed substantially —
-`QC_FILT`'s signature changed, two subworkflows and two modules were added, a BAMBU input was
-removed, and `RENDER_REPORT` grew from 23 to 30 inputs — and an empty channel yields zero tasks
-silently rather than failing, so a mis-wired input looks like success until the task count is short.
-Compare against the 24 tasks the previous stub run produced.
+Every real run stopped at `CLASSIFICATION:RNAMINING` with:
+
+```
+Command 'ps' required by nextflow to collect task metrics cannot be found
+```
+
+`samuelismael/rnamining:1.1.0`, introduced by #30, did not install `procps`. Nextflow's task wrapper
+shells out to `ps` to sample memory and CPU whenever trace, report or timeline are enabled — which
+nf-core turns on by default — so the task exited 1 **before `rnamining` was ever invoked**. The
+previous `biocontainers/rnamining:1.0.4` image had it. One line fixes it in any image:
+
+```dockerfile
+RUN apt-get update && apt-get install -y --no-install-recommends procps \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+Publishing it under a **new tag** rather than rebuilding `1.1.0` was the right call: anyone who
+already pulled the old tag still gets what they got, and the Nextflow-specific requirement is visible
+in the name.
+
+The 1.1.0 image was audited directly and `procps` was **its only problem**. Everything else Nextflow
+needs was present: `bash`, the full coreutils set, no `ENTRYPOINT` to swallow arguments, the conda
+environment on `PATH` via `ENV` rather than an activation hook, a working `rnamining --version`, and
+correct behaviour under an arbitrary UID. Two of those are worth remembering when auditing a future
+image, because they fail in ways a stub run cannot catch:
+
+- **conda on `PATH` via `ENV`.** Nextflow runs a non-interactive, non-login shell, so a tool reachable
+  only after `conda activate` in `.bashrc` is invisible. A stub run never notices, because the stub
+  block does not call the tool.
+- **`procps`.** Not needed by the tool at all — only by Nextflow's metrics wrapper — so it is absent
+  from images that otherwise work perfectly when run by hand.
+
+`itsiaguara/pulposeq:test` was checked for the same thing and has `ps` at `/usr/bin/ps` (procps-ng
+4.0.4), inherited from the `rocker/r-ver` base rather than requested explicitly. Worth making explicit
+in that Dockerfile so a future base-image bump cannot remove it silently.
+
+### P1. Re-run the static checks and the stub — **DONE**
+
+Both halves pass against the current tree. `nextflow lint .`: 46 files clean, the only 3 warnings
+being style-only ones in nf-core template subworkflows. Stub run: 30 tasks, 11 succeeded and 19
+cached. See *Static checks* and *Stub run* above.
+
+Two variants are still worth running when convenient, because they exercise a path the default does
+not:
 
 ```bash
-nextflow lint .
-nextflow run . -profile test,docker -params-file test_data/testing.yml -stub-run
-nextflow run . -profile test,docker -params-file test_data/testing.yml -stub-run --skip_qc
-nextflow run . -profile test,docker -params-file test_data/testing.yml -stub-run --skip_filtering
+nextflow run . -profile test,singularity -params-file test_data/testing.yml -stub-run --skip_qc
+nextflow run . -profile test,singularity -params-file test_data/testing.yml -stub-run --skip_filtering
 ```
 
 `--skip_qc` matters specifically: `QC_FILT` is now conditional again while `RESTRANDING` is not, and
@@ -175,9 +229,18 @@ The module has been verified in isolation, but never inside Nextflow. Confirm:
 4. a deliberately wrong `--restrand_kit` produces the error, not a silent low rate
 5. `--headcrop 10` warns
 
-**The test data cannot exercise this.** `test_data/testing.yml` is PacBio, so `RESTRANDING` is inert.
-The vignette's `PCB109.fq.gz` (20,000 reads, ~13 MB) against the existing chr1 reference would make
-this testable and is small enough to commit.
+**No stub run can ever close this, and the 27 Aug pass did not.** `test_data/testing.yml` is
+`library: PacBio`, so `RESTRANDING` is skipped by design and `RESTRANDER` never appears in the task
+list. Adding stub runs will not help; the gate is on the library type, not on the stub mechanism.
+
+Two ways out, and the first is a prerequisite for the second being routine:
+
+- **`test_data/testing_ont.yml`** with `library: ONT_cDNA`, `stranded_library: false` and a
+  `restrand_kit`. The vignette's `PCB109.fq.gz` (20,000 reads, ~13 MB) against the existing chr1
+  reference makes this testable and is small enough to commit.
+- **The first real ONT run** exercises it for free, since restranding sits outside every skip. That
+  is the more likely route to closing P2 in practice — but it tests one kit on one dataset, which is
+  why the committed test data is still worth having.
 
 ### P3. `restrand_kit` in `examplerun.yml` is a placeholder
 
@@ -206,9 +269,35 @@ likely to arise from **internal priming**, where reverse transcriptase primes on
 region instead of a real poly(A) tail. Now that restranding gives every read a strand, those models
 will pass curation and enter the validated set.
 
-Published long-read benchmarking work reports that filtering internally-primed reads substantially
-reduces the detection of intron-overlapping genes, and provides a tool for it (`PrimeSpotter`).
-pulposeq has no equivalent step.
+Published long-read benchmarking work (You *et al.*, bioRxiv 2025.09.11.675724) treats internal
+priming as an explanation for platform-specific detection differences, and reports that **PacBio has
+a higher internal-priming propensity than ONT**, which it links to PacBio's higher proportion of
+intronic reads. That matches this data: in the PacBio run 46.4% of whitelisted `i` transcripts are
+mono-exonic, against 19.4% for ONT.
+
+The paper supplies a tool, [`PrimeSpotter`](https://github.com/youyupei/PrimeSpotter). Note what it
+does and does not do:
+
+- It **tags, it does not filter**. Output is a BAM carrying an `IP` tag per read (`T`/`F`), a summary
+  giving the overall proportion, and a gene-level IP/non-IP count table. Removing reads is a separate
+  decision, which is the same position this pipeline takes.
+- Criterion: a sliding 10-nt window looking for **≥8 A** (forward strand) or ≥8 T (reverse), merged
+  and extended 10 nt either side; a read is flagged if it ends in an A-rich region or starts in a
+  T-rich one. **The threshold is not configurable** — it is the same fixed, human-calibrated
+  criterion that makes test B unfit as an organism-agnostic default.
+- Inputs are BAM + genome FASTA + GTF, all of which the pipeline already has. Installation is a conda
+  environment (Python 3.7.12, pysam), so adopting it means a new container.
+
+> An earlier version of this section claimed the paper "reports that filtering internally-primed
+> reads substantially reduces the detection of intron-overlapping genes". That asserts more than the
+> paper appears to support — it explains detection differences rather than quantifying a filtering
+> effect. The 199-page supplement is still unread, so this is not a refutation, but the claim should
+> not be relied on until someone checks.
+
+pulposeq has no equivalent step. The attraction of adding one is specific: `VALIDATE_NOVEL_CONTEXT`
+already counts supporting reads per novel transcript, so per-read `IP` tags would yield
+`frac_internally_primed` **per candidate** — read-resolved evidence, stronger than the
+transcript-level test B, and the one signal the candidate set currently has nothing on.
 
 **Partly addressed.** `VALIDATE_NOVEL_CONTEXT` now runs test D (boundary read-through and host
 junctions), which catches a large share of the same population — an internally-primed fragment of

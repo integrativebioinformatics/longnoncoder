@@ -36,6 +36,29 @@ library: "ONT_cDNA"
 # you have already re-oriented the reads yourself.
 stranded_library: false
 
+# minimap2 spliced preset. splice:hq is `splice` with -C5 -O6,24 -B4: it lowers the
+# penalty for non-canonical junctions, makes short indels costlier and long gaps
+# cheaper, and doubles the mismatch penalty. In short it trusts the read, treating a
+# discrepancy as real biology rather than basecalling error — which suits accurate
+# data and misfires on noisy data, where it can build junctions out of errors.
+#
+# Leave null to follow the library: splice:hq for PacBio (minimap2's documented
+# Iso-Seq preset), splice for ONT cDNA.
+#
+#   true   use splice:hq. Worth evaluating for R10.4.1 sup ONT cDNA, which is far
+#          more accurate than the chemistry `splice` was tuned for.
+#   false  use splice. For PacBio this overrides the recommended preset; the main
+#          reason to do it is aligning both platforms identically so the preset is
+#          not a confound when comparing their novel transcript calls.
+#
+# Not valid for ONT_DRS: that preset sets -k14 for a high error rate, which
+# contradicts what splice:hq assumes. Setting it there is an error, not ignored.
+#
+# Changing this re-runs alignment and everything after it. Do not change it in the
+# same run as a restranding change — both move the mono-exonic novel transcript
+# count, in opposite directions.
+map_hq: null
+
 # ------------------------------------------------------------------------------
 #  Restranding (unoriented ONT cDNA only)
 # ------------------------------------------------------------------------------

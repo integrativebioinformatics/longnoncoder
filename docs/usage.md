@@ -119,6 +119,7 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `annotation` | Full path to a reference annotation `GTF` file from Ensembl |
 | `library` | Sequencing library type: `ONT_cDNA`, `ONT_DRS` or `PacBio` |
 | `stranded_library` | Whether the reads **on disk** are already oriented (`true`/`false`) |
+| `map_hq` | Use minimap2's `splice:hq` preset instead of `splice`. Unset follows the library default; not valid for `ONT_DRS` |
 | `restrand_kit` | Sequencing kit whose primers Restrander should look for — **required** for unoriented ONT cDNA |
 | `restrand_config` | Optional custom Restrander configuration JSON; overrides `restrand_kit` |
 | `restrand_min_frac` | Minimum oriented fraction, per sample; below it the run stops (default `0.80`, minimum `0.5`) |
@@ -135,7 +136,7 @@ The `library` and `stranded_library` parameters are **required** whenever alignm
 > [!IMPORTANT]
 > **The pipeline processes stranded data only.** There is no unstranded path. Unoriented reads reaching alignment and quantification erase mono-exonic novel transcripts, push novel isoforms of known genes into the antisense class, and bleed reads between overlapping sense/antisense pairs — the three things an isoform-level lncRNA pipeline is least able to absorb. ONT cDNA is therefore either oriented before it arrives, or oriented by the pipeline.
 
-| `library` | `stranded_library` | Restrander | `minimap2` preset | Bambu `stranded` |
+| `library` | `stranded_library` | Restrander | `minimap2` preset (`map_hq` unset) | Bambu `stranded` |
 |---|---|---|---|---|
 | `ONT_DRS` | automatically `true` | no | `-ax splice -uf -k14` | `TRUE` |
 | `PacBio` | automatically `true` | no | `-ax splice:hq -uf` | `TRUE` |
@@ -152,6 +153,32 @@ If restranding does not reach `restrand_min_frac` on **every** sample, the run s
 **ONT_DRS.** Direct RNA sequencing reads the native RNA molecule, so these libraries are considered automatically stranded. Setting `stranded_library: false` for `ONT_DRS` is ignored, and the pipeline emits a warning.
 
 **ONT_cDNA.** This covers both PCR-cDNA and direct-cDNA protocols. Standard ONT cDNA library preparation sequences either the first or second cDNA strand, so read direction is roughly 50/50 with respect to the RNA strand. Set `stranded_library: false` for such reads — the pipeline then orients them itself with [Restrander](https://github.com/mritchielab/restrander), as described below. Set `stranded_library: true` only if you have already oriented the reads yourself, for example with [Pychopper](https://github.com/epi2me-labs/pychopper).
+
+### Choosing the alignment preset with `map_hq`
+
+`map_hq` selects between minimap2's two spliced presets. `splice:hq` is `splice` with three penalties changed:
+
+| Option | `splice` | `splice:hq` | Penalises |
+|---|---|---|---|
+| `-B` | 2 | **4** | a mismatch |
+| `-O` | 2,32 | **6,24** | opening a gap |
+| `-C` | 9 | **5** | a junction that is not `GT-AG` |
+
+Gap cost is `min(O1 + k×E1, O2 + k×E2)`, and both presets use `-E1,0`. So a gap of length *k* costs `min(2+k, 32)` under `splice` and `min(6+k, 24)` under `splice:hq`. Below 22 bases `splice:hq` is dearer, above it cheaper — short indels become harder to invent, introns easier to place.
+
+Taken together, `splice:hq` **trusts the read**: it reads a discrepancy as real biology rather than basecalling error. That suits accurate data and misfires on noisy data, where it can assemble junctions out of errors.
+
+**Leave `map_hq` unset** and the preset follows the library — `splice:hq` for PacBio, which is minimap2's documented Iso-Seq preset, and `splice` for ONT cDNA. Set it `true` or `false` to override for either platform.
+
+Two reasons to set it explicitly:
+
+- **`map_hq: true` for ONT cDNA.** R10.4.1 with `sup` basecalling is far more accurate than the chemistry `splice` was tuned for, and published work on this chemistry uses `splice:hq`. Worth evaluating rather than adopting untested: it changes junction placement, so it moves the class-code distribution and the mono-exonic count.
+- **`map_hq: false` for PacBio.** Aligns both platforms identically, so the preset is not a confound when comparing their novel transcript calls. The pipeline warns, because `splice:hq` is the recommended preset for Iso-Seq, but the comparison is a legitimate reason to override it.
+
+`map_hq` cannot be used with `ONT_DRS`: that preset sets `-k14` to cope with a high error rate, and `splice:hq` asserts the opposite, so the two cannot both be right about the same reads. Setting it is an error rather than a silently ignored value.
+
+> [!NOTE]
+> Changing `map_hq` changes the alignment command, so Nextflow re-runs alignment and everything downstream. Run it as a deliberate comparison, and not in the same run as a change to restranding — both move the mono-exonic count, in opposite directions, and you will not be able to attribute which did what.
 
 ### Restranding ONT cDNA libraries
 

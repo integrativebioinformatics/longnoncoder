@@ -170,6 +170,11 @@
             "description": "Whether the reads on disk are already oriented. Forced to true for ONT_DRS and PacBio; only meaningful for ONT_cDNA. This describes the FASTQ, not the chemistry: ONT PCR-cDNA is strand-specific chemistry whose basecalled reads are not oriented.",
             "fa_icon": "fas fa-arrows-alt-h"
         },
+        "map_hq": {
+            "type": "boolean",
+            "description": "Choose minimap2's splice:hq preset over splice. splice:hq is splice with -C5 -O6,24 -B4: a lower non-canonical junction penalty, costlier short gaps, cheaper long ones and a doubled mismatch penalty. It trusts the read, reading a discrepancy as real biology rather than basecalling error, so it suits accurate data (R10.4.1 sup, Iso-Seq) and can build junctions out of errors on noisy data. Leave unset to follow the library default: splice:hq for PacBio, splice for ONT cDNA. Set true or false to override for either, so both can be run each way and compared. Cannot be used with ONT_DRS, whose -k14 setting assumes the opposite error profile.",
+            "fa_icon": "fas fa-gem"
+        },
         "restrand_kit": {
             "type": "string",
             "enum": ["PCB109", "PCB111", "PCB114", "DCS109", "DCS-LSK114", "NEBNext", "trimmed"],
