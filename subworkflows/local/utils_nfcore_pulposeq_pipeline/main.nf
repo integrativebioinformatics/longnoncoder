@@ -204,6 +204,26 @@ def validateInputParameters() {
                          "state is wrong rather than that the threshold needs relaxing."
             }
         }
+        else if (params.restrand_kit || params.restrand_config) {
+            // Reached only when one of these was actually passed: both default to
+            // null, so their presence here means they were set for a library that
+            // skips restranding. Warned about rather than quietly dropped -- the run
+            // record should reflect what was asked for, and hiding the value would
+            // leave the misunderstanding invisible.
+            //
+            // restrand_min_frac is deliberately not covered: it defaults to 0.8, so
+            // there is no way to tell a user who passed 0.8 from one who passed
+            // nothing at all.
+            def why = params.library == 'ONT_cDNA'
+                ? "--stranded_library is true, so these reads are already oriented"
+                : "--library ${params.library} is always oriented"
+
+            log.warn(
+                "restrand_kit / restrand_config are set, but restranding is neither running nor applied: " +
+                "${why}. Restranding runs only for ONT_cDNA reads that are not already oriented, so these " +
+                "values are ignored."
+            )
+        }
     }
 
     // Coding prediction requires organism
