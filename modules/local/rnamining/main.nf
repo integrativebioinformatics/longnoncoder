@@ -3,8 +3,8 @@ process RNAMINING {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
-        'docker://docker.io/samuelismael/rnamining:1.1.0':
-        'docker.io/samuelismael/rnamining:1.1.0' }"
+        'docker://docker.io/samuelismael/rnamining:1.1.0-nextflow':
+        'docker.io/samuelismael/rnamining:1.1.0-nextflow' }"
 
     input:
     path fasta
