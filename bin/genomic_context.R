@@ -6,8 +6,8 @@
 #   title       the subject and the region actually plotted, chromosome included
 #   chromosome  a bar marking where on the chromosome this window sits
 #   structure   the union of the gene's (or the host's) exons, collapsed to one row
-#   subject     intronic panels only: the candidate on a row of its own
-#   isoforms    every validated transcript in the window, coloured by biotype
+#   isoforms    every validated transcript in the window, coloured by biotype. In an
+#               intronic panel the candidate is one of these, labelled like the rest
 #   coverage    one track per sample, on a y range shared across samples
 #   axis        genomic coordinates
 #   legend      the biotypes this panel contains
@@ -583,17 +583,8 @@ draw_ideogram <- function(chrom, win_s, win_e, chrom_len,
 #' @param structure_gr GRanges drawn as the single "gene" row above the isoforms
 #' @param panel_tx     rows of `tx` this panel will draw; sizes the track and supplies
 #'                     the biotype each model is coloured by
-#' @param subject_gr   exons of the one transcript the panel is named after, drawn on
-#'                     a dedicated row of its own. plotTranscripts packs by position
-#'                     and drops labels that would collide, so the subject can end up
-#'                     sharing a row with another model and losing its label to it --
-#'                     a panel titled BambuTx1528 showed only BambuTx1193, 8 kb away.
-#'                     Its own row is the only way to guarantee the title and the
-#'                     highlighted model are the same transcript.
 draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
-                       title, subtitle, out_png, structure_label = "gene",
-                       subject_gr = NULL, subject_label = NULL, subject_txlab = NULL,
-                       subject_fill = NULL) {
+                       title, subtitle, out_png, structure_label = "gene") {
 
   # A shared y range across samples, so track heights compare directly instead of
   # each being rescaled to its own maximum.
@@ -635,9 +626,6 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   show_ideo <- is.finite(chrom_len) && chrom_len > 0
   head_h    <- if (show_ideo) ideo_h + ideo_lab + zoom_h else 0
 
-  show_subj <- !is.null(subject_gr) && length(subject_gr) > 0
-  subj_h    <- if (show_subj) TX_LABEL_H + TX_MODEL_H + 0.04 else 0
-
   # plotLegend lays its entries in a single row and divides the width equally between
   # them, so five entries including protein_coding_CDS_not_defined ran off the page.
   # Chunk into as many rows as the longest label needs, and draw one legend per row.
@@ -651,7 +639,7 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   } else list()
   lgnd_h    <- if (show_lgnd) length(lgnd_rows) * 0.20 + 0.14 else 0
 
-  height  <- margin * 2 + title_h + head_h + gene_h + subj_h + tx_h + gap * 3 +
+  height  <- margin * 2 + title_h + head_h + gene_h + tx_h + gap * 3 +
              length(bw_files) * (sig_lab_h + sig_h + gap) + label_h + lgnd_h
 
   png(out_png, width = width, height = height, units = "in", res = 300)
@@ -699,39 +687,6 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   }
 
   y <- y + gene_h + gap
-
-  # The subject on a row of its own, directly under the host structure it is being
-  # compared against, and labelled with the id in the title.
-  if (show_subj) {
-    fill <- if (is.null(subject_fill)) BIOTYPE_FALLBACK else subject_fill
-    # Anchored top-down, not bottom-up: a bottom-anchored label grows upward into the
-    # gap above and can touch the structure row.
-    plotText(label = subject_label, x = margin, y = y, just = c("left", "top"),
-             fontsize = 7, fontcolor = fill, default.units = "inches")
-
-    # Drawn by plotTranscripts, filtered to this one transcript, rather than by
-    # plotRanges. plotRanges has no concept of a transcript: it draws each exon as an
-    # independent box, so a two-exon candidate reads as two separate features with no
-    # intron between them -- the same model drawn in the track below showed the exons
-    # joined, and the two disagreed about the structure of one transcript.
-    if (!is.null(subject_txlab) && !is.na(subject_txlab)) {
-      plotTranscripts(
-        params = pars, y = y + TX_LABEL_H, height = TX_MODEL_H,
-        labels = NULL, limitLabel = FALSE,
-        boxHeight = grid::unit(TX_BOX_MM, "mm"), spaceHeight = TX_SPACE_H,
-        stroke = TX_STROKE,
-        fill = c(BIOTYPE_FALLBACK, BIOTYPE_FALLBACK), colorbyStrand = FALSE,
-        transcriptFilter     = subject_txlab,
-        transcriptHighlights = data.frame(transcript = subject_txlab, color = fill,
-                                          stringsAsFactors = FALSE)
-      )
-    } else {
-      # No TxDb entry for it: fall back to exon boxes rather than drawing nothing.
-      plotRanges(params = pars, data = subject_gr, collapse = TRUE,
-                 fill = fill, linecolor = NA, y = y + TX_LABEL_H, height = 0.16)
-    }
-    y <- y + subj_h
-  }
 
   # --- Isoform track ----------------------------------------------------------
   #
@@ -892,12 +847,12 @@ if (nrow(flagged)) {
     # carries its own Bambu gene id, so filtering on the host gene would leave other
     # novel models in the window out of the panel entirely.
     #
-    # The subject itself is excluded, because it already has a dedicated row directly
-    # under the host structure. Leaving it in draws it twice -- once there and once in
-    # the track. It went unnoticed while plotTranscripts was dropping it from the track.
+    # The candidate is in here too, and appears only here. It briefly had a dedicated
+    # row above the track as well, which drew it twice; the track entry is the one kept,
+    # because it carries the full label -- identifier, class code wording and strand --
+    # where the dedicated row could only show the bare id.
     in_window <- tx$chrom == row$chrom & tx$end >= row$win_s & tx$start <= row$win_e
-    panel_tx  <- tx[in_window & tx$transcript_id %in% draw_ids &
-                    tx$transcript_id != row$qry_id, , drop = FALSE]
+    panel_tx  <- tx[in_window & tx$transcript_id %in% draw_ids, , drop = FALSE]
 
     host_lab <- if (is.na(row$host_gene_name) || !nzchar(row$host_gene_name)) {
       row$host_gene_id
@@ -922,14 +877,7 @@ if (nrow(flagged)) {
           sprintf(", %.0f%% splice into a host exon", 100 * row$frac_into_host_exon)),
       out_png      = file.path(opt$outdir,
                                sprintf("intronic_context_%s.png", row$qry_id)),
-      structure_label = "host",
-      # Its own row, so the transcript named in the title is the one the eye lands on.
-      subject_gr    = exons_gr[exon_txid == row$qry_id],
-      subject_label = row$qry_id,
-      # The name the TxDb knows it by, so plotTranscripts can be filtered to it.
-      subject_txlab = unname(lab[row$qry_id]),
-      subject_fill  = biotype_color(
-        tx$biotype_key[match(row$qry_id, tx$transcript_id)])
+      structure_label = "host"
     )
   }
 
