@@ -1687,6 +1687,11 @@ ctx_flags   <- read_csv_safe(params$context_flags)
 ctx_summary <- read_csv_safe(params$context_summary)
 novel_ir    <- read_csv_safe(params$novel_intron_retention_meta)
 
+# Chunk options cannot use `!expr !is.null(x)`: YAML reads `!expr` as a tag and
+# then hits a second `!`, which is a duplicate tag property and a parse error.
+# Same reason the existing scaffold chunks carry a plain `has_*` flag.
+has_ctx_flags <- !is.null(ctx_flags)
+
 ctx_metric <- function(key) {
   if (is.null(ctx_summary)) return(NA_integer_)
   v <- ctx_summary$value[ctx_summary$metric == key]
@@ -1738,7 +1743,7 @@ if (is.null(ctx_flags)) {
 #| fig-cap: "**Strand of each novel transcript relative to its host gene, by class code.** Opposite-strand transcripts are unambiguous: the host's pre-mRNA cannot produce them. Same-strand intronic transcripts are the population that needs the read-level evidence below. Transcripts with no host gene are intergenic and have nothing to compare against."
 #| fig-width: 10
 #| fig-height: 6
-#| eval: !expr !is.null(ctx_flags)
+#| eval: !expr has_ctx_flags
 
 strand_df <- ctx_flags %>%
   mutate(relation = case_when(
@@ -1769,7 +1774,7 @@ ggplot(strand_df, aes(x = class_code, y = count, fill = relation)) +
 #| fig-cap: "**Fraction of supporting reads that run past a transcript's boundaries, and fraction carrying one of the host gene's splice junctions.** A discrete transcript sits near zero on both. Values near one mean the reads supporting the call belong to a longer molecule, most likely the host's unspliced pre-mRNA. Only transcripts with a host gene and at least one recovered read are shown."
 #| fig-width: 10
 #| fig-height: 6
-#| eval: !expr !is.null(ctx_flags)
+#| eval: !expr has_ctx_flags
 
 reads_df <- ctx_flags %>%
   filter(!is.na(same_strand_as_host), reads_total > 0) %>%
@@ -1838,6 +1843,8 @@ if (!is.null(ctx_flags)) {
 
   if (!nrow(evidence_sets)) evidence_sets <- NULL
 }
+
+has_evidence_sets <- !is.null(evidence_sets)
 ```
 
 ```{r}
@@ -1845,7 +1852,7 @@ if (!is.null(ctx_flags)) {
 #| fig-cap: "**Combinations of structural warning signs across novel transcript candidates.** Each bar is one exact combination; the dot matrix below names it. Bars are stacked by gffcompare class code, which is a mutually exclusive attribute and therefore a fill rather than a set. Set sizes are in the row labels. A candidate appearing in the leftmost bar carries no warning signs at all."
 #| fig-width: 11
 #| fig-height: 7
-#| eval: !expr !is.null(evidence_sets)
+#| eval: !expr has_evidence_sets
 
 plot_upset(
   evidence_sets,
@@ -1934,6 +1941,8 @@ if (!is.null(sup_total) && !is.null(sup_full) && !is.null(sup_uniq)) {
            unique_fraction      = reads_unique      / reads_total)
   if (!nrow(support)) support <- NULL
 }
+
+has_support <- !is.null(support)
 ```
 
 ```{r}
@@ -1941,7 +1950,7 @@ if (!is.null(sup_total) && !is.null(sup_full) && !is.null(sup_uniq)) {
 #| fig-cap: "**Full-length and uniquely-mapped read support for novel transcripts, by class code and exon structure.** Each panel is one support measure. Low full-length support means the reads behind a call do not span it; low unique support means those reads are compatible with other transcripts too, so the count came largely from expectation-maximisation rather than from unambiguous evidence."
 #| fig-width: 12
 #| fig-height: 7
-#| eval: !expr !is.null(support)
+#| eval: !expr has_support
 
 support_long <- support %>%
   select(class_code, exon, full_length_fraction, unique_fraction) %>%
@@ -1967,7 +1976,7 @@ ggplot(support_long, aes(x = class_code, y = fraction, fill = exon)) +
 #| label: tbl-support-summary
 #| tbl-cap: "Median read support by novel transcript category and class code."
 #| echo: false
-#| eval: !expr !is.null(support)
+#| eval: !expr has_support
 
 support %>%
   group_by(biotype, class_code) %>%
@@ -2084,11 +2093,26 @@ needs revisiting, not the transcript.
 #| output: asis
 
 embed_figures(gc_flagged, "figure", "qry_id", function(r) {
-  sprintf("%s inside an intron of %s (%s). %d reads: %d cross a boundary, %d carry a host junction.",
-          r$qry_id,
-          ifelse(is.na(r$host_gene_name) | !nzchar(r$host_gene_name),
-                 r$host_gene_id, r$host_gene_name),
-          r$host_gene_biotype, r$reads_total,
-          r$reads_crossing_boundary, r$reads_with_host_junction)
+  host <- ifelse(is.na(r$host_gene_name) | !nzchar(r$host_gene_name),
+                 r$host_gene_id, r$host_gene_name)
+  pct  <- function(x) if (is.null(x) || !length(x) || is.na(x)) NA_real_ else 100 * x
+  fc   <- pct(r$frac_crossing)
+  fj   <- pct(r$frac_host_junction)
+  fe   <- pct(r$frac_into_host_exon)
+
+  # Fractions, not counts, and for the same reason the selection ranks on fractions:
+  # a raw count of host-junction reads ranks by expression. Falls back to counts for
+  # a candidates table written before those columns existed.
+  ev <- if (is.na(fc) || is.na(fj)) {
+    sprintf("%d reads: %d cross a boundary, %d carry a host junction",
+            r$reads_total, r$reads_crossing_boundary, r$reads_with_host_junction)
+  } else {
+    sprintf("%d reads: %.0f%% cross a boundary, %.0f%% carry a host junction%s",
+            r$reads_total, fc, fj,
+            if (is.na(fe)) "" else
+              sprintf(", %.0f%% splice into a host exon", fe))
+  }
+  sprintf("%s inside an intron of %s (%s). %s.", r$qry_id, host,
+          r$host_gene_biotype, ev)
 })
 ```
