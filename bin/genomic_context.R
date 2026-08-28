@@ -1,18 +1,30 @@
 #!/usr/bin/env Rscript
 
-# Genomic context figures, drawn with plotgardener. One PNG per gene, stacking:
+# Genomic context figures, drawn with plotgardener. Two families of PNG -- one per
+# selected gene, one per flagged intronic candidate -- each stacking:
 #
-#   title            gene name and the region actually plotted, chromosome included
-#   gene structure   the union of the gene's exons, collapsed to one row
-#   isoforms         every validated transcript in the window, novel ones highlighted
-#   coverage         one track per sample, on a shared y range
-#   axis             genomic coordinates
+#   title       the subject and the region actually plotted, chromosome included
+#   chromosome  a bar marking where on the chromosome this window sits
+#   structure   the union of the gene's (or the host's) exons, collapsed to one row
+#   subject     intronic panels only: the candidate on a row of its own
+#   isoforms    every validated transcript in the window, coloured by biotype
+#   coverage    one track per sample, on a y range shared across samples
+#   axis        genomic coordinates
+#   legend      the biotypes this panel contains
 #
-# Scope is deliberately narrow: only known genes carrying at least one novel isoform.
-# A wholly novel locus has no annotated models to place it against, and that
-# comparison is most of what makes the view worth looking at. The bigWigs are
-# published, so anything not plotted here can be opened in IGV against the
-# validated GTF.
+# Two scope decisions, both deliberate.
+#
+# Only known genes carrying at least one novel isoform are drawn. A wholly novel locus
+# has no annotated model to place it against, and that comparison is most of what makes
+# the view worth looking at. No biotype filter applies: a novel lncRNA inside a known
+# lncRNA gene competes for a panel on the same terms as one inside a protein-coding
+# gene.
+#
+# The isoform track shows the VALIDATED set -- transcripts supported in these samples --
+# and not the reference in full. A reference isoform with no support here is absent by
+# design: the panel is a picture of what the data contains, and an unexpressed model
+# drawn solid over flat coverage reads as evidence it is not. The bigWigs are published,
+# so the complete annotation can be opened against them in IGV.
 
 suppressPackageStartupMessages({
   library(optparse)
@@ -86,6 +98,19 @@ BIOTYPE_COLORS <- c(
 )
 BIOTYPE_FALLBACK <- "#969696"
 
+# Isoform track geometry, passed straight to plotTranscripts.
+#
+# boxHeight is the lever that matters. plotgardener's 2 mm default leaves a row barely
+# taller than the label that has to sit with it, and it drops labels it cannot place --
+# eight ACOT7 isoforms came out with two names between them. Raising the box raises the
+# row, which is what gives the labels room; it also widens the gap between exon boxes
+# and the intron line they sit on, which is the thick-against-thin contrast we want
+# anyway. plotTranscripts draws UTR thinner than CDS by itself, so that comes free.
+TX_LABEL_SIZE <- 6
+TX_BOX_MM     <- 4       # exon box height, against plotgardener's 2 mm default
+TX_SPACE_H    <- 0.5     # row spacing as a fraction of boxHeight
+TX_STROKE     <- 0.1     # transcript body outline, plotgardener's default
+
 biotype_color <- function(bt) {
   out <- unname(BIOTYPE_COLORS[bt])
   out[is.na(out)] <- BIOTYPE_FALLBACK
@@ -146,7 +171,10 @@ tx <- data.frame(
   transcript_name    = tx_col("transcript_name"),
   transcript_biotype = tx_col("transcript_biotype"),
   transcript_status  = tx_col("transcript_status"),
+  class_code         = tx_col("class_code"),
+  classification     = tx_col("classification"),
   chrom              = as.character(GenomeInfoDb::seqnames(tx_gr)),
+  strand             = as.character(BiocGenerics::strand(tx_gr)),
   start              = BiocGenerics::start(tx_gr),
   end                = BiocGenerics::end(tx_gr),
   stringsAsFactors   = FALSE
@@ -162,7 +190,20 @@ display_name <- ifelse(!is.na(tx$transcript_name) & nzchar(tx$transcript_name),
                        tx$transcript_name, tx$transcript_id)
 biotype <- ifelse(is.na(tx$transcript_biotype) | !nzchar(tx$transcript_biotype),
                   "unknown_biotype", tx$transcript_biotype)
-tx$label <- paste(display_name, biotype, sep = " | ")
+# plotTranscripts labels each model with its TXNAME, so the label has to BE the
+# transcript_id as far as the TxDb is concerned -- one string, used on the figure and
+# in the rewritten sub-GTF alike.
+#
+# Biotype is left out of it: every model is coloured by biotype and the legend names
+# it, so repeating it on each label spends a third of the track width restating the
+# palette. The GTF keeps transcript_biotype as its own attribute, so nothing is lost.
+# The bare class code goes too -- the mapping to its wording is one-to-one, "intronic"
+# says everything "i" does, and the letter is still on every row of the metadata CSV.
+cls <- ifelse(is.na(tx$classification) | !nzchar(tx$classification), "",
+              paste0(" | ", tx$classification))
+str_mark <- ifelse(tx$strand %in% c("+", "-"), paste0(" | ", tx$strand), "")
+
+tx$label <- paste0(display_name, cls, str_mark)
 # Kept as its own column because the figures colour by it and the legend lists it.
 tx$biotype_key <- biotype
 
@@ -346,11 +387,16 @@ if (nrow(cand) == 0 && nrow(flagged) == 0) {
 
 # --- Annotation for plotgardener ----------------------------------------------
 
-# plotTranscripts draws from a TxDb and labels each model with its TXNAME, so the
-# label has to BE the transcript id as far as the TxDb is concerned. The GTF is
-# rewritten accordingly -- but only over the handful of windows being drawn, which
-# also keeps makeTxDbFromGFF off the whole-genome annotation. On this data that is a
-# few thousand records instead of several million.
+# plotTranscripts draws from a TxDb and labels each model with its TXNAME, so the label
+# has to BE the transcript id as far as the TxDb is concerned. The GTF is rewritten
+# accordingly -- but only over the handful of windows being drawn, which also keeps
+# makeTxDbFromGFF off the whole-genome annotation. On this data that is a few thousand
+# records instead of several million.
+#
+# Note plotTranscripts also has a transcriptFilter argument that takes transcript names
+# to display. Restricting the GTF here rather than filtering per call is still the right
+# way round: it is what keeps the TxDb build small, and one build is shared by every
+# panel.
 # Both selections share one TxDb: makeTxDbFromGFF over the flagged windows as well
 # is a few hundred extra records, where building it twice would repeat the whole
 # parse.
@@ -360,9 +406,9 @@ windows <- c(
   if (nrow(flagged)) GenomicRanges::GRanges(
     flagged$chrom, IRanges::IRanges(flagged$win_s, flagged$win_e)) else GenomicRanges::GRanges()
 )
-# Which transcripts each panel is meant to contain. plotTranscripts draws whatever the
-# TxDb holds inside the window, so this set -- not the window alone -- is what decides
-# a panel's contents. Restricting it stops a neighbouring gene's isoforms from crowding
+# Which transcripts each panel is meant to contain -- this set, not the window alone,
+# is what decides a panel's contents. Restricting it stops a neighbouring gene's
+# isoforms from crowding
 # out the ones the figure is about: a plain overlap query on one 84 kb window pulled in
 # five genes and 31 transcripts to draw a caption that promised eight.
 draw_ids <- character(0)
@@ -427,35 +473,42 @@ pulposeq_assembly <- assembly(
 
 # --- Drawing ------------------------------------------------------------------
 
-exons_gr <- gtf[as.character(S4Vectors::mcols(gtf)$type) == "exon"]
-exon_gid <- as.character(S4Vectors::mcols(exons_gr)$gene_id)
+exons_gr  <- gtf[as.character(S4Vectors::mcols(gtf)$type) == "exon"]
+exon_gid  <- as.character(S4Vectors::mcols(exons_gr)$gene_id)
+exon_txid <- as.character(S4Vectors::mcols(exons_gr)$transcript_id)
 
-#' How many rows plotTranscripts will need for a set of models.
+#' Assign each model to a row, packing models that do not overlap onto the same one.
 #'
-#' plotgardener packs models into rows by position and writes a label above each, so a
-#' row is claimed by whichever is wider, the model or its label. Working the packing
-#' out here is what lets the panel height be exact. Sizing on the transcript count
+#' A label sits above every model, so a row is claimed by whichever is wider, the model
+#' or its label. The assignment returned here both draws the track and sizes it, which
+#' is what makes the panel height exact. Sizing on the transcript count
 #' alone leaves half the figure blank when models pack together; sizing on the bar
 #' height alone clips the overflow, which is how a panel captioned "11 isoforms" came
 #' to draw seven and lose three of its four novel candidates.
 pack_rows <- function(starts, ends, labels, win_s, win_e, track_w, fontsize) {
   n <- length(starts)
-  if (!n) return(1L)
+  if (!n) return(integer(0))
   span    <- max(1, win_e - win_s)
   # Roughly the advance width of one character at this size, in inches, as bp.
   char_in <- fontsize * 0.0075
   lab_bp  <- nchar(labels) * char_in / track_w * span
-  mid <- (starts + ends) / 2
-  l   <- pmin(starts, mid - lab_bp / 2)
-  r   <- pmax(ends,   mid + lab_bp / 2)
-  pad <- 0.02 * span                    # plotgardener's default inter-model spacing
+  # Clamped to the window: a model running off the edge only competes for the space it
+  # actually occupies on screen, and its label is centred on the visible part.
+  vs  <- pmax(starts, win_s)
+  ve  <- pmin(ends,   win_e)
+  mid <- (vs + ve) / 2
+  l   <- pmin(vs, mid - lab_bp / 2)
+  r   <- pmax(ve, mid + lab_bp / 2)
+  pad <- 0.02 * span
   row_end <- numeric(0)
+  rows    <- integer(n)
   for (i in order(l)) {
     slot <- which(row_end + pad < l[i])
     k <- if (length(slot)) slot[1] else length(row_end) + 1L
     row_end[k] <- r[i]
+    rows[i]    <- k
   }
-  max(1L, length(row_end))
+  rows
 }
 
 #' A chromosome bar with the drawn window marked on it, and the zoom lines down to
@@ -502,19 +555,17 @@ draw_ideogram <- function(chrom, win_s, win_e, chrom_len,
 #' @param structure_gr GRanges drawn as the single "gene" row above the isoforms
 #' @param panel_tx     rows of `tx` this panel will draw; sizes the track and supplies
 #'                     the biotype each model is coloured by
+#' @param subject_gr   exons of the one transcript the panel is named after, drawn on
+#'                     a dedicated row of its own. plotTranscripts packs by position
+#'                     and drops labels that would collide, so the subject can end up
+#'                     sharing a row with another model and losing its label to it --
+#'                     a panel titled BambuTx1528 showed only BambuTx1193, 8 kb away.
+#'                     Its own row is the only way to guarantee the title and the
+#'                     highlighted model are the same transcript.
 draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
-                       title, subtitle, out_png, structure_label = "gene") {
-
-  # Colour every model by its transcript biotype, keyed on the label the TxDb actually
-  # ended up using: `lab` is the same transcript -> label mapping the sub-GTF was
-  # rewritten with, so a name that genuinely needed a uniquifying suffix still matches.
-  panel_lab <- unname(lab[panel_tx$transcript_id])
-  keep      <- !is.na(panel_lab)
-  hl <- if (any(keep)) {
-    data.frame(transcript = panel_lab[keep],
-               color      = biotype_color(panel_tx$biotype_key[keep]),
-               stringsAsFactors = FALSE)
-  } else NULL
+                       title, subtitle, out_png, structure_label = "gene",
+                       subject_gr = NULL, subject_label = NULL,
+                       subject_fill = NULL) {
 
   # A shared y range across samples, so track heights compare directly instead of
   # each being rescaled to its own maximum.
@@ -533,20 +584,24 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   ideo_lab <- 0.22
   zoom_h   <- 0.40
   gene_h   <- 0.26
-  row_h    <- 0.27          # one packed row: the label plus the model beneath it
+  # plotgardener's own row pitch: the box plus the spacing fraction above it. Matching
+  # it here is what makes the height we request line up with the rows it actually draws.
+  row_h    <- (TX_BOX_MM / 25.4) * (1 + TX_SPACE_H)
   sig_h    <- 0.55
+  sig_lab_h <- 0.17        # band above each trace for its scale and sample name
   gap      <- 0.12
   label_h  <- 0.45
   legend_h <- 0.34
 
-  # Height follows the real packing, so the figure is exactly as tall as its contents.
-  # One spare row, capped at the worst case of every model on its own row. pack_rows
-  # estimates label widths, so it can be off by one either way; erring tall costs a
-  # little whitespace, erring short silently drops models off the bottom.
-  n_rows <- pack_rows(panel_tx$start, panel_tx$end, panel_tx$label,
-                      win_s, win_e, track_w, 6)
-  n_rows <- min(max(nrow(panel_tx), 1L), n_rows + 1L)
-  tx_h   <- max(0.5, n_rows * row_h)
+  # The same packing that draws the track sizes it, so the height is exact rather than
+  # estimated -- no spare row, and nothing to clip.
+  tx_rows <- pack_rows(panel_tx$start, panel_tx$end, panel_tx$label,
+                       win_s, win_e, track_w, TX_LABEL_SIZE)
+  n_rows  <- if (length(tx_rows)) max(tx_rows) else 1L
+  # Half a row of slack: pack_rows estimates label widths, so it can disagree with
+  # plotgardener by one. Erring tall costs whitespace; erring short makes plotTranscripts
+  # drop models and say so with a "+" in the corner.
+  tx_h    <- max(0.4, (n_rows + 0.5) * row_h)
 
   chrom_len <- if (!is.null(chrom_lens) && chrom %in% names(chrom_lens)) {
     as.numeric(chrom_lens[[chrom]])
@@ -554,12 +609,24 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   show_ideo <- is.finite(chrom_len) && chrom_len > 0
   head_h    <- if (show_ideo) ideo_h + ideo_lab + zoom_h else 0
 
+  show_subj <- !is.null(subject_gr) && length(subject_gr) > 0
+  subj_h    <- if (show_subj) 0.32 else 0
+
+  # plotLegend lays its entries in a single row and divides the width equally between
+  # them, so five entries including protein_coding_CDS_not_defined ran off the page.
+  # Chunk into as many rows as the longest label needs, and draw one legend per row.
   bts       <- sort(unique(panel_tx$biotype_key))
   show_lgnd <- length(bts) > 0
-  lgnd_h    <- if (show_lgnd) legend_h else 0
+  lgnd_rows <- if (show_lgnd) {
+    # Calibrated against rendered panels: a 30-character biotype occupies ~1.4 in of
+    # text at fontsize 7, so four entries fit across 7 in and five do not.
+    per_row <- max(1L, floor(track_w / (max(nchar(bts)) * 0.048 + 0.30)))
+    unname(split(bts, ceiling(seq_along(bts) / per_row)))
+  } else list()
+  lgnd_h    <- if (show_lgnd) length(lgnd_rows) * 0.20 + 0.14 else 0
 
-  height  <- margin * 2 + title_h + head_h + gene_h + tx_h + gap * 3 +
-             length(bw_files) * (sig_h + gap) + label_h + lgnd_h
+  height  <- margin * 2 + title_h + head_h + gene_h + subj_h + tx_h + gap * 3 +
+             length(bw_files) * (sig_lab_h + sig_h + gap) + label_h + lgnd_h
 
   png(out_png, width = width, height = height, units = "in", res = 300)
   pageCreate(width = width, height = height, default.units = "inches",
@@ -606,21 +673,73 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   }
 
   y <- y + gene_h + gap
+
+  # The subject on a row of its own, directly under the host structure it is being
+  # compared against, and labelled with the id in the title.
+  if (show_subj) {
+    fill <- if (is.null(subject_fill)) BIOTYPE_FALLBACK else subject_fill
+    # Anchored top-down, not bottom-up: a bottom-anchored label grows upward into the
+    # gap above and can touch the structure row.
+    plotText(label = subject_label, x = margin, y = y, just = c("left", "top"),
+             fontsize = 7, fontcolor = fill, default.units = "inches")
+    plotRanges(
+      params = pars, data = subject_gr,
+      collapse = TRUE, fill = fill, linecolor = NA,
+      y = y + 0.13, height = 0.16
+    )
+    y <- y + subj_h
+  }
+
+  # transcriptHighlights colours every model by its biotype, keyed on the label the
+  # TxDb ended up using -- `lab` is the same transcript -> label mapping the sub-GTF was
+  # rewritten with, so a name that genuinely needed a uniquifying suffix still matches.
+  # colorbyStrand is off because that would otherwise decide the colour of anything the
+  # highlight table misses, and strand is already on the label.
+  panel_lab <- unname(lab[panel_tx$transcript_id])
+  keep      <- !is.na(panel_lab)
+  hl <- if (any(keep)) {
+    data.frame(transcript = panel_lab[keep],
+               color      = biotype_color(panel_tx$biotype_key[keep]),
+               stringsAsFactors = FALSE)
+  } else NULL
+
   plotTranscripts(
     params = pars, y = y, height = tx_h,
-    labels = "transcript", fontsize = 6,
-    transcriptHighlights = hl
+    labels = "transcript", fontsize = TX_LABEL_SIZE,
+    # grid::unit rather than a bare unit(): grid is a base package and always resolves,
+    # where relying on plotgardener to re-export it is an assumption with no upside.
+    boxHeight = grid::unit(TX_BOX_MM, "mm"), spaceHeight = TX_SPACE_H,
+    stroke = TX_STROKE,
+    fill = c(BIOTYPE_FALLBACK, BIOTYPE_FALLBACK), colorbyStrand = FALSE,
+    transcriptHighlights = hl,
+    # Left on deliberately: it draws a "+" when not everything fits, which is the only
+    # warning that a panel is incomplete. A "+" in the corner means raise tx_h.
+    limitLabel = TRUE
   )
 
   y <- y + tx_h + gap
   for (i in seq_along(bw_files)) {
+    # Scale and sample name in a band above the trace rather than inside it.
+    # plotSignal's own scale = TRUE / label = draw both over the plotting area, where a
+    # peak reaching ymax runs straight through them: "[0 - 121]" came out with the 1
+    # struck through by the trace.
+    # Named, not just bracketed: a bare "[0 - 130]" beside a transcript track reads as
+    # though it might be a length in bp. It is the vertical scale -- reads stacked over
+    # a single base -- and saying so costs five characters.
+    # Rounded because bigWig scores are numeric: an unrounded ymax prints as 130.457.
+    plotText(label = sprintf("depth [0 - %s]", format(round(ymax), scientific = FALSE,
+                                                      trim = TRUE)),
+             x = margin, y = y, just = c("left", "top"),
+             fontsize = 7, fontcolor = "grey35", default.units = "inches")
+    plotText(label = sample_names[i], x = margin + track_w, y = y,
+             just = c("right", "top"), fontsize = 8, default.units = "inches")
     plotSignal(
       params = pars, data = bw_files[i],
-      y = y, height = sig_h,
-      range = c(0, ymax), scale = TRUE, label = sample_names[i],
+      y = y + sig_lab_h, height = sig_h,
+      range = c(0, ymax),
       linecolor = "#3B6FB6", fill = "#3B6FB6"
     )
-    y <- y + sig_h + gap
+    y <- y + sig_lab_h + sig_h + gap
   }
 
   plotGenomeLabel(
@@ -633,12 +752,19 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   # Only the biotypes this panel contains, so the key never explains a colour that is
   # not on screen.
   if (show_lgnd) {
-    plotLegend(
-      legend = bts, fill = biotype_color(bts), border = FALSE,
-      orientation = "h", fontsize = 7,
-      x = margin, y = y + label_h, width = track_w, height = legend_h - 0.06,
-      just = c("left", "top"), default.units = "inches"
-    )
+    per_row <- length(lgnd_rows[[1]])
+    ly <- y + label_h
+    for (r in lgnd_rows) {
+      # Width proportional to the entries on this row, so a short final row keeps the
+      # same swatch spacing as a full one instead of stretching across the page.
+      plotLegend(
+        legend = r, fill = biotype_color(r), border = FALSE,
+        orientation = "h", fontsize = 7,
+        x = margin, y = ly, width = track_w * length(r) / per_row, height = 0.18,
+        just = c("left", "top"), default.units = "inches"
+      )
+      ly <- ly + 0.20
+    }
   }
 
   pageGuideHide()
@@ -728,7 +854,12 @@ if (nrow(flagged)) {
           sprintf(", %.0f%% splice into a host exon", 100 * row$frac_into_host_exon)),
       out_png      = file.path(opt$outdir,
                                sprintf("intronic_context_%s.png", row$qry_id)),
-      structure_label = "host"
+      structure_label = "host",
+      # Its own row, so the transcript named in the title is the one the eye lands on.
+      subject_gr    = exons_gr[exon_txid == row$qry_id],
+      subject_label = row$qry_id,
+      subject_fill  = biotype_color(
+        tx$biotype_key[match(row$qry_id, tx$transcript_id)])
     )
   }
 
