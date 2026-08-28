@@ -94,22 +94,49 @@ BIOTYPE_COLORS <- c(
   processed_transcript           = "#D9D9D9",
   processed_pseudogene           = "#C7C7C7",
   unprocessed_pseudogene         = "#C7C7C7",
-  unknown_biotype                = "#969696"
+  "biotype not set"              = "#969696"
 )
 BIOTYPE_FALLBACK <- "#969696"
 
 # Isoform track geometry, passed straight to plotTranscripts.
 #
-# boxHeight is the lever that matters. plotgardener's 2 mm default leaves a row barely
-# taller than the label that has to sit with it, and it drops labels it cannot place --
-# eight ACOT7 isoforms came out with two names between them. Raising the box raises the
-# row, which is what gives the labels room; it also widens the gap between exon boxes
-# and the intron line they sit on, which is the thick-against-thin contrast we want
-# anyway. plotTranscripts draws UTR thinner than CDS by itself, so that comes free.
+# boxHeight is raised from plotgardener's 2 mm default for contrast: a taller exon box
+# against the same thin intron line is the thick-against-thin reading we want, and
+# plotTranscripts draws UTR thinner than CDS by itself, so that comes free.
+#
+# It is NOT the reason labels go missing, which was the earlier guess. plotTranscripts
+# centres a label on the transcript's true midpoint and does not draw it when that falls
+# outside the window: in the ACOT7 intronic panel exactly two of ten models had an
+# in-window midpoint, and exactly those two were labelled. Gene panels never hit this,
+# because their window spans min(start) to max(end) over the gene's own transcripts, so
+# every midpoint is inside it by construction. Intronic panels are windowed on one host
+# intron, so host isoforms running the length of the gene lose their names -- see the
+# note on the isoform track in draw_panel().
 TX_LABEL_SIZE <- 6
+TX_LABEL_H    <- 0.09    # band above each model for its label
 TX_BOX_MM     <- 4       # exon box height, against plotgardener's 2 mm default
-TX_SPACE_H    <- 0.5     # row spacing as a fraction of boxHeight
+TX_SPACE_H    <- 0.2     # padding inside a model's own band, as a fraction of the box
 TX_STROKE     <- 0.1     # transcript body outline, plotgardener's default
+
+TX_MODEL_H <- (TX_BOX_MM / 25.4) * (1 + TX_SPACE_H)
+TX_ROW_H   <- TX_LABEL_H + TX_MODEL_H   # per_model: label band plus the model's own
+
+# Every panel is drawn once per renderer, to a filename carrying the renderer's suffix,
+# so the two can be compared on the same data in one run rather than by editing the
+# source between runs. The empty suffix is the one the candidate CSVs and the report
+# point at; once one renderer wins, drop the other entry and this collapses back to a
+# single call.
+#
+#   packed     one plotTranscripts call. It packs models into rows and labels them, but
+#              places a label at the model's midpoint and omits it when that falls
+#              outside the window -- so a host isoform spanning a whole gene goes
+#              unnamed in a panel windowed on one of its introns.
+#   per_model  one call per transcript, filtered to that transcript and placed at a row
+#              of our choosing with its own labels off. The label is then ours to draw,
+#              clamped inside the track, so an off-window midpoint still gets a name.
+#              plotgardener still renders the model, so UTR-vs-CDS thickness is
+#              unchanged. Costs one call per model instead of one per panel.
+TX_RENDERERS <- c(packed = "", per_model = ".per_model")
 
 biotype_color <- function(bt) {
   out <- unname(BIOTYPE_COLORS[bt])
@@ -189,7 +216,7 @@ tx <- tx[!is.na(tx$gene_id) & nzchar(tx$gene_id), , drop = FALSE]
 display_name <- ifelse(!is.na(tx$transcript_name) & nzchar(tx$transcript_name),
                        tx$transcript_name, tx$transcript_id)
 biotype <- ifelse(is.na(tx$transcript_biotype) | !nzchar(tx$transcript_biotype),
-                  "unknown_biotype", tx$transcript_biotype)
+                  "biotype not set", tx$transcript_biotype)
 # plotTranscripts labels each model with its TXNAME, so the label has to BE the
 # transcript_id as far as the TxDb is concerned -- one string, used on the figure and
 # in the rewritten sub-GTF alike.
@@ -562,7 +589,7 @@ draw_ideogram <- function(chrom, win_s, win_e, chrom_len,
 #'                     a panel titled BambuTx1528 showed only BambuTx1193, 8 kb away.
 #'                     Its own row is the only way to guarantee the title and the
 #'                     highlighted model are the same transcript.
-draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
+draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx, renderer,
                        title, subtitle, out_png, structure_label = "gene",
                        subject_gr = NULL, subject_label = NULL,
                        subject_fill = NULL) {
@@ -584,9 +611,9 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   ideo_lab <- 0.22
   zoom_h   <- 0.40
   gene_h   <- 0.26
-  # plotgardener's own row pitch: the box plus the spacing fraction above it. Matching
-  # it here is what makes the height we request line up with the rows it actually draws.
-  row_h    <- (TX_BOX_MM / 25.4) * (1 + TX_SPACE_H)
+  # per_model owns the row pitch, because it places every model itself. packed leaves the
+  # pitch to plotgardener, which is boxHeight plus its spacing fraction.
+  row_h    <- if (renderer == "per_model") TX_ROW_H else TX_MODEL_H
   sig_h    <- 0.55
   sig_lab_h <- 0.17        # band above each trace for its scale and sample name
   gap      <- 0.12
@@ -598,10 +625,11 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   tx_rows <- pack_rows(panel_tx$start, panel_tx$end, panel_tx$label,
                        win_s, win_e, track_w, TX_LABEL_SIZE)
   n_rows  <- if (length(tx_rows)) max(tx_rows) else 1L
-  # Half a row of slack: pack_rows estimates label widths, so it can disagree with
-  # plotgardener by one. Erring tall costs whitespace; erring short makes plotTranscripts
-  # drop models and say so with a "+" in the corner.
-  tx_h    <- max(0.4, (n_rows + 0.5) * row_h)
+  # per_model is exact: every model sits at a row we chose, so nothing can overflow.
+  # packed needs slack, because pack_rows only estimates what plotgardener will do and
+  # being short there means models dropped with a "+" in the corner.
+  tx_h    <- if (renderer == "per_model") max(0.4, n_rows * row_h)
+             else               max(0.4, (n_rows + 0.5) * row_h)
 
   chrom_len <- if (!is.null(chrom_lens) && chrom %in% names(chrom_lens)) {
     as.numeric(chrom_lens[[chrom]])
@@ -690,32 +718,70 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
     y <- y + subj_h
   }
 
-  # transcriptHighlights colours every model by its biotype, keyed on the label the
-  # TxDb ended up using -- `lab` is the same transcript -> label mapping the sub-GTF was
+  # --- Isoform track, one of two renderers (see TX_RENDERERS) -----------------
+  #
+  # Colours come from `lab`, the same transcript -> label mapping the sub-GTF was
   # rewritten with, so a name that genuinely needed a uniquifying suffix still matches.
-  # colorbyStrand is off because that would otherwise decide the colour of anything the
+  # colorbyStrand is off in both: it would otherwise decide the colour of anything the
   # highlight table misses, and strand is already on the label.
   panel_lab <- unname(lab[panel_tx$transcript_id])
-  keep      <- !is.na(panel_lab)
-  hl <- if (any(keep)) {
-    data.frame(transcript = panel_lab[keep],
-               color      = biotype_color(panel_tx$biotype_key[keep]),
-               stringsAsFactors = FALSE)
-  } else NULL
+  panel_col <- biotype_color(panel_tx$biotype_key)
 
-  plotTranscripts(
-    params = pars, y = y, height = tx_h,
-    labels = "transcript", fontsize = TX_LABEL_SIZE,
-    # grid::unit rather than a bare unit(): grid is a base package and always resolves,
-    # where relying on plotgardener to re-export it is an assumption with no upside.
-    boxHeight = grid::unit(TX_BOX_MM, "mm"), spaceHeight = TX_SPACE_H,
-    stroke = TX_STROKE,
-    fill = c(BIOTYPE_FALLBACK, BIOTYPE_FALLBACK), colorbyStrand = FALSE,
-    transcriptHighlights = hl,
-    # Left on deliberately: it draws a "+" when not everything fits, which is the only
-    # warning that a panel is incomplete. A "+" in the corner means raise tx_h.
-    limitLabel = TRUE
-  )
+  # Genomic coordinate to page inches, clamped to the window.
+  gx <- function(p) {
+    margin + (min(max(p, win_s), win_e) - win_s) / max(1, win_e - win_s) * track_w
+  }
+
+  if (renderer == "per_model") {
+    for (i in seq_len(nrow(panel_tx))) {
+      lb <- panel_lab[i]
+      if (is.na(lb)) next
+      ry <- y + (tx_rows[i] - 1L) * row_h
+
+      plotTranscripts(
+        params = pars, y = ry + TX_LABEL_H, height = TX_MODEL_H,
+        # Off, or plotgardener's own label lands on top of the one drawn below it and
+        # every name appears twice.
+        labels = NULL,
+        boxHeight = grid::unit(TX_BOX_MM, "mm"), spaceHeight = TX_SPACE_H,
+        stroke = TX_STROKE, limitLabel = FALSE,
+        fill = c(BIOTYPE_FALLBACK, BIOTYPE_FALLBACK), colorbyStrand = FALSE,
+        transcriptFilter     = lb,
+        transcriptHighlights = data.frame(transcript = lb, color = panel_col[i],
+                                          stringsAsFactors = FALSE)
+      )
+
+      # Centred on the visible extent, then clamped inside the track, so a model whose
+      # midpoint is off-window -- exactly when packed drops its label -- still gets one.
+      lw <- nchar(lb) * TX_LABEL_SIZE * 0.0075
+      lx <- min(max((gx(panel_tx$start[i]) + gx(panel_tx$end[i])) / 2,
+                    margin + lw / 2),
+                margin + track_w - lw / 2)
+      plotText(label = lb, x = lx, y = ry, just = c("center", "top"),
+               fontsize = TX_LABEL_SIZE, fontcolor = panel_col[i],
+               default.units = "inches")
+    }
+  } else {
+    keep <- !is.na(panel_lab)
+    hl <- if (any(keep)) {
+      data.frame(transcript = panel_lab[keep], color = panel_col[keep],
+                 stringsAsFactors = FALSE)
+    } else NULL
+
+    plotTranscripts(
+      params = pars, y = y, height = tx_h,
+      labels = "transcript", fontsize = TX_LABEL_SIZE,
+      # grid::unit rather than a bare unit(): grid is a base package and always
+      # resolves, where relying on plotgardener to re-export it is an assumption with
+      # no upside.
+      boxHeight = grid::unit(TX_BOX_MM, "mm"), spaceHeight = TX_SPACE_H,
+      stroke = TX_STROKE,
+      fill = c(BIOTYPE_FALLBACK, BIOTYPE_FALLBACK), colorbyStrand = FALSE,
+      transcriptHighlights = hl,
+      # A "+" in the corner means not everything fitted -- raise tx_h.
+      limitLabel = TRUE
+    )
+  }
 
   y <- y + tx_h + gap
   for (i in seq_along(bw_files)) {
@@ -790,18 +856,23 @@ if (nrow(cand)) {
                    tx$start <= row$win_e & tx$transcript_id %in% draw_ids, ,
                    drop = FALSE]
 
-    cand$figure[i] <- draw_panel(
+    # Once per renderer. The CSV keeps the unsuffixed file, so the report is unaffected
+    # by the comparison being run.
+    figs <- vapply(names(TX_RENDERERS), function(rend) draw_panel(
       chrom        = row$chrom, win_s = row$win_s, win_e = row$win_e,
       # The union of every exon the gene has, so a reader sees the full exonic
       # footprint before the isoforms start differing from it.
       structure_gr = GenomicRanges::reduce(exons_gr[exon_gid == row$gene_id]),
       panel_tx     = panel_tx,
+      renderer     = rend,
       title        = row$label,
       subtitle     = sprintf("%d isoforms: %d known, %d novel (%d novel lncRNA candidate%s)",
                              row$n_tx, row$n_known, row$n_novel, row$n_novel_lnc,
                              if (row$n_novel_lnc == 1) "" else "s"),
-      out_png      = file.path(opt$outdir, sprintf("genomic_context_%s.png", row$label))
-    )
+      out_png      = file.path(opt$outdir, sprintf("genomic_context_%s%s.png",
+                                                   row$label, TX_RENDERERS[[rend]]))
+    ), character(1))
+    cand$figure[i] <- figs[["packed"]]
   }
 
   write.csv(cand[, c("gene_id", "gene_name", "label", "chrom", "start", "end",
@@ -837,10 +908,11 @@ if (nrow(flagged)) {
       row$host_gene_name
     }
 
-    flagged$figure[i] <- draw_panel(
+    figs <- vapply(names(TX_RENDERERS), function(rend) draw_panel(
       chrom        = row$chrom, win_s = row$win_s, win_e = row$win_e,
       structure_gr = GenomicRanges::reduce(exons_gr[exon_gid == row$host_gene_id]),
       panel_tx     = panel_tx,
+      renderer     = rend,
       title        = sprintf("%s in %s", row$qry_id, host_lab),
       # Percentages, because the ranking is on fractions and a bare count invites the
       # same misreading the ranking used to make. The host-exon figure is reported
@@ -853,14 +925,16 @@ if (nrow(flagged)) {
         if (is.na(row$reads_spliced_into_host_exon)) "" else
           sprintf(", %.0f%% splice into a host exon", 100 * row$frac_into_host_exon)),
       out_png      = file.path(opt$outdir,
-                               sprintf("intronic_context_%s.png", row$qry_id)),
+                               sprintf("intronic_context_%s%s.png",
+                                       row$qry_id, TX_RENDERERS[[rend]])),
       structure_label = "host",
       # Its own row, so the transcript named in the title is the one the eye lands on.
       subject_gr    = exons_gr[exon_txid == row$qry_id],
       subject_label = row$qry_id,
       subject_fill  = biotype_color(
         tx$biotype_key[match(row$qry_id, tx$transcript_id)])
-    )
+    ), character(1))
+    flagged$figure[i] <- figs[["packed"]]
   }
 
   write.csv(flagged[, c("qry_id", "host_gene_id", "host_gene_name", "host_gene_biotype",
