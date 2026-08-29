@@ -83,10 +83,17 @@ if (nrow(known) > 0) {
         gene_biotype       = known$gene_biotype,
         transcript_name    = known$external_transcript_name,
         transcript_biotype = known$transcript_biotype,
-        class_code         = NA_character_,
-        classification     = NA_character_,
-        ref_gene_id        = NA_character_,
-        stringsAsFactors   = FALSE
+        class_code             = NA_character_,
+        classification         = NA_character_,
+        # A known transcript IS the reference, so it has nothing to have been
+        # compared against. NA rather than self-reference, matching class_code.
+        ref_gene_id            = NA_character_,
+        ref_gene_name          = NA_character_,
+        ref_gene_biotype       = NA_character_,
+        ref_transcript_id      = NA_character_,
+        ref_transcript_name    = NA_character_,
+        ref_transcript_biotype = NA_character_,
+        stringsAsFactors       = FALSE
     )
     # duplicate the rows under the unversioned key as well
     known_bare <- known_attrs
@@ -101,18 +108,39 @@ if (nrow(novel) > 0) {
     gene_biotype <- unname(ref_gene_biotype[ref_gene])
     gene_biotype[is.na(gene_biotype)] <- "novel"
 
+    # Taken from the metadata, never re-derived from the prediction. Deriving it
+    # here silently undid the routing upstream: m and n transcripts are
+    # novel_retained_intron by class code, but every one of them predicts
+    # non-coding, so an ifelse on the prediction relabelled all of them
+    # novel_lncRNA and novel_retained_intron never reached the enriched GTF.
+    # The fallback covers a metadata file written before the column existed.
+    tx_biotype <- if ("transcript_biotype" %in% names(novel)) {
+        as.character(novel$transcript_biotype)
+    } else {
+        warning("novel metadata has no transcript_biotype column; ",
+                "falling back to the coding prediction, which cannot represent ",
+                "intron retention.")
+        ifelse(novel$prediction == "coding", "novel_protein_coding", "novel_lncRNA")
+    }
+
+    col <- function(name) if (name %in% names(novel)) as.character(novel[[name]]) else NA_character_
+
     lookup$novel <- data.frame(
-        key                = novel$qry_id,
-        transcript_status  = "novel",
-        gene_name          = as.character(novel$gene_name),
-        gene_biotype       = gene_biotype,
-        transcript_name    = NA_character_,
-        transcript_biotype = ifelse(novel$prediction == "coding",
-                                    "novel_protein_coding", "novel_lncRNA"),
-        class_code         = as.character(novel$class_code),
-        classification     = as.character(novel$classification),
-        ref_gene_id        = ref_gene,
-        stringsAsFactors   = FALSE
+        key                    = novel$qry_id,
+        transcript_status      = "novel",
+        gene_name              = as.character(novel$gene_name),
+        gene_biotype           = gene_biotype,
+        transcript_name        = NA_character_,
+        transcript_biotype     = tx_biotype,
+        class_code             = as.character(novel$class_code),
+        classification         = as.character(novel$classification),
+        ref_gene_id            = ref_gene,
+        ref_gene_name          = col("ref_gene_name"),
+        ref_gene_biotype       = col("ref_gene_biotype"),
+        ref_transcript_id      = col("ref_id"),
+        ref_transcript_name    = col("ref_transcript_name"),
+        ref_transcript_biotype = col("ref_transcript_biotype"),
+        stringsAsFactors       = FALSE
     )
 }
 

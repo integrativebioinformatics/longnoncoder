@@ -287,7 +287,7 @@ if (nrow(cand) > 0) {
 # intron, on the host's strand, and supported by reads that do not stop where the
 # transcript does. Drawn on purpose so the report can show what a flagged call
 # looks like beside a clean one.
-FLAG_COLS <- c("qry_id", "host_gene_id", "host_gene_biotype", "class_code",
+FLAG_COLS <- c("qry_id", "ref_gene_id", "ref_gene_biotype", "class_code",
                "strand", "reads_total", "reads_crossing_boundary",
                "reads_with_host_junction")
 
@@ -346,7 +346,7 @@ if (nrow(flagged)) {
   if (!is.null(opt$annotation) && file.exists(opt$annotation)) {
     ref_ex   <- rtracklayer::import(opt$annotation, feature.type = "exon")
     ref_gid  <- as.character(S4Vectors::mcols(ref_ex)$gene_id)
-    wanted   <- unique(flagged$host_gene_id)
+    wanted   <- unique(flagged$ref_gene_id)
     ref_ex   <- ref_ex[ref_gid %in% wanted]
     if (length(ref_ex)) {
       by_g <- split(ref_ex, as.character(S4Vectors::mcols(ref_ex)$gene_id))
@@ -375,7 +375,7 @@ if (nrow(flagged)) {
 
 if (nrow(flagged)) {
   win <- t(vapply(seq_len(nrow(flagged)), function(i) {
-    gid <- flagged$host_gene_id[i]
+    gid <- flagged$ref_gene_id[i]
     ivs <- host_introns_by_gene[[gid]]
     if (!is.null(ivs) && length(ivs)) {
       # The intron containing the candidate; if it straddles more than one, the
@@ -399,7 +399,7 @@ if (nrow(flagged)) {
 
   flagged$win_s <- pmax(1, win[, 1])
   flagged$win_e <- win[, 2]
-  flagged$host_gene_name <- genes$gene_name[match(flagged$host_gene_id, genes$gene_id)]
+  flagged$ref_gene_name <- genes$gene_name[match(flagged$ref_gene_id, genes$gene_id)]
 }
 
 cat(sprintf("%d flagged intronic candidates selected for drawing\n", nrow(flagged)))
@@ -452,7 +452,7 @@ if (nrow(flagged)) {
     # intronic candidate carries its own Bambu gene id, so filtering on the host gene
     # alone would drop the transcript the figure exists to show.
     draw_ids <- c(draw_ids,
-                  tx$transcript_id[in_win & (tx$gene_id == flagged$host_gene_id[i] |
+                  tx$transcript_id[in_win & (tx$gene_id == flagged$ref_gene_id[i] |
                                              tx$transcript_status == "novel")])
   }
 }
@@ -839,8 +839,8 @@ if (nrow(flagged)) {
   for (i in seq_len(nrow(flagged))) {
     row <- flagged[i, ]
     cat(sprintf("Drawing flagged %s in %s intron at %s:%d-%d\n",
-                row$qry_id, ifelse(is.na(row$host_gene_name), row$host_gene_id,
-                                   row$host_gene_name),
+                row$qry_id, ifelse(is.na(row$ref_gene_name), row$ref_gene_id,
+                                   row$ref_gene_name),
                 row$chrom, row$win_s, row$win_e))
 
     # Everything in the window, not just the host's isoforms: an intronic candidate
@@ -854,15 +854,15 @@ if (nrow(flagged)) {
     in_window <- tx$chrom == row$chrom & tx$end >= row$win_s & tx$start <= row$win_e
     panel_tx  <- tx[in_window & tx$transcript_id %in% draw_ids, , drop = FALSE]
 
-    host_lab <- if (is.na(row$host_gene_name) || !nzchar(row$host_gene_name)) {
-      row$host_gene_id
+    host_lab <- if (is.na(row$ref_gene_name) || !nzchar(row$ref_gene_name)) {
+      row$ref_gene_id
     } else {
-      row$host_gene_name
+      row$ref_gene_name
     }
 
     flagged$figure[i] <- draw_panel(
       chrom        = row$chrom, win_s = row$win_s, win_e = row$win_e,
-      structure_gr = GenomicRanges::reduce(exons_gr[exon_gid == row$host_gene_id]),
+      structure_gr = GenomicRanges::reduce(exons_gr[exon_gid == row$ref_gene_id]),
       panel_tx     = panel_tx,
       title        = sprintf("%s in %s", row$qry_id, host_lab),
       # Percentages, because the ranking is on fractions and a bare count invites the
@@ -871,7 +871,7 @@ if (nrow(flagged)) {
       # host, which is a finding rather than an artifact.
       subtitle     = sprintf(
         "intronic, same strand as host (%s) | %d reads: %.0f%% cross a boundary, %.0f%% carry a host junction%s",
-        ifelse(is.na(row$host_gene_biotype), "unknown biotype", row$host_gene_biotype),
+        ifelse(is.na(row$ref_gene_biotype), "unknown biotype", row$ref_gene_biotype),
         row$reads_total, 100 * row$frac_crossing, 100 * row$frac_host_junction,
         if (is.na(row$reads_spliced_into_host_exon)) "" else
           sprintf(", %.0f%% splice into a host exon", 100 * row$frac_into_host_exon)),
@@ -881,7 +881,7 @@ if (nrow(flagged)) {
     )
   }
 
-  write.csv(flagged[, c("qry_id", "host_gene_id", "host_gene_name", "host_gene_biotype",
+  write.csv(flagged[, c("qry_id", "ref_gene_id", "ref_gene_name", "ref_gene_biotype",
                         "chrom", "start", "end", "win_s", "win_e", "strand",
                         "class_code", "num_exons", "reads_total",
                         "reads_crossing_boundary", "reads_with_host_junction",

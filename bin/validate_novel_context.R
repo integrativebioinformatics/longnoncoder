@@ -65,8 +65,8 @@ meta <- read.csv(opt$metadata, stringsAsFactors = FALSE)
 # An empty candidate set is a legitimate outcome on a small or highly complete
 # annotation. Write the empty outputs and stop rather than failing the run.
 write_empty <- function() {
-    cols <- c("qry_id", "class_code", "strand", "host_gene_id", "host_gene_biotype",
-              "host_gene_strand", "same_strand_as_host", "reads_total",
+    cols <- c("qry_id", "class_code", "strand", "ref_gene_id", "ref_gene_biotype",
+              "ref_gene_strand", "same_strand_as_host", "reads_total",
               "reads_same_strand", "reads_crossing_boundary",
               "reads_with_host_junction", "reads_spliced_into_host_exon",
               "frac_crossing_boundary", "frac_with_host_junction")
@@ -99,7 +99,7 @@ ref <- import(opt$annotation, feature.type = c("exon"))
 ref_gene_id <- if (!is.null(ref$gene_id)) as.character(ref$gene_id) else rep(NA_character_, length(ref))
 
 # Host gene extent and strand, keyed on gene id. The metadata already carries
-# host_gene_id from gffcompare's reference match, so the annotation is only
+# ref_gene_id from gffcompare's reference match, so the annotation is only
 # needed for the geometry.
 cat("Deriving host intron structure...\n")
 gene_exons <- split(ref, ref_gene_id)
@@ -147,7 +147,7 @@ if (!any(seqlevels(cand) %in% bam_levels)) {
 
 cat("Test A: comparing candidate strand with host gene strand...\n")
 
-host_id     <- as.character(meta$host_gene_id)
+host_id     <- as.character(meta$ref_gene_id)
 host_id[is.na(host_id) | host_id == "-" | !nzchar(host_id)] <- NA_character_
 
 host_strand <- rep(NA_character_, nrow(meta))
@@ -258,9 +258,9 @@ flags <- data.frame(
     qry_id                       = meta$qry_id,
     class_code                   = meta$class_code,
     strand                       = as.character(meta$strand),
-    host_gene_id                 = host_id,
-    host_gene_biotype            = meta$host_gene_biotype,
-    host_gene_strand             = host_strand,
+    ref_gene_id                 = host_id,
+    ref_gene_biotype            = meta$ref_gene_biotype,
+    ref_gene_strand             = host_strand,
     same_strand_as_host          = same_strand,
     reads_total                  = reads_total,
     reads_same_strand            = reads_same_strand,

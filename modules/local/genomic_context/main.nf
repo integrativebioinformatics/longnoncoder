@@ -61,7 +61,7 @@ process GENOMIC_CONTEXT {
     printf 'ENSG00000000000,STUBGENE,STUBGENE,chr1,1000,9000,950,9050,4,3,1,1,protein_coding;novel_lncRNA,genomic_context_STUBGENE.png\\n' >> genomic_context_candidates.csv
 
     touch intronic_context_STUBTX.png
-    printf 'qry_id,host_gene_id,host_gene_name,host_gene_biotype,chrom,start,end,win_s,win_e,strand,class_code,num_exons,reads_total,reads_crossing_boundary,reads_with_host_junction,figure\\n' > intronic_context_candidates.csv
+    printf 'qry_id,ref_gene_id,ref_gene_name,ref_gene_biotype,chrom,start,end,win_s,win_e,strand,class_code,num_exons,reads_total,reads_crossing_boundary,reads_with_host_junction,figure\\n' > intronic_context_candidates.csv
     printf 'BambuTxSTUB,ENSG00000000000,STUBGENE,protein_coding,chr1,3000,3800,2000,5000,+,i,1,42,31,18,intronic_context_STUBTX.png\\n' >> intronic_context_candidates.csv
 
     cat <<-END_VERSIONS > versions.yml

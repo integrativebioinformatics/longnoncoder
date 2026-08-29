@@ -42,10 +42,15 @@ if (is.null(opt$bambu_gtf) || is.null(opt$compared_gtf) || is.null(opt$tmap_file
     stop("All input files must be specified.", call.=FALSE)
 }
 
-# Reference gene biotypes, used to give novel transcripts arising from a known
-# gene that gene's real biotype rather than a generic label
+# Reference lookups, used to say what each novel transcript was compared against:
+# the biotype and name of the reference gene, and of the reference transcript
+# itself. Kept as four named vectors rather than the whole table, which is several
+# hundred megabytes for a full GENCODE annotation.
 reference <- read_reference_gtf(opt$annotation)
 ref_gene_biotype <- reference$gene_biotype
+ref_gene_name    <- reference$gene_name
+ref_tx_biotype   <- reference$tx_biotype
+ref_tx_name      <- reference$tx_name
 rm(reference)
 
 # Import GTF files
@@ -111,14 +116,25 @@ normalise_ref_gene <- function(ids) {
     ids
 }
 
-# Biotype of the gene a novel transcript arises from, recorded on every novel
-# record rather than only in the GTF. For intronic, antisense and retained-intron
-# transcripts the host's biotype is the difference between "another isoform of a
-# known lncRNA" and "a novel transcript at a protein-coding locus", and hosts are
-# frequently neither -- so it cannot be assumed. Genuinely new loci have no host
-# and keep NA.
-tx_info$host_gene_id      <- normalise_ref_gene(tx_info$ref_gene_id)
-tx_info$host_gene_biotype <- unname(ref_gene_biotype[tx_info$host_gene_id])
+# What the novel transcript was compared against, recorded on every novel record
+# rather than only in the GTF.
+#
+# "ref" rather than "host": a host is something a transcript sits inside, which is
+# true for i, x, m and n but backwards for k and y, where the novel transcript
+# CONTAINS the reference. There is no separate host id -- it was a normalised copy
+# of ref_gene_id and nothing more -- so the placeholder is cleaned in place instead.
+tx_info$ref_gene_id <- normalise_ref_gene(tx_info$ref_gene_id)
+tx_info$ref_id      <- normalise_ref_gene(tx_info$ref_id)
+
+tx_info$ref_gene_biotype <- unname(ref_gene_biotype[tx_info$ref_gene_id])
+tx_info$ref_gene_name    <- unname(ref_gene_name[tx_info$ref_gene_id])
+
+# Transcript level as well as gene level, because the two disagree in exactly the
+# cases worth looking at. A y-class novel transcript containing TARDBP-221 has
+# ref_gene_biotype "protein_coding" and ref_transcript_biotype
+# "nonsense_mediated_decay", and only the second says what it actually contains.
+tx_info$ref_transcript_biotype <- unname(ref_tx_biotype[tx_info$ref_id])
+tx_info$ref_transcript_name    <- unname(ref_tx_name[tx_info$ref_id])
 
 # Load counts
 cat("Filtering transcripts with zero counts...\n")
@@ -139,6 +155,9 @@ CLASS_LABELS <- c(
     i = 'intronic',
     x = 'antisense',
     j = 'multiexon SJ match',
+    k = 'extends reference',
+    o = 'same-strand overlap',
+    y = 'reference within intron',
     m = 'total intron retention',
     n = 'partial intron retention'
 )
@@ -153,17 +172,24 @@ classify_class_code <- function(codes) unname(CLASS_LABELS[as.character(codes)])
 #' keeps that gene's real biotype; only genuinely new loci, which gffcompare
 #' reports without a reference gene, are labelled "novel".
 novel_attrs <- function(meta) {
-    gene_biotype <- meta$host_gene_biotype
+    gene_biotype <- meta$ref_gene_biotype
     gene_biotype[is.na(gene_biotype)] <- "novel"
 
     list(
-        transcript_status  = rep("novel", nrow(meta)),
-        transcript_biotype = as.character(meta$transcript_biotype),
-        gene_biotype       = gene_biotype,
-        class_code         = as.character(meta$class_code),
-        classification     = as.character(meta$classification),
-        ref_gene_id        = meta$host_gene_id,
-        gene_name          = as.character(meta$gene_name)
+        transcript_status      = rep("novel", nrow(meta)),
+        transcript_biotype     = as.character(meta$transcript_biotype),
+        gene_biotype           = gene_biotype,
+        class_code             = as.character(meta$class_code),
+        classification         = as.character(meta$classification),
+        # What it was compared against, carried on the GTF as well as the CSV so the
+        # file is self-describing in IGV without the metadata beside it.
+        ref_gene_id            = meta$ref_gene_id,
+        ref_gene_name          = as.character(meta$ref_gene_name),
+        ref_gene_biotype       = as.character(meta$ref_gene_biotype),
+        ref_transcript_id      = as.character(meta$ref_id),
+        ref_transcript_name    = as.character(meta$ref_transcript_name),
+        ref_transcript_biotype = as.character(meta$ref_transcript_biotype),
+        gene_name              = as.character(meta$gene_name)
     )
 }
 
@@ -182,16 +208,24 @@ write_novel_gtf <- function(meta, path) {
     invisible(exons)
 }
 
-# Novel transcripts are sorted by coding potential, but that prediction only
-# carries information for some class codes. RNAmining scores length-normalised
-# trinucleotide composition; a retained intron is sequence that has never been
-# under coding selection, so it pulls the composition toward non-coding in
-# proportion to the share of the transcript it occupies. An m or n transcript is
-# therefore predicted non-coding largely by construction, and routing it down the
-# coding/non-coding branch would file it as a lncRNA candidate on the strength of
-# a determination its own structure already made. These get their own category
-# instead, with the prediction kept as a column rather than used as the key.
-CANDIDATE_CODES        <- c('u', 'i', 'x', 'j')
+# Which class codes are eligible to become candidates, and which get their own
+# category instead.
+#
+# k, o and y are in because each can reveal something the others cannot: k means
+# the novel model extends past the reference it contains, which is where an
+# unannotated exon would show up; y means the model contains a reference inside its
+# own intron, which can be a distinct locus rather than an isoform; o is
+# same-strand overlap that matches no junction. Excluding them was not a judgement
+# that they are uninteresting, only that they had not been looked at.
+#
+# m and n stay separate on GENCODE's terms: retained_intron is carried alongside
+# protein_coding and lncRNA rather than beneath either, and "retained intron"
+# describes the structure precisely where "lncRNA" would assert more than the data
+# supports. The coding prediction is kept as a column on them, not used as the key.
+#
+# Note = and c never appear at all: only novel transcripts reach gffcompare, so a
+# model matching or contained by a reference was already resolved as annotated.
+CANDIDATE_CODES        <- c('u', 'i', 'x', 'j', 'k', 'o', 'y')
 INTRON_RETENTION_CODES <- c('m', 'n')
 
 # Select novel lncRNA candidates

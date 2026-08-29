@@ -194,18 +194,35 @@ read_reference_gtf <- function(path) {
         stringsAsFactors              = FALSE
     )
 
-    # Gene id -> biotype, keyed on both id forms so a lookup succeeds whichever
-    # form gffcompare reports in cmp_ref_gene / ref_gene_id.
-    gene_biotype <- c(
-        setNames(tx$gene_biotype, tx$ensembl_gene_id),
-        setNames(tx$gene_biotype, tx$ensembl_gene_id_version)
-    )
-    gene_biotype <- gene_biotype[!duplicated(names(gene_biotype))]
+    # Lookups keyed on BOTH id forms, so they succeed whichever form gffcompare
+    # reports in ref_id / ref_gene_id. Ensembl writes the version in a separate
+    # attribute and GENCODE writes it inline, and a novel-transcript record can end
+    # up carrying either.
+    dual_key <- function(values, bare, versioned) {
+        out <- c(setNames(values, bare), setNames(values, versioned))
+        out[!duplicated(names(out))]
+    }
+
+    gene_biotype <- dual_key(tx$gene_biotype,
+                             tx$ensembl_gene_id, tx$ensembl_gene_id_version)
+    gene_name    <- dual_key(tx$external_gene_name,
+                             tx$ensembl_gene_id, tx$ensembl_gene_id_version)
+
+    # Transcript level, which the gene level cannot stand in for: a
+    # nonsense_mediated_decay or retained_intron isoform of a protein_coding gene
+    # has gene_biotype "protein_coding" and transcript_biotype something else
+    # entirely, and it is the transcript a novel model was actually compared against.
+    tx_biotype <- dual_key(tx$transcript_biotype,
+                           tx$ensembl_transcript_id, tx$ensembl_transcript_id_version)
+    tx_name    <- dual_key(tx$external_transcript_name,
+                           tx$ensembl_transcript_id, tx$ensembl_transcript_id_version)
 
     cat(sprintf("  %d transcripts, %d exons, %d genes\n",
                 nrow(tx), nrow(exons), length(unique(tx$ensembl_gene_id))))
 
-    list(tx = tx, exons = exons, gene_biotype = gene_biotype)
+    list(tx = tx, exons = exons,
+         gene_biotype = gene_biotype, gene_name = gene_name,
+         tx_biotype = tx_biotype, tx_name = tx_name)
 }
 
 #' Count distinct exons per transcript, keyed on the versioned transcript id.

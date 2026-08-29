@@ -2000,7 +2000,7 @@ if (is.null(novel_ir)) {
 } else {
   n_m <- sum(novel_ir$class_code == "m")
   n_n <- sum(novel_ir$class_code == "n")
-  hosts <- sort(table(novel_ir$host_gene_biotype, useNA = "ifany"), decreasing = TRUE)
+  hosts <- sort(table(novel_ir$ref_gene_biotype, useNA = "ifany"), decreasing = TRUE)
   host_names <- names(hosts)
   host_names[is.na(host_names)] <- "no host gene"
   host_txt <- paste(sprintf("%s (%d)", host_names, as.integer(hosts)), collapse = ", ")
@@ -2093,8 +2093,8 @@ needs revisiting, not the transcript.
 #| output: asis
 
 embed_figures(gc_flagged, "figure", "qry_id", function(r) {
-  host <- ifelse(is.na(r$host_gene_name) | !nzchar(r$host_gene_name),
-                 r$host_gene_id, r$host_gene_name)
+  host <- ifelse(is.na(r$ref_gene_name) | !nzchar(r$ref_gene_name),
+                 r$ref_gene_id, r$ref_gene_name)
   pct  <- function(x) if (is.null(x) || !length(x) || is.na(x)) NA_real_ else 100 * x
   fc   <- pct(r$frac_crossing)
   fj   <- pct(r$frac_host_junction)
@@ -2113,6 +2113,6 @@ embed_figures(gc_flagged, "figure", "qry_id", function(r) {
               sprintf(", %.0f%% splice into a host exon", fe))
   }
   sprintf("%s inside an intron of %s (%s). %s.", r$qry_id, host,
-          r$host_gene_biotype, ev)
+          r$ref_gene_biotype, ev)
 })
 ```

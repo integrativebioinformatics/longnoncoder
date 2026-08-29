@@ -32,7 +32,7 @@ tools:
 input:
   - metadata:
       type: file
-      description: Novel transcript metadata CSV, carrying seqnames, start, end, strand, class_code and host_gene_id
+      description: Novel transcript metadata CSV, carrying seqnames, start, end, strand, class_code and ref_gene_id
       pattern: "*.csv"
   - annotation:
       type: file
