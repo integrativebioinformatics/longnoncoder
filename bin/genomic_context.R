@@ -53,11 +53,15 @@ if (is.null(opt$gtf) || is.null(opt$bigwigs)) {
 }
 dir.create(opt$outdir, showWarnings = FALSE, recursive = TRUE)
 
-# How many genes to draw, and the isoform count above which a locus stops being
-# legible in one panel. Fixed rather than exposed: these are properties of what fits
-# on a page, not choices a user needs to make.
-N_GENES <- 5L
-MAX_TX  <- 12L
+# The cap on how many panels the stratified selection draws, and the isoform count
+# above which a locus stops being legible in one panel. Fixed rather than exposed:
+# these are properties of what fits on a page, not choices a user needs to make.
+#
+# The cap rarely bites. Most strata are empty on any given run -- not every class
+# code turns up among all three novel biotypes -- so the usual output is well under
+# it.
+MAX_PANELS <- 24L
+MAX_TX     <- 12L
 
 # How many flagged intronic candidates to draw. These are the visual control: a
 # candidate the flags call host pre-mRNA should look like it when drawn -- coverage
@@ -85,7 +89,7 @@ INTRON_PAD_MIN  <- 1000L
 BIOTYPE_COLORS <- c(
   novel_lncRNA                   = "#D95F02",
   novel_protein_coding           = "#7570B3",
-  novel_retained_intron          = "#1B9E77",
+  novel_non_coding               = "#1B9E77",
   protein_coding                 = "#7FBC41",
   lncRNA                         = "#4393C3",
   retained_intron                = "#8DA0CB",
@@ -201,6 +205,13 @@ tx <- data.frame(
   transcript_status  = tx_col("transcript_status"),
   class_code         = tx_col("class_code"),
   classification     = tx_col("classification"),
+  # What gffcompare matched the model against. Needed because the novel model and
+  # the gene it relates to are often not the same gene_id: Bambu gives an intronic
+  # or antisense model its own gene, so a panel built from the model's own gene
+  # alone would show it against nothing.
+  ref_gene_id        = tx_col("ref_gene_id"),
+  ref_gene_name      = tx_col("ref_gene_name"),
+  ref_gene_biotype   = tx_col("ref_gene_biotype"),
   chrom              = as.character(GenomeInfoDb::seqnames(tx_gr)),
   strand             = as.character(BiocGenerics::strand(tx_gr)),
   start              = BiocGenerics::start(tx_gr),
@@ -262,22 +273,151 @@ genes <- do.call(rbind, lapply(names(by_gene), function(gid) {
   )
 }))
 
-cand <- genes[genes$n_known > 0 & genes$n_novel > 0 & genes$n_tx <= MAX_TX, , drop = FALSE]
-cat(sprintf("%d genes carry both known and novel isoforms within the %d-isoform limit\n",
-            nrow(cand), MAX_TX))
+# Coarsen the reference gene's biotype to the distinction that decides how a novel
+# call should be read. The exact biotype still reaches the panel subtitle; this is
+# only the stratifying key, and leaving it fine-grained would scatter single
+# transcripts across a dozen near-empty strata.
+LNCRNA_REF_BIOTYPES <- c(
+  "lncRNA", "lincRNA", "antisense", "antisense_RNA", "sense_intronic",
+  "sense_overlapping", "macro_lncRNA", "bidirectional_promoter_lncRNA",
+  "3prime_overlapping_ncRNA", "non_coding", "processed_transcript")
 
-if (nrow(cand) > 0) {
-  # Deterministic: novel lncRNA first because that is what the pipeline exists to find,
-  # then the richest loci, then gene_id so a re-run selects the same genes.
-  cand <- cand[order(-cand$n_novel_lnc, -cand$n_novel, -cand$n_tx, cand$gene_id), , drop = FALSE]
-  cand <- head(cand, N_GENES)
+ref_class_of <- function(bt) {
+  ifelse(is.na(bt) | !nzchar(bt),     "no reference",
+  ifelse(bt %in% LNCRNA_REF_BIOTYPES, "lncRNA gene",
+  ifelse(bt == "protein_coding",      "protein-coding gene", "other gene")))
+}
+
+slug <- function(x) {
+  x <- gsub("[^A-Za-z0-9]+", "-", x)
+  substr(gsub("(^-|-$)", "", x), 1, 60)
+}
+
+# One panel per stratum, rather than the five richest loci overall.
+#
+# The flat top-N ranked on novel lncRNA count, which is a popularity contest: it
+# returned five variations on the same finding -- the most isoform-rich loci -- and
+# never showed what an antisense lncRNA, or a retained intron inside a coding gene,
+# actually looks like, because those loci are smaller. A reader cannot judge a class
+# of call they have never been shown an example of.
+#
+# A stratum is (novel biotype, classification, reference gene class), so the panel
+# set spans the ways a novel model can relate to the annotation. A sense-intronic
+# lncRNA inside a protein-coding gene is a different claim from the same model
+# inside an lncRNA gene, and that pair is the lncDACH1 argument in one figure each.
+#
+# Ranking WITHIN a stratum is the old one -- richest locus first -- so each panel is
+# still the most informative example of its kind.
+#
+# u is excluded: it is intergenic, so there is no reference gene to draw it against
+# and the panel would be the novel model alone on an empty window.
+novel_tx <- tx[tx$transcript_status %in% "novel" &
+                 !is.na(tx$class_code) & !tx$class_code %in% "u", , drop = FALSE]
+
+n_tx_of    <- setNames(genes$n_tx,    genes$gene_id)
+n_known_of <- setNames(genes$n_known, genes$gene_id)
+n_novel_of <- setNames(genes$n_novel, genes$gene_id)
+lookup0 <- function(map, key) { v <- unname(map[key]); v[is.na(v)] <- 0L; as.integer(v) }
+
+if (nrow(novel_tx)) {
+  # A panel is the novel model's own gene plus the reference gene it was matched
+  # against, which are frequently different and occasionally the same.
+  ref_same <- !is.na(novel_tx$ref_gene_id) & novel_tx$ref_gene_id == novel_tx$gene_id
+  ref_use  <- !is.na(novel_tx$ref_gene_id) & !ref_same
+
+  novel_tx$panel_n_tx    <- lookup0(n_tx_of,    novel_tx$gene_id) +
+    ifelse(ref_use, lookup0(n_tx_of,    novel_tx$ref_gene_id), 0L)
+  novel_tx$panel_n_known <- lookup0(n_known_of, novel_tx$gene_id) +
+    ifelse(ref_use, lookup0(n_known_of, novel_tx$ref_gene_id), 0L)
+  novel_tx$panel_n_novel <- lookup0(n_novel_of, novel_tx$gene_id) +
+    ifelse(ref_use, lookup0(n_novel_of, novel_tx$ref_gene_id), 0L)
+
+  novel_tx$ref_class <- ref_class_of(novel_tx$ref_gene_biotype)
+  novel_tx$stratum   <- paste(novel_tx$transcript_biotype, novel_tx$classification,
+                              novel_tx$ref_class, sep = " | ")
+
+  # A panel needs a known isoform to supply the context, and has to stay legible.
+  novel_tx <- novel_tx[novel_tx$panel_n_known > 0 & novel_tx$panel_n_tx <= MAX_TX, ,
+                       drop = FALSE]
+}
+
+cat(sprintf("%d novel models across %d strata are drawable within the %d-isoform limit\n",
+            nrow(novel_tx), length(unique(novel_tx$stratum)), MAX_TX))
+
+cand <- genes[0, , drop = FALSE]
+
+if (nrow(novel_tx)) {
+  novel_tx <- novel_tx[order(-novel_tx$panel_n_tx, -novel_tx$panel_n_novel,
+                             novel_tx$transcript_id), , drop = FALSE]
+
+  # Strata taken in order of how many models they hold, so if the cap does bite it
+  # drops the thinnest evidence rather than whatever happened to sort last.
+  strat_order <- names(sort(table(novel_tx$stratum), decreasing = TRUE))
+
+  locus_of <- paste(novel_tx$gene_id, novel_tx$ref_gene_id, sep = "~")
+  picked   <- integer(0)
+  used     <- character(0)
+
+  for (s in strat_order) {
+    rows <- which(novel_tx$stratum == s)
+    free <- rows[!locus_of[rows] %in% used]
+    # Fall back to the best example even when its locus is already drawn: the strata
+    # are what the figure set is meant to span, and a repeated locus under a
+    # different heading still answers a different question about it.
+    take   <- if (length(free)) free[1] else rows[1]
+    used   <- c(used, locus_of[take])
+    picked <- c(picked, take)
+    if (length(picked) >= MAX_PANELS) break
+  }
+
+  sel <- novel_tx[picked, , drop = FALSE]
+
+  cand <- do.call(rbind, lapply(seq_len(nrow(sel)), function(i) {
+    r  <- sel[i, ]
+    pg <- unique(c(r$gene_id, r$ref_gene_id))
+    pg <- pg[!is.na(pg) & pg %in% genes$gene_id]
+    g  <- genes[match(pg, genes$gene_id), , drop = FALSE]
+    # A reference on another sequence is a broken match, not a panel. The model's own
+    # gene is always on its own chromosome, so this never empties g.
+    g  <- g[g$chrom == r$chrom, , drop = FALSE]
+
+    data.frame(
+      gene_id     = if (!is.na(r$ref_gene_id) && r$ref_gene_id %in% g$gene_id)
+                      r$ref_gene_id else r$gene_id,
+      gene_name   = if (!is.na(r$ref_gene_name) && nzchar(r$ref_gene_name))
+                      r$ref_gene_name
+                    else if (!is.na(r$ref_gene_id)) r$ref_gene_id else r$gene_id,
+      chrom       = r$chrom,
+      start       = min(g$start),
+      end         = max(g$end),
+      n_tx        = sum(g$n_tx),
+      n_known     = sum(g$n_known),
+      n_novel     = sum(g$n_novel),
+      n_novel_lnc = sum(g$n_novel_lnc),
+      biotypes    = paste(sort(unique(unlist(strsplit(g$biotypes, ";")))), collapse = ";"),
+      panel_genes = paste(g$gene_id, collapse = ";"),
+      stringsAsFactors = FALSE
+    )
+  }))
+
+  cand$stratum        <- sel$stratum
+  cand$novel_biotype  <- sel$transcript_biotype
+  cand$classification <- sel$classification
+  cand$class_code     <- sel$class_code
+  cand$ref_class      <- sel$ref_class
+  cand$example_tx     <- sel$transcript_id
+  cand$ref_gene_biotype <- sel$ref_gene_biotype
+
   cand$label <- ifelse(is.na(cand$gene_name) | !nzchar(cand$gene_name),
                        cand$gene_id, cand$gene_name)
   cand$pad   <- ceiling((cand$end - cand$start) * 0.05)
   cand$win_s <- pmax(1, cand$start - cand$pad)
   cand$win_e <- cand$end + cand$pad
+
+  cat(sprintf("Drawing %d stratified panels:\n%s\n", nrow(cand),
+              paste0("  ", cand$stratum, "  -> ", cand$label, collapse = "\n")))
 } else {
-  message("No known gene carries a novel isoform.")
+  message("No novel model outside class code u has a drawable reference context.")
 }
 
 # --- Flagged intronic candidates ----------------------------------------------
@@ -441,7 +581,12 @@ windows <- c(
 # five genes and 31 transcripts to draw a caption that promised eight.
 draw_ids <- character(0)
 if (nrow(cand)) {
-  draw_ids <- c(draw_ids, tx$transcript_id[tx$gene_id %in% cand$gene_id])
+  # Both genes behind each panel, not just the one the structure track is drawn from:
+  # an intronic or antisense model carries its own Bambu gene id, so restricting to
+  # the reference gene would drop the transcript the panel exists to show.
+  draw_ids <- c(draw_ids,
+                tx$transcript_id[tx$gene_id %in%
+                                   unique(unlist(strsplit(cand$panel_genes, ";")))])
 }
 if (nrow(flagged)) {
   for (i in seq_len(nrow(flagged))) {
@@ -796,17 +941,22 @@ if (nrow(cand)) {
   cand$figure <- NA_character_
   for (i in seq_len(nrow(cand))) {
     row <- cand[i, ]
-    cat(sprintf("Drawing %s at %s:%d-%d (%d isoforms: %d known, %d novel, %d novel lncRNA)\n",
-                row$label, row$chrom, row$win_s, row$win_e,
-                row$n_tx, row$n_known, row$n_novel, row$n_novel_lnc))
+    cat(sprintf("Drawing [%s] %s at %s:%d-%d (%d isoforms: %d known, %d novel)\n",
+                row$stratum, row$label, row$chrom, row$win_s, row$win_e,
+                row$n_tx, row$n_known, row$n_novel))
 
-    # Everything that will actually be drawn, which after the draw_ids restriction is
-    # this gene's isoforms plus any overlapping gene that is itself a candidate.
-    # Sizing on the gene's own transcripts under-counts whenever two candidates
-    # overlap, and the panel is coloured from these rows as well as sized by them.
-    panel_tx <- tx[tx$chrom == row$chrom & tx$end >= row$win_s &
-                   tx$start <= row$win_e & tx$transcript_id %in% draw_ids, ,
-                   drop = FALSE]
+    # Restricted to the two genes behind this panel. A plain window query pulls in
+    # whatever neighbours happen to overlap -- one 84 kb window returned five genes
+    # and 31 transcripts for a caption promising eight -- and the panel is coloured
+    # from these rows as well as sized by them.
+    row_genes <- strsplit(row$panel_genes, ";")[[1]]
+    panel_tx  <- tx[tx$chrom == row$chrom & tx$end >= row$win_s &
+                    tx$start <= row$win_e & tx$transcript_id %in% draw_ids &
+                    tx$gene_id %in% row_genes, , drop = FALSE]
+
+    ref_bt <- if (is.na(row$ref_gene_biotype) || !nzchar(row$ref_gene_biotype)) {
+      row$ref_class
+    } else row$ref_gene_biotype
 
     cand$figure[i] <- draw_panel(
       chrom        = row$chrom, win_s = row$win_s, win_e = row$win_e,
@@ -815,20 +965,36 @@ if (nrow(cand)) {
       structure_gr = GenomicRanges::reduce(exons_gr[exon_gid == row$gene_id]),
       panel_tx     = panel_tx,
       title        = row$label,
-      subtitle     = sprintf("%d isoforms: %d known, %d novel (%d novel lncRNA candidate%s)",
-                             row$n_tx, row$n_known, row$n_novel, row$n_novel_lnc,
-                             if (row$n_novel_lnc == 1) "" else "s"),
-      out_png      = file.path(opt$outdir, sprintf("genomic_context_%s.png", row$label))
+      # The stratum is the point of the panel, so it leads: this figure is here as
+      # the example of its kind, not because the locus is remarkable.
+      subtitle     = sprintf(
+        "%s, %s | reference: %s | %d isoforms: %d known, %d novel",
+        row$novel_biotype, row$classification, ref_bt,
+        row$n_tx, row$n_known, row$n_novel),
+      out_png      = file.path(opt$outdir,
+                               sprintf("genomic_context_%s_%s.png",
+                                       slug(row$label), slug(row$stratum)))
     )
   }
 
-  write.csv(cand[, c("gene_id", "gene_name", "label", "chrom", "start", "end",
-                     "win_s", "win_e", "n_tx", "n_known", "n_novel", "n_novel_lnc",
-                     "biotypes", "figure")],
+  write.csv(cand[, c("stratum", "novel_biotype", "classification", "class_code",
+                     "ref_class", "ref_gene_biotype", "example_tx",
+                     "gene_id", "gene_name", "label", "panel_genes", "chrom",
+                     "start", "end", "win_s", "win_e", "n_tx", "n_known",
+                     "n_novel", "n_novel_lnc", "biotypes", "figure")],
             file.path(opt$outdir, "genomic_context_candidates.csv"), row.names = FALSE)
 } else {
-  write.csv(genes[0, ], file.path(opt$outdir, "genomic_context_candidates.csv"),
-            row.names = FALSE)
+  # Same columns as the populated case. The report reads this file by name, and a
+  # zero-row table with a different header is harder to handle than an empty one
+  # with the right header.
+  empty_cols <- c("stratum", "novel_biotype", "classification", "class_code",
+                  "ref_class", "ref_gene_biotype", "example_tx", "gene_id",
+                  "gene_name", "label", "panel_genes", "chrom", "start", "end",
+                  "win_s", "win_e", "n_tx", "n_known", "n_novel", "n_novel_lnc",
+                  "biotypes", "figure")
+  write.csv(as.data.frame(setNames(replicate(length(empty_cols), character(0),
+                                             simplify = FALSE), empty_cols)),
+            file.path(opt$outdir, "genomic_context_candidates.csv"), row.names = FALSE)
 }
 cat("Wrote genomic_context_candidates.csv\n")
 

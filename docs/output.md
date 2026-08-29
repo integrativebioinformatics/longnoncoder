@@ -240,11 +240,11 @@ Bambu writes only `gene_id`, `transcript_id` and `exon_number` into its GTF outp
 |--------------------------------|----------------------------------------|
 | `transcript_status` | `known` if the transcript is present in the reference annotation, `novel` if it was assembled by Bambu. |
 | `gene_biotype` | For known transcripts, the biotype from the reference annotation. For novel transcripts arising from a known gene, that gene's reference biotype; for novel transcripts at previously unannotated loci, `novel`. |
-| `transcript_biotype` | For known transcripts, the biotype from the reference annotation. For novel transcripts, `novel_lncRNA` or `novel_protein_coding` according to the coding-potential prediction, or `novel_retained_intron` for class codes m and n. |
+| `transcript_biotype` | For known transcripts, the biotype from the reference annotation. For novel transcripts, one of `novel_lncRNA`, `novel_protein_coding` or `novel_non_coding` — see [How novel models are routed](#how-novel-models-are-routed). |
 | `gene_name` | Gene symbol, where the reference annotation or gffcompare provides one. |
 | `transcript_name` | Transcript name from the reference annotation (known transcripts only). |
 | `class_code` | gffcompare class code relative to the reference (novel transcripts only). |
-| `classification` | Human-readable reading of `class_code`: intergenic, intronic, antisense, multiexon SJ match, total intron retention or partial intron retention (novel transcripts only). |
+| `classification` | Human-readable reading of `class_code`: intergenic, sense intronic, antisense intronic, antisense, multiexon SJ match, extends reference, same-strand overlap, reference within intron, total intron retention or partial intron retention (novel transcripts only). |
 | `ref_gene_id` | Reference gene the novel transcript was matched against, where gffcompare found one (novel transcripts only). |
 
 > [!NOTE]
@@ -324,43 +324,61 @@ With `rnamining`:
 | `novel_protein-coding_metadata.csv` | Metadata table for novel protein-coding RNA isoform candidates. |
 | `novel_transcripts_metadata.csv` | Metadata table for all novel RNA isoform candidates. |
 | `novel_transcripts.gtf` | GTF file containing only the validated set of novel isoform candidates. |
-| `novel_intron_retention_metadata.csv` | Metadata table for intron-retention events (class codes `m` and `n`). Kept out of the lncRNA and protein-coding tables on purpose — see the note below. |
-| `novel_intron_retention.gtf` | GTF file containing the intron-retention transcripts, with `transcript_biotype "novel_retained_intron"`. |
+| `novel_non_coding_metadata.csv` | Metadata table for models predicted non-coding that share splice structure with a reference gene which is not an lncRNA. |
+| `novel_non_coding.gtf` | GTF file for the same set, with `transcript_biotype "novel_non_coding"`. |
 | `novel_context_flags.csv` | Structural evidence per novel transcript: the reference gene, its biotype and strand, `same_strand_as_host`, and the read counts behind the boundary and junction tests. |
 | `novel_context_summary.csv` | Aggregate counts from the same tests, as rendered in the report. |
 
 ### Which class codes become candidates
 
-Seven gffcompare class codes are eligible: `u` intergenic, `i` intronic, `x`
+Nine gffcompare class codes are eligible: `u` intergenic, `i` intronic, `x`
 antisense, `j` multiexon SJ match, `k` extends reference, `o` same-strand overlap,
-and `y` reference within intron. Each is given its wording in the `classification`
-column, so the letter never has to be looked up.
+`y` reference within intron, `m` total intron retention and `n` partial intron
+retention. Each is given its wording in the `classification` column, so the letter
+never has to be looked up.
 
-`k`, `o` and `y` earn their place by showing things the others cannot. `k` means
-the novel model runs past the reference it contains, which is where an unannotated
-exon would appear; `y` means it contains a reference inside its own intron, which
-can be a distinct locus rather than an isoform.
+`i` is split by orientation, as **sense intronic** or **antisense intronic**. That
+is the only class code whose strand relative to the reference varies: `x` is
+antisense by definition and the rest are same-strand matches.
 
 `=` and `c` never appear. Only novel transcripts reach gffcompare, so a model
-matching or contained by a reference was already resolved as annotated.
+matching or contained by a reference was already resolved as annotated. `s`, `e`,
+`p` and `r` are not admitted.
 
-### Why intron retention is a separate category
+### How novel models are routed
 
-`m` and `n` transcripts retain at least one reference intron. They are routed to
-`novel_retained_intron` rather than sorted by coding potential, following GENCODE,
-which carries `retained_intron` **alongside** `protein_coding` and `lncRNA` rather
-than beneath either — and because "retained intron" describes the structure exactly,
-where "lncRNA" would assert more than the data supports.
+Each candidate is assigned one of three `transcript_biotype` values, from its class
+code, its coding-potential prediction, and the biotype of the reference gene it was
+matched against.
 
-The coding prediction is kept as a **column** in
-`novel_intron_retention_metadata.csv`, so nothing is lost; it is simply not the
-routing key.
+**`u`, `i` and `x` share no splice structure with a reference.** `u` has no
+reference at all, `i` lies wholly inside an intron, and `x` overlaps on the opposite
+strand. The coding prediction decides alone:
 
-> An earlier version of this document argued that retained intronic sequence pulls
-> a composition-based prediction toward non-coding, making the call circular for
-> `m`/`n`. Checking it against real output did not support that: `m` and `n` were
-> indistinguishable from `j`, `k` and `y` in how often they were called non-coding.
-> The separation stands on the vocabulary argument above, which is a narrower claim.
+| Prediction | `transcript_biotype` |
+|---|---|
+| non-coding | `novel_lncRNA` |
+| coding | `novel_protein_coding` |
+
+A sense-intronic or antisense lncRNA inside a protein-coding locus is still an
+lncRNA, and both Ensembl and GENCODE annotate them that way.
+
+**`j`, `k`, `o`, `y`, `m` and `n` do share structure with a reference transcript.**
+A non-coding call carries less weight here: an unproductive isoform of a
+protein-coding gene — a retained intron, an NMD target, a truncated model — is
+predicted non-coding too, and calling one a novel lncRNA would assert a new
+non-coding gene at a locus that already has a coding one.
+
+| Prediction | Reference gene | `transcript_biotype` |
+|---|---|---|
+| coding | any | `novel_protein_coding` |
+| non-coding | lncRNA | `novel_lncRNA` |
+| non-coding | anything else | `novel_non_coding` |
+
+`novel_non_coding` states that a model has no coding potential without asserting
+what it is, which is as much as the evidence supports for a non-coding isoform of a
+coding gene. The prediction and its probability are kept as columns on every record
+in all three categories.
 
 ### Reference identity on novel records
 

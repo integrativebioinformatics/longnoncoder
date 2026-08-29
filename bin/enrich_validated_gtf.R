@@ -108,18 +108,19 @@ if (nrow(novel) > 0) {
     gene_biotype <- unname(ref_gene_biotype[ref_gene])
     gene_biotype[is.na(gene_biotype)] <- "novel"
 
-    # Taken from the metadata, never re-derived from the prediction. Deriving it
-    # here silently undid the routing upstream: m and n transcripts are
-    # novel_retained_intron by class code, but every one of them predicts
-    # non-coding, so an ifelse on the prediction relabelled all of them
-    # novel_lncRNA and novel_retained_intron never reached the enriched GTF.
-    # The fallback covers a metadata file written before the column existed.
+    # Taken from the metadata, never re-derived from the prediction. The routing
+    # upstream uses the prediction AND the reference gene's biotype together: a
+    # non-coding call on a model that shares splice structure with a protein-coding
+    # gene becomes novel_non_coding, not novel_lncRNA. An ifelse on the prediction
+    # alone cannot represent that distinction and silently collapses the two, which
+    # is exactly the bug this replaced. The fallback covers a metadata file written
+    # before the column existed, and says so rather than pretending otherwise.
     tx_biotype <- if ("transcript_biotype" %in% names(novel)) {
         as.character(novel$transcript_biotype)
     } else {
-        warning("novel metadata has no transcript_biotype column; ",
-                "falling back to the coding prediction, which cannot represent ",
-                "intron retention.")
+        warning("novel metadata has no transcript_biotype column; falling back to ",
+                "the coding prediction, which cannot distinguish novel_lncRNA from ",
+                "novel_non_coding.")
         ifelse(novel$prediction == "coding", "novel_protein_coding", "novel_lncRNA")
     }
 

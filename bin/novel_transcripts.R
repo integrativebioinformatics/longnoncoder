@@ -43,12 +43,13 @@ if (is.null(opt$bambu_gtf) || is.null(opt$compared_gtf) || is.null(opt$tmap_file
 }
 
 # Reference lookups, used to say what each novel transcript was compared against:
-# the biotype and name of the reference gene, and of the reference transcript
-# itself. Kept as four named vectors rather than the whole table, which is several
-# hundred megabytes for a full GENCODE annotation.
+# the biotype, name and strand of the reference gene, and the biotype and name of
+# the reference transcript itself. Kept as named vectors rather than the whole
+# table, which is several hundred megabytes for a full GENCODE annotation.
 reference <- read_reference_gtf(opt$annotation)
 ref_gene_biotype <- reference$gene_biotype
 ref_gene_name    <- reference$gene_name
+ref_gene_strand  <- reference$gene_strand
 ref_tx_biotype   <- reference$tx_biotype
 ref_tx_name      <- reference$tx_name
 rm(reference)
@@ -189,6 +190,14 @@ tx_info$ref_gene_name    <- unname(ref_gene_name[tx_info$ref_gene_id])
 tx_info$ref_transcript_biotype <- unname(ref_tx_biotype[tx_info$ref_id])
 tx_info$ref_transcript_name    <- unname(ref_tx_name[tx_info$ref_id])
 
+# Orientation relative to the reference gene. NA where gffcompare reported no
+# reference, which is the honest value for u: there is nothing to be sense or
+# antisense to. x is antisense by construction and should always come out FALSE,
+# which makes it a free check that the lookup is keyed correctly.
+tx_info$ref_gene_strand    <- unname(ref_gene_strand[tx_info$ref_gene_id])
+tx_info$same_strand_as_ref <- ifelse(is.na(tx_info$ref_gene_strand), NA,
+                                     tx_info$strand == tx_info$ref_gene_strand)
+
 # Load counts
 cat("Filtering transcripts with zero counts...\n")
 tx_counts <- read_table(opt$tx_counts)
@@ -196,10 +205,6 @@ gene_counts <- read_table(opt$gene_counts)
 
 # Remove novel transcripts that had 0 transcript counts in all samples
 tx_info <- tx_info[tx_info$qry_id %in% tx_counts$TXNAME, ]
-
-# Save the metadata of all novel transcripts
-cat("Saving novel transcripts metadata...\n")
-write.csv(tx_info, file="novel_transcripts_metadata.csv", row.names = FALSE)
 
 #' Human-readable label for a gffcompare class code. Kept in one place because
 #' three outputs need the same mapping and copies of it drifted apart.
@@ -215,7 +220,32 @@ CLASS_LABELS <- c(
     n = 'partial intron retention'
 )
 
-classify_class_code <- function(codes) unname(CLASS_LABELS[as.character(codes)])
+#' Human-readable label for a class code, with i split by orientation.
+#'
+#' "Intronic" on its own conflates two situations that warrant different scrutiny.
+#' A model lying inside a same-strand intron cannot be told apart from a fragment
+#' of that gene's pre-mRNA without independent evidence -- the lncDACH1 problem --
+#' while an antisense one is not explainable that way at all. Where the orientation
+#' is unknown the label stays the unqualified "intronic" rather than guessing.
+classify_class_code <- function(codes, same_strand = NULL) {
+    codes <- as.character(codes)
+    out   <- unname(CLASS_LABELS[codes])
+
+    if (!is.null(same_strand)) {
+        is_i      <- !is.na(codes) & codes == 'i' & !is.na(same_strand)
+        out[is_i] <- ifelse(same_strand[is_i], 'sense intronic', 'antisense intronic')
+    }
+    out
+}
+
+tx_info$classification <- classify_class_code(tx_info$class_code,
+                                              tx_info$same_strand_as_ref)
+
+# Save the metadata of all novel transcripts. Written after the classification so
+# the full table carries it as well, including for the class codes that never
+# become candidates.
+cat("Saving novel transcripts metadata...\n")
+write.csv(tx_info, file="novel_transcripts_metadata.csv", row.names = FALSE)
 
 #' Build the attribute set written into the novel GTFs.
 #'
@@ -261,64 +291,103 @@ write_novel_gtf <- function(meta, path) {
     invisible(exons)
 }
 
-# Which class codes are eligible to become candidates, and which get their own
-# category instead.
+# ---------------------------------------------------------------------------
+# Routing novel models into biotypes
+# ---------------------------------------------------------------------------
 #
-# k, o and y are in because each can reveal something the others cannot: k means
-# the novel model extends past the reference it contains, which is where an
-# unannotated exon would show up; y means the model contains a reference inside its
-# own intron, which can be a distinct locus rather than an isoform; o is
-# same-strand overlap that matches no junction. Excluding them was not a judgement
-# that they are uninteresting, only that they had not been looked at.
+# Two groups, split by whether the model shares splice structure with the
+# reference it was matched against.
 #
-# m and n stay separate on GENCODE's terms: retained_intron is carried alongside
-# protein_coding and lncRNA rather than beneath either, and "retained intron"
-# describes the structure precisely where "lncRNA" would assert more than the data
-# supports. The coding prediction is kept as a column on them, not used as the key.
+# u, i and x share none of it. u has no reference at all, i lies wholly inside an
+# intron, and x is exonic overlap on the opposite strand. For these the coding
+# prediction stands on its own, so a non-coding call becomes novel_lncRNA whatever
+# the reference gene happens to be: a sense-intronic or antisense lncRNA sitting
+# inside a protein-coding locus is still an lncRNA, and both Ensembl and GENCODE
+# annotate them as such.
+#
+# j, k, o, y, m and n all do share structure with a reference transcript, and
+# there a non-coding call is much weaker evidence. An unproductive isoform of a
+# protein-coding gene -- a retained intron, an NMD target, a truncated model --
+# predicts non-coding too, and calling one a novel lncRNA asserts a new non-coding
+# gene at a locus that already has a coding one. So lncRNA is claimed only where
+# the reference gene is itself an lncRNA. Everything else in this group is filed by
+# the prediction alone.
+#
+# novel_non_coding is deliberately not novel_lncRNA. It says the model has no
+# coding potential without asserting what it is, which is as much as the evidence
+# supports for a non-coding isoform of a coding gene.
 #
 # Note = and c never appear at all: only novel transcripts reach gffcompare, so a
 # model matching or contained by a reference was already resolved as annotated.
-CANDIDATE_CODES        <- c('u', 'i', 'x', 'j', 'k', 'o', 'y')
-INTRON_RETENTION_CODES <- c('m', 'n')
+INDEPENDENT_CODES <- c('u', 'i', 'x')
+RELATED_CODES     <- c('j', 'k', 'o', 'y', 'm', 'n')
+CANDIDATE_CODES   <- c(INDEPENDENT_CODES, RELATED_CODES)
+
+# Reference gene biotypes that count as lncRNA when deciding whether a
+# structurally-related model can be called one.
+#
+# Current Ensembl and GENCODE releases have consolidated on "lncRNA", but users do
+# supply older annotations, which split the same class across several names. On one
+# of those, every lncRNA locus would otherwise fall through to novel_non_coding.
+# processed_transcript is included for the same reason -- it was a non-coding gene
+# biotype before the merge -- though it is the least clear-cut of these.
+LNCRNA_GENE_BIOTYPES <- c(
+    "lncRNA", "lincRNA", "antisense", "antisense_RNA",
+    "sense_intronic", "sense_overlapping", "macro_lncRNA",
+    "bidirectional_promoter_lncRNA", "3prime_overlapping_ncRNA",
+    "non_coding", "processed_transcript"
+)
+
+is_lnc_ref  <- !is.na(tx_info$ref_gene_biotype) &
+                   tx_info$ref_gene_biotype %in% LNCRNA_GENE_BIOTYPES
+is_coding   <- !is.na(tx_info$prediction) & tx_info$prediction == 'coding'
+is_noncod   <- !is.na(tx_info$prediction) & tx_info$prediction == 'non-coding'
+independent <- tx_info$class_code %in% INDEPENDENT_CODES
+related     <- tx_info$class_code %in% RELATED_CODES
+
+biotype <- rep(NA_character_, nrow(tx_info))
+biotype[(independent | related) & is_coding] <- "novel_protein_coding"
+biotype[independent & is_noncod]             <- "novel_lncRNA"
+biotype[related & is_noncod & is_lnc_ref]    <- "novel_lncRNA"
+biotype[related & is_noncod & !is_lnc_ref]   <- "novel_non_coding"
+tx_info$transcript_biotype <- biotype
+
+# The 200 nt floor is the consensus lower bound for a long non-coding RNA. Applied
+# to every candidate rather than only the lncRNA branch, so the three categories
+# stay comparable to one another.
+eligible <- tx_info[tx_info$class_code %in% CANDIDATE_CODES &
+                        tx_info$len >= 200 &
+                        !is.na(tx_info$transcript_biotype), ]
+
+routed <- table(eligible$transcript_biotype)
+cat(sprintf("Routed %d candidates: %s\n", nrow(eligible),
+            paste(sprintf("%s=%d", names(routed), as.integer(routed)),
+                  collapse = ", ")))
 
 # Select novel lncRNA candidates
 cat("Processing lncRNA candidates...\n")
-new_lncRNAs <- tx_info[tx_info$class_code %in% CANDIDATE_CODES &
-                    tx_info$len >= 200 &
-                    tx_info$prediction == 'non-coding', ]
-new_lncRNAs$classification     <- classify_class_code(new_lncRNAs$class_code)
-new_lncRNAs$transcript_biotype <- "novel_lncRNA"
+new_lncRNAs <- eligible[eligible$transcript_biotype == "novel_lncRNA", ]
 
 write.csv(new_lncRNAs, file="novel_lncRNAs_metadata.csv", row.names = FALSE)
 new_lncRNAs_exons_gtf <- write_novel_gtf(new_lncRNAs, "novel_lncRNAs.gtf")
 
 # Select novel protein-coding candidates
 cat("Processing protein-coding candidates...\n")
-new_mRNAs <- tx_info[tx_info$class_code %in% CANDIDATE_CODES &
-                         tx_info$len >= 200 &
-                         tx_info$prediction == 'coding', ]
-new_mRNAs$classification     <- classify_class_code(new_mRNAs$class_code)
-new_mRNAs$transcript_biotype <- "novel_protein_coding"
+new_mRNAs <- eligible[eligible$transcript_biotype == "novel_protein_coding", ]
 
 write.csv(new_mRNAs, file="novel_protein-coding_metadata.csv", row.names = FALSE)
 new_mRNAs_exons_gtf <- write_novel_gtf(new_mRNAs, "novel_protein-coding.gtf")
 
-# Select intron-retention events. Not split by the coding prediction: it stays as
-# a column so nothing is lost, but it is not the routing key here. novel_retained_intron
-# mirrors GENCODE, which carries retained_intron alongside protein_coding and
-# lncRNA rather than beneath either.
-cat("Processing intron retention events...\n")
-new_intron_retention <- tx_info[tx_info$class_code %in% INTRON_RETENTION_CODES &
-                                    tx_info$len >= 200, ]
-new_intron_retention$classification     <- classify_class_code(new_intron_retention$class_code)
-new_intron_retention$transcript_biotype <- "novel_retained_intron"
+# Select the non-coding models that are not claimed as lncRNA
+cat("Processing non-coding candidates...\n")
+new_ncRNAs <- eligible[eligible$transcript_biotype == "novel_non_coding", ]
 
-write.csv(new_intron_retention, file="novel_intron_retention_metadata.csv", row.names = FALSE)
-write_novel_gtf(new_intron_retention, "novel_intron_retention.gtf")
+write.csv(new_ncRNAs, file="novel_non_coding_metadata.csv", row.names = FALSE)
+write_novel_gtf(new_ncRNAs, "novel_non_coding.gtf")
 
-# Save combined metadata. All three categories: taking m and n out of the lncRNA
-# branch must not drop them from the validated GTF and the counts derived from it.
-new_mRNA_lncRNA <- rbind(new_mRNAs, new_lncRNAs, new_intron_retention)
+# Save combined metadata. All three categories: the novel_non_coding models must
+# not drop out of the validated GTF or the counts derived from it.
+new_mRNA_lncRNA <- rbind(new_mRNAs, new_lncRNAs, new_ncRNAs)
 write.csv(new_mRNA_lncRNA, "novel_pc_lnc_RNAs_metadata.csv", row.names = FALSE)
 
 # Update novel transcripts GTF with the new classifications

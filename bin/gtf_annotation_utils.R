@@ -217,11 +217,20 @@ read_reference_gtf <- function(path) {
     tx_name    <- dual_key(tx$external_transcript_name,
                            tx$ensembl_transcript_id, tx$ensembl_transcript_id_version)
 
+    # Gene strand, which the sense/antisense split of intronic novel models needs.
+    # gffcompare's i code covers both orientations and they are not the same
+    # finding: a model inside a same-strand intron cannot be told apart from a
+    # fragment of that gene's pre-mRNA without independent evidence, while an
+    # antisense one cannot be explained that way at all. Every transcript of a gene
+    # shares the gene's strand, so the first occurrence per gene is the gene's.
+    gene_strand <- dual_key(tx$strand,
+                            tx$ensembl_gene_id, tx$ensembl_gene_id_version)
+
     cat(sprintf("  %d transcripts, %d exons, %d genes\n",
                 nrow(tx), nrow(exons), length(unique(tx$ensembl_gene_id))))
 
     list(tx = tx, exons = exons,
-         gene_biotype = gene_biotype, gene_name = gene_name,
+         gene_biotype = gene_biotype, gene_name = gene_name, gene_strand = gene_strand,
          tx_biotype = tx_biotype, tx_name = tx_name)
 }
 

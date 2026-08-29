@@ -22,7 +22,7 @@ process RENDER_REPORT {
     path novel_transcriptome_meta
     path novel_lncrna_exonlength
     path novel_protein_coding_exonlength
-    path novel_intron_retention_meta
+    path novel_non_coding_meta
 
     // structural validation of the novel calls
     path context_flags
@@ -82,7 +82,7 @@ process RENDER_REPORT {
         -P novel_transcriptome_meta:${novel_transcriptome_meta} \\
         -P novel_lncrna_exonlength:${novel_lncrna_exonlength} \\
         -P novel_protein_coding_exonlength:${novel_protein_coding_exonlength} \\
-        -P novel_intron_retention_meta:${novel_intron_retention_meta} \\
+        -P novel_non_coding_meta:${novel_non_coding_meta} \\
         -P context_flags:${context_flags} \\
         -P context_summary:${context_summary} \\
         -P genomic_context_candidates:${genomic_context_candidates} \\

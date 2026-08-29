@@ -250,7 +250,7 @@ workflow PULPOSEQ {
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
             NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
-            NOVEL_TRANSCRIPTS.out.novel_intron_retention_metadata,
+            NOVEL_TRANSCRIPTS.out.novel_non_coding_metadata,
             VALIDATE_NOVEL_CONTEXT.out.flags,
             VALIDATE_NOVEL_CONTEXT.out.summary,
             GENOMIC_CONTEXT.out.candidates,
