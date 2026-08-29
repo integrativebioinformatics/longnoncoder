@@ -23,8 +23,8 @@ option_list <- list(
                 help="Path to compared transcriptome annotated GTF file", metavar="character"),
     make_option(c("--tmap_file"), type="character", default=NULL,
                 help="Path to tmap results file", metavar="character"),
-    make_option(c("--rnamining_predictions"), type="character", default=NULL,
-                help="Path to rnamining predictions file", metavar="character"),
+    make_option(c("--coding_predictions"), type="character", default=NULL,
+                help="Path to the coding-potential table (CPC2 or RNAmining)", metavar="character"),
     make_option(c("--tx_counts"), type="character", default=NULL,
                 help="Path to transcript counts file", metavar="character"),
     make_option(c("--gene_counts"), type="character", default=NULL,
@@ -36,7 +36,7 @@ opt <- parse_args(opt_parser)
 
 # Check if all required arguments are provided
 if (is.null(opt$bambu_gtf) || is.null(opt$compared_gtf) || is.null(opt$tmap_file) ||
-    is.null(opt$rnamining_predictions) || is.null(opt$tx_counts) || is.null(opt$gene_counts) ||
+    is.null(opt$coding_predictions) || is.null(opt$tx_counts) || is.null(opt$gene_counts) ||
     is.null(opt$annotation)) {
     print_help(opt_parser)
     stop("All input files must be specified.", call.=FALSE)
@@ -64,30 +64,82 @@ tx_table <- as.data.frame(tx_gtf[tx_gtf$type == "transcript"], )
 cat("Loading tmap results...\n")
 tmap <- read_table(opt$tmap_file)
 
-# Load rnamining prediction results
-cat("Loading rnamining predictions...\n")
-# RNAmining writes a free-text header before the TSV body, and its shape differs
-# between releases: 1.0.4 emits four title lines then a blank, so the body starts
-# at line 6, while the 1.1.0 module stub shows four "#"-prefixed lines and no
-# blank. Skipping a fixed number of lines silently drops the first prediction
-# whenever that count is wrong -- no error, just one transcript missing its
-# coding call -- so the body is identified by matching it instead.
-rnamres <- readLines(opt$rnamining_predictions)
+cat("Loading coding-potential predictions...\n")
 
-is_data <- grepl("^[^#[:space:]][^\t]*\t(coding|non-coding)\t", rnamres)
+#' Read a coding-potential table from either predictor.
+#'
+#' The two formats differ in more than layout. RNAmining writes a preamble and then
+#' <id> <coding|non-coding> <score>, where the score is the probability of whichever
+#' class it chose. CPC2 writes a "#ID" header with eight tab-separated columns,
+#' spells the label "noncoding" without the hyphen, and its coding_probability is
+#' the probability of CODING specifically -- so a non-coding row carries a low value
+#' where RNAmining carries a high one. Passing either straight through would put two
+#' different quantities in the same column.
+#'
+#' Both are normalised here: prediction in {coding, non-coding}, and coding_prob as
+#' P(coding) whichever tool produced it. CPC2 columns are located by header name
+#' rather than position, because it inserts ORF_Start when run with --ORF.
+read_coding_predictions <- function(path) {
+    lines <- readLines(path)
+    hdr   <- grep("^#ID\t", lines)
 
-if (!any(is_data)) {
-    stop("No prediction rows found in ", opt$rnamining_predictions,
-         ". Expected tab-separated <id> <coding|non-coding> <score> lines.",
-         call. = FALSE)
+    if (length(hdr)) {
+        cols <- strsplit(sub("^#", "", lines[hdr[1]]), "\t", fixed = TRUE)[[1]]
+        body <- lines[seq.int(hdr[1] + 1L, length(lines))]
+        body <- body[nzchar(body)]
+        if (!length(body)) {
+            stop("CPC2 table ", path, " has a header but no rows.", call. = FALSE)
+        }
+
+        d <- read.table(text = body, sep = "\t", header = FALSE, quote = "",
+                        comment.char = "", stringsAsFactors = FALSE)
+        if (ncol(d) != length(cols)) {
+            stop("CPC2 table ", path, " has ", ncol(d), " columns against a ",
+                 length(cols), "-column header.", call. = FALSE)
+        }
+        names(d) <- cols
+
+        missing <- setdiff(c("ID", "label", "coding_probability"), names(d))
+        if (length(missing)) {
+            stop("CPC2 table ", path, " is missing column(s): ",
+                 paste(missing, collapse = ", "), ". Found: ",
+                 paste(names(d), collapse = ", "), call. = FALSE)
+        }
+
+        cat(sprintf("Read %d CPC2 predictions\n", nrow(d)))
+        return(data.frame(
+            transcript_id    = as.character(d$ID),
+            prediction       = ifelse(d$label == "coding", "coding", "non-coding"),
+            coding_prob      = as.numeric(d$coding_probability),
+            coding_predictor = "cpc2",
+            stringsAsFactors = FALSE))
+    }
+
+    # RNAmining. The preamble line count has changed between versions, and skipping a
+    # fixed number silently drops one transcript's call whenever that count is wrong,
+    # so the body is identified by matching it instead.
+    is_data <- grepl("^[^#[:space:]][^\t]*\t(coding|non-coding)\t", lines)
+    if (!any(is_data)) {
+        stop("No prediction rows found in ", path, ". Expected either a CPC2 table ",
+             "with a #ID header, or RNAmining <id> <coding|non-coding> <score> lines.",
+             call. = FALSE)
+    }
+
+    d <- read.table(text = lines[is_data], header = FALSE, sep = "\t",
+                    stringsAsFactors = FALSE)
+    colnames(d) <- c("transcript_id", "prediction", "score")
+
+    cat(sprintf("Read %d RNAmining predictions (%d preamble lines skipped)\n",
+                nrow(d), sum(!is_data)))
+    data.frame(
+        transcript_id    = as.character(d$transcript_id),
+        prediction       = as.character(d$prediction),
+        coding_prob      = ifelse(d$prediction == "coding", d$score, 1 - d$score),
+        coding_predictor = "rnamining",
+        stringsAsFactors = FALSE)
 }
 
-rnam <- read.table(text = rnamres[is_data], header = FALSE, sep = "\t",
-                   stringsAsFactors = FALSE)
-colnames(rnam) <- c("transcript_id", "prediction", "rnamining_score")
-
-cat(sprintf("Read %d RNAmining predictions (%d header lines skipped)\n",
-            nrow(rnam), sum(!is_data)))
+rnam <- read_coding_predictions(opt$coding_predictions)
 
 # Select relevant information from gtf
 tx_table <- dplyr::select(tx_table, seqnames, transcript_id, gene_name, start, end, strand)
@@ -96,12 +148,13 @@ tx_table <- dplyr::select(tx_table, seqnames, transcript_id, gene_name, start, e
 cat("Merging data...\n")
 tx_info <- merge(tmap, tx_table, by.x="qry_id", by.y="transcript_id", all.x=TRUE)
 
-# Add the rnamining results
+# Attach the coding-potential calls
 tx_info <- merge(tx_info, rnam, by.x="qry_id", by.y="transcript_id", all.x=TRUE)
 
 # Select relevant info and reorder columns
 tx_info <- dplyr::select(tx_info, seqnames, qry_id, ref_id, qry_gene_id, ref_gene_id, gene_name, 
-                  class_code, strand, start, end, len, num_exons, prediction, rnamining_score)
+                  class_code, strand, start, end, len, num_exons, prediction, coding_prob,
+                  coding_predictor)
 
 # Remove unstranded transcripts
 tx_info <- tx_info[tx_info$strand != "*", ]

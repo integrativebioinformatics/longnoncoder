@@ -220,8 +220,16 @@
         "skip_class": {
             "type": "boolean"
         },
+        "coding_potential_pred": {
+            "type": "string",
+            "default": "cpc2",
+            "enum": ["cpc2", "rnamining"],
+            "description": "Tool used to predict coding potential for novel transcripts.",
+            "help_text": "CPC2 is the default and needs no organism. RNAmining requires --organism and is currently under review: on the pipeline's test data it called 86 of 100 GENCODE protein-coding transcripts non-coding, and invalidated 80 of the 88 it had called coding."
+        },
         "organism": {
-            "type": "string"
+            "type": "string",
+            "description": "Organism model used by RNAmining, e.g. Homo_sapiens. Required with --coding_potential_pred rnamining, and ignored by CPC2."
         },
         "maxlen": {
             "type": "integer",

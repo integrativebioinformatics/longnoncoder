@@ -30,7 +30,7 @@ input:
       type: file
       description: GFFcompare tmap file mapping query to reference transcripts.
       pattern: "*.tmap"
-  - rnamining_predictions:
+  - coding_predictions:
       type: file
       description: RNAMINING prediction file with ID, prediction and score TSV columns, preceded by the tool header.
       pattern: "*.txt"

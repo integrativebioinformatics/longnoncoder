@@ -10,7 +10,7 @@ process NOVEL_TRANSCRIPTS {
     path bambu_gtf
     path compared_gtf
     path tmap_file
-    path rnamining_predictions
+    path coding_predictions
     path tx_counts
     path gene_counts
     path annotation
@@ -44,7 +44,7 @@ process NOVEL_TRANSCRIPTS {
         --bambu_gtf ${bambu_gtf} \\
         --compared_gtf ${compared_gtf} \\
         --tmap_file ${tmap_file} \\
-        --rnamining_predictions ${rnamining_predictions} \\
+        --coding_predictions ${coding_predictions} \\
         --tx_counts ${tx_counts} \\
         --gene_counts ${gene_counts} \\
         --annotation ${annotation} \\

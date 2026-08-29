@@ -3,6 +3,7 @@
 //
 include { GFFCOMPARE } from '../../modules/nf-core/gffcompare/main'
 include { GFFREAD    } from '../../modules/nf-core/gffread/main'
+include { CPC2       } from '../../modules/nf-core/cpc2/main'
 
 //
 // MODULE: Local to the pipeline
@@ -61,14 +62,33 @@ workflow CLASSIFICATION {
     ch_gffread_fasta = GFFREAD.out.gffread_fasta.map { _meta, f -> f }
 
     //
-    // RNAMINING: coding potential prediction
+    // Coding potential prediction, from whichever predictor params.coding_potential_pred
+    // names. Both write a table of one row per transcript with a coding/non-coding call;
+    // novel_transcripts.R reads either, keying on the header rather than on column
+    // position.
     //
-    RNAMINING(
-        ch_gffread_fasta
-    )
-
-    ch_predictions = RNAMINING.out.preds
-    ch_versions = ch_versions.mix(RNAMINING.out.versions)
+    // CPC2 is the default. On this pipeline's own test data RNAmining called 86 of 100
+    // GENCODE protein-coding transcripts non-coding, against 1 for CPC2, and reversing
+    // the comparison it invalidated 80 of the 88 it had called coding. RNAmining is kept
+    // selectable rather than removed so that behaviour can be re-checked once the cause
+    // is understood -- it is a per-organism model and the fault may not be in the tool.
+    //
+    if (params.coding_potential_pred == 'rnamining') {
+        RNAMINING(
+            ch_gffread_fasta
+        )
+        ch_predictions = RNAMINING.out.preds
+        ch_versions    = ch_versions.mix(RNAMINING.out.versions)
+    }
+    else {
+        // CPC2 keeps the meta map, where RNAMINING took a bare path.
+        CPC2(
+            GFFREAD.out.gffread_fasta
+        )
+        ch_predictions = CPC2.out.txt.map { _meta, f -> f }
+        // Versions reach the pipeline through the `versions` topic channel rather than
+        // a versions.yml emit, so there is nothing to mix in here.
+    }
 
     emit:
     annotated_gtf = ch_annotated_gtf
