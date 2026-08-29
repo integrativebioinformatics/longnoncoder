@@ -278,11 +278,6 @@ def validateInputParameters() {
         }
     }
 
-    // Coding prediction requires organism
-    if (!params.skip_class && !params.organism) {
-        error("--organism must be provided when classification is not skipped (skip_class = false)")
-    }
-
     // Filtering length checks
     if (params.maxlen && params.minlen && (params.maxlen as int) < (params.minlen as int)) {
         error("--maxlen (${params.maxlen}) cannot be less than --minlen (${params.minlen})")
