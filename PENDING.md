@@ -121,6 +121,8 @@ Verified against the rendered Ensembl 116 HTML: duplicated captions fixed, figur
 the stale `@fig-density` cross-reference fixed, chromosome naming reconciled, chromosome figure
 scaling derived from the data. Tabsets, palette, legends, lollipops and log ticks all visible.
 
+**Two open items on the current report — see P13.**
+
 ## Restrander, verified directly against the image
 
 Run locally against `emiyoshi/restrander:v1.1.3` on the tool's own 20,000-read PCB109 vignette
@@ -144,6 +146,60 @@ version detection produced an empty string.
 # 2. Validations still pending
 
 ## Priorities
+
+Numbered in the order they were raised, not by importance. **P11 is the most consequential entry
+here** and invalidates the classification half of every run made before it.
+
+### P11. RNAmining misclassifies protein-coding transcripts — **predictor swapped to CPC2**
+
+RNAmining's coding call is the routing key for `novel_lncRNA` versus `novel_protein_coding`, so it
+decides what the pipeline's primary output contains. It is wrong often enough to change the answer.
+
+**Positive control.** 100 GENCODE protein-coding transcripts, same container, same input path:
+RNAmining called **86 of them non-coding**. CPC2 called 1.
+
+**Head to head** over the same 1,570 novel transcripts from the chr1 test run: CPC2 reversed **80 of
+the 88** RNAmining had called coding, and **275 of the 1,482** it had called non-coding.
+
+**Independent check, agreeing with CPC2.** Scanning for the longest ATG-to-stop reading frame:
+
+- transcripts RNAmining called **coding** have a median longest ORF of **54 nt** — a 17-residue
+  peptide, and a median transcript length of 230 nt, barely over the 200 nt floor
+- the 107 `k`-class transcripts containing a protein-coding reference, all called non-coding, have a
+  median longest ORF of **969 nt**; one is a 3,836 nt transcript whose 3,594 nt ORF covers **94%** of
+  it, which is not a lncRNA under any reading
+- shuffling those same sequences base-by-base caps the longest ORF at 564 nt, and **83%** of the real
+  ones exceed that — so the reading frames are not an artifact of base composition
+- the 275 CPC2 reclassifies sit almost exactly at a 126 aa cut, so two unrelated methods pick out the
+  same transcripts
+
+Ruled out as causes: organism (`Homo_sapiens` was correctly passed and echoed), the prediction parser
+(88/1,481 in the raw output matches the metadata exactly), and read strand (5.3% coding on `+` vs
+6.0% on `−`, so `gffread` orientation is fine). An earlier hypothesis that retained introns bias the
+composition was also **not supported** — `m`/`n` were indistinguishable from `j`, `k` and `y`.
+
+**Done.** `--coding_potential_pred` selects `cpc2` (default) or `rnamining`; RNAmining is kept, not
+deleted, and now requires `--organism` rather than silently receiving an empty one. Selecting it logs
+a warning carrying these numbers.
+
+**Still open.** Why RNAmining fails is unknown — it may be the shipped model rather than the tool,
+which is the reason it was kept selectable. Samuel is checking. Until then no run should use it.
+
+**Consequence for existing results.** Every classification produced before this swap carries the
+error: roughly 275 protein-coding transcripts sat in the lncRNA set and ~80 lncRNA candidates sat in
+the protein-coding set. Re-running classification is enough — alignment and assembly are unaffected.
+
+### P12. CPC2's nf-core stub is broken — blocks `-stub-run`
+
+`modules/nf-core/cpc2/main.nf` references `$args` inside its `stub:` block, but `def args` is
+declared inside `script:` and is not in scope there, so any stub run fails on that process. Upstream
+bug, not ours. The vendored module is left untouched so it does not drift from `nf-core modules
+lint`; the fix is one line (`def args = task.ext.args ?: ''` in the stub) and is worth reporting
+upstream. **Until then, stub runs will not complete with `coding_potential_pred: cpc2`.**
+
+Note also that CPC2 emits versions through the `topic: versions` channel rather than a
+`versions.yml`, so there is no `CPC2.out.versions` to mix — `gffread` already uses this form, so the
+collection path exists, but it differs from RNAMINING's.
 
 ### P0. RNAmining image missing `procps` — **RESOLVED upstream**
 
@@ -365,9 +421,31 @@ ambient config on every cluster. Hardening it means staging the BAMs *and* their
 writing basenames into the list — which is only possible now that the `ch_index` fix has landed,
 since staging a BAM without its adjacent index would break random access.
 
-### P8. `BAM_COVERAGE` and `GENOMIC_CONTEXT` have never run
+### P8. `BAM_COVERAGE` and `GENOMIC_CONTEXT` — **all three have now run**
 
-Both are new and untested on real data.
+`BAM_COVERAGE`, `GENOMIC_CONTEXT` and `VALIDATE_NOVEL_CONTEXT` all completed on the 4-sample chr1
+run. Measured peaks, which replace the estimates below: `BAM_COVERAGE` **2.6 GB / 25 s** (the
+per-contig chunking holds), `VALIDATE_NOVEL_CONTEXT` **1.3 GB / 55 s**, `GENOMIC_CONTEXT`
+**1.2 GB / 40 s**. `conf/test.config` is now sized from that trace rather than from estimates.
+
+`GENOMIC_CONTEXT` needed substantial correction once its output could be seen, all of it now fixed:
+
+- **Every model drew without exons.** `make.unique` ran over GTF rows rather than over the
+  transcript→label mapping, so each transcript's own exons were renamed `... #1`, `... #2` and no
+  longer matched their parent. All 158 transcripts loaded with zero exons. The `gene` track looked
+  right throughout because it is drawn from the raw GTF, not the TxDb.
+- **Panels dropped models silently**, and the `+` plotgardener draws to say so was misread as a
+  stray glyph. A panel captioned "11 isoforms" drew 7, losing 3 of its 4 novel candidates.
+- **Labels went missing** for any model whose midpoint fell outside the window — which is every host
+  isoform in a panel windowed on one intron. Fixed by calling `plotTranscripts` once per transcript
+  with `transcriptFilter`, at a row chosen here, and drawing the labels clamped inside the track.
+- **Flagged candidates were ranked on a raw count**, i.e. by expression: 225 of 2,084 reads (10.8%)
+  outranked 40 of 40. Now ranked on the fraction, with a 20-read floor.
+- **`reads_spliced_into_host_exon` was computed and discarded** — it is the signal separating host
+  pre-mRNA from an unannotated host exon, and now reaches the figure and the CSV.
+
+Still worth watching on the next run: determinism (`genomic_context_candidates.csv` should list the
+same five genes), and whether `txdbmaker` or the `GenomicFeatures` fallback is the one in use.
 
 - `BAM_COVERAGE` — **the `process_low` hypothesis was wrong, and the first run OOM-killed it.**
   The reasoning had been that `coverage()` returns a run-length encoded `RleList`, so memory should
@@ -420,6 +498,38 @@ first real run:
 `bambu_run_metrics.csv` and `validation_summary.csv` are produced and wired to `RENDER_REPORT`, but
 the rendered output has never been checked. Confirm the callout shows the NDR and both retention
 rows, and that the `tryCatch` fallbacks degrade cleanly against older results lacking those files.
+
+### P13. Report — heatmaps and two missing UpSet figures
+
+**Both UpSet figures are absent from the rendered HTML.** Neither `fig-bambu-lnc-pc-stats` nor
+`fig-evidence-upset` appears, and the first has no `eval` guard at all, so it should render
+unconditionally. Not yet diagnosed — the report examined was rendered on NPAD from a `report.qmd`
+that may not have matched the committed one, so confirm against a clean checkout before treating it
+as a plotting bug.
+
+**The heatmaps are unwanted.** They replaced five lollipop families earlier and nothing downstream
+depends on them, so they can be replaced outright rather than tuned.
+
+Also to build here: novel lncRNA and novel protein-coding candidates plotted **against reference
+biotype, split by class code** — two panels, stacked bars. An UpSet is the wrong shape for this:
+`class_code` and `ref_gene_biotype` are each one value per transcript, so there are no set
+intersections to show, only a contingency table. Now that `ref_transcript_biotype` exists, the same
+figure at transcript level is the one that answers whether the coding call agrees with the reference
+— the `y`-class transcript containing `TARDBP-221` has `ref_gene_biotype` `protein_coding` and
+`ref_transcript_biotype` `nonsense_mediated_decay`, and only the second is informative.
+
+### P14. `k`, `o` and `y` admitted as candidate class codes
+
+Adds roughly **217 candidates** on the chr1 test data (213 lncRNA, 4 protein-coding), a ~20%
+increase. `k` contributes 142, of which **107 have a protein-coding reference** — those are the
+transcripts P11 showed were being misrouted, so this change and the CPC2 swap must land together.
+With CPC2 they should route to `novel_protein_coding` instead; **confirm that on the next run**,
+since it is the check that the two changes compose correctly.
+
+Fixed alongside: `enrich_validated_gtf.R` derived `transcript_biotype` from the prediction, which
+silently undid the `m`/`n` routing — all 17 intron-retention transcripts predict non-coding, so every
+one was relabelled `novel_lncRNA` and `novel_retained_intron` never reached the enriched GTF or
+anything downstream. It now reads the column the metadata has carried all along.
 
 ## Non-urgent polishing
 
@@ -481,8 +591,11 @@ cycle rather than tracked as priorities. All three are currently out of date.
 | Item | What changed under it |
 |---|---|
 | **Workflow illustration** | The figure no longer matches the pipeline. `RESTRANDING` is a new subworkflow ahead of QC; `BAM_COVERAGE` and `GENOMIC_CONTEXT` are new; the unstranded branch is gone. |
-| **`docs/output.md` figures and tables** | New output directories `restrander/`, `coverage/`, `genomic_context/`; new files `bambu_run_metrics.csv`, `bambu_console.log`, `validation_summary.csv`, `genomic_context_regions.gtf`; gene features now present in the validated GTFs. |
-| **`CITATIONS.md`** | Restrander is not cited. Add it, and any tool adopted from the validation work. Also worth checking that every tool currently in the pipeline is listed. |
+| **`docs/output.md` figures and tables** | Directory tables and the coding-potential, class-code and `ref_*` sections are now current. Still to do: figures for the new outputs, and `bambu_run_metrics.csv`, `bambu_console.log`, `validation_summary.csv` are still undocumented. |
+| **`CITATIONS.md`** | Restrander is not cited, and **CPC2 is not cited**. Add both, plus any tool adopted from the validation work. Also worth checking that every tool currently in the pipeline is listed. |
+
+`docs/usage.md`, `examplerun.yml` and `test_data/testing.yml` carry `coding_potential_pred` and the
+narrowed role of `organism`. The workflow illustration is still the main gap.
 
 ---
 

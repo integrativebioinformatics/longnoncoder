@@ -139,5 +139,20 @@ ndr: null            # e.g. 0.2
 # ------------------------------------------------------------------------------
 #  Coding potential prediction
 # ------------------------------------------------------------------------------
-# Scientific name, used by RNAmining. Check its list of supported organisms.
-organism: "Genus_species"     # e.g. "Mus_musculus"
+# Which tool decides whether a novel transcript is coding or non-coding. That call
+# is the routing key for the novel lncRNA and novel protein-coding categories, so it
+# determines what the pipeline's main output contains.
+#
+#   cpc2       default. No organism needed.
+#   rnamining  requires `organism` below. Currently under review -- see the warning
+#              the pipeline prints when you select it. On this pipeline's test data
+#              it called 86 of 100 GENCODE protein-coding transcripts non-coding,
+#              against 1 for CPC2. Kept selectable so earlier runs can be
+#              reproduced and so the cause can be investigated, not because the two
+#              are interchangeable.
+coding_potential_pred: "cpc2"
+
+# Scientific name of the organism, e.g. "Mus_musculus". Only used by RNAmining,
+# which selects a per-organism model and has no usable default -- the run stops if
+# you choose rnamining without it. Ignored by CPC2, which warns and continues.
+organism: null

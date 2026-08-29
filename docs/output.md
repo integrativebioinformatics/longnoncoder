@@ -240,7 +240,7 @@ Bambu writes only `gene_id`, `transcript_id` and `exon_number` into its GTF outp
 |--------------------------------|----------------------------------------|
 | `transcript_status` | `known` if the transcript is present in the reference annotation, `novel` if it was assembled by Bambu. |
 | `gene_biotype` | For known transcripts, the biotype from the reference annotation. For novel transcripts arising from a known gene, that gene's reference biotype; for novel transcripts at previously unannotated loci, `novel`. |
-| `transcript_biotype` | For known transcripts, the biotype from the reference annotation. For novel transcripts, `novel_lncRNA` or `novel_protein_coding` according to the RNAmining coding-potential prediction. |
+| `transcript_biotype` | For known transcripts, the biotype from the reference annotation. For novel transcripts, `novel_lncRNA` or `novel_protein_coding` according to the coding-potential prediction, or `novel_retained_intron` for class codes m and n. |
 | `gene_name` | Gene symbol, where the reference annotation or gffcompare provides one. |
 | `transcript_name` | Transcript name from the reference annotation (known transcripts only). |
 | `class_code` | gffcompare class code relative to the reference (novel transcripts only). |
@@ -275,13 +275,29 @@ Class_codes description figure below retrieved from the official [documentation]
 |------------------------|------------------------------------------------|
 | `bambu_novel_transcripts.fa` | FASTA sequences extracted for bambu novel isoform candidates. |
 
-## `rnamining/` (coding potential prediction for novel transcripts)
+## `coding_potential/` (coding potential prediction for novel transcripts)
+
+Contents depend on which predictor `coding_potential_pred` selected. Whichever ran,
+the call it produced is recorded per transcript in the novel metadata as
+`prediction`, with `coding_prob` holding P(coding) and `coding_predictor` naming the
+tool — normalised across the two, since they report different quantities natively.
+
+With `cpc2` (default):
 
 | File | Description |
 |------------------|------------------------------------------------------|
-| `codings.txt` | List of novel isoform candidates predicted as protein-coding RNAs. |
-| `noncodings.txt` | List of novel isoform candidates predicted as non-coding RNAs. |
-| `predictions.txt` | Full RNAmining prediction output for all evaluated novel isoform candidates. |
+| `*.txt` | CPC2 table: one row per novel isoform candidate, with transcript and peptide length, Fickett score, isoelectric point, ORF integrity, coding probability and label. |
+
+With `rnamining`:
+
+| File | Description |
+|------------------|------------------------------------------------------|
+| `codings.txt` | Novel isoform candidates predicted as protein-coding, as FASTA. |
+| `noncodings.txt` | Novel isoform candidates predicted as non-coding, as FASTA. |
+| `predictions.txt` | Full RNAmining prediction output for all evaluated candidates. |
+
+> RNAmining is currently under review — see [Coding potential](usage.md#coding-potential)
+> in the usage documentation before selecting it.
 
 ## `annotations_metadata/` (metadata handling)
 
@@ -310,27 +326,60 @@ Class_codes description figure below retrieved from the official [documentation]
 | `novel_transcripts.gtf` | GTF file containing only the validated set of novel isoform candidates. |
 | `novel_intron_retention_metadata.csv` | Metadata table for intron-retention events (class codes `m` and `n`). Kept out of the lncRNA and protein-coding tables on purpose — see the note below. |
 | `novel_intron_retention.gtf` | GTF file containing the intron-retention transcripts, with `transcript_biotype "novel_retained_intron"`. |
-| `novel_context_flags.csv` | Structural evidence per novel transcript: host gene and its biotype and strand, `same_strand_as_host`, and the read counts behind the boundary and junction tests. |
+| `novel_context_flags.csv` | Structural evidence per novel transcript: the reference gene, its biotype and strand, `same_strand_as_host`, and the read counts behind the boundary and junction tests. |
 | `novel_context_summary.csv` | Aggregate counts from the same tests, as rendered in the report. |
+
+### Which class codes become candidates
+
+Seven gffcompare class codes are eligible: `u` intergenic, `i` intronic, `x`
+antisense, `j` multiexon SJ match, `k` extends reference, `o` same-strand overlap,
+and `y` reference within intron. Each is given its wording in the `classification`
+column, so the letter never has to be looked up.
+
+`k`, `o` and `y` earn their place by showing things the others cannot. `k` means
+the novel model runs past the reference it contains, which is where an unannotated
+exon would appear; `y` means it contains a reference inside its own intron, which
+can be a distinct locus rather than an isoform.
+
+`=` and `c` never appear. Only novel transcripts reach gffcompare, so a model
+matching or contained by a reference was already resolved as annotated.
 
 ### Why intron retention is a separate category
 
-`m` and `n` transcripts retain at least one reference intron. Retained intronic
-sequence has never been under coding selection, so it carries no codon bias — and
-because RNAmining scores length-normalised trinucleotide composition, it pulls the
-prediction toward non-coding in proportion to how much of the transcript it makes
-up. Sorting these by coding potential would therefore file them as lncRNA
-candidates on the strength of a determination their own structure already made.
+`m` and `n` transcripts retain at least one reference intron. They are routed to
+`novel_retained_intron` rather than sorted by coding potential, following GENCODE,
+which carries `retained_intron` **alongside** `protein_coding` and `lncRNA` rather
+than beneath either — and because "retained intron" describes the structure exactly,
+where "lncRNA" would assert more than the data supports.
 
-They are routed to their own output instead. The coding prediction is kept as a
-**column** in `novel_intron_retention_metadata.csv`, so nothing is lost; it is
-simply not used as the routing key. `novel_retained_intron` follows GENCODE, which
-carries `retained_intron` alongside `protein_coding` and `lncRNA` rather than
-beneath either.
+The coding prediction is kept as a **column** in
+`novel_intron_retention_metadata.csv`, so nothing is lost; it is simply not the
+routing key.
 
-`host_gene_biotype` is recorded on every novel record. It is not decorative: an
-intron-retention transcript of a lncRNA gene and one of a protein-coding gene are
-different findings, and hosts are frequently neither.
+> An earlier version of this document argued that retained intronic sequence pulls
+> a composition-based prediction toward non-coding, making the call circular for
+> `m`/`n`. Checking it against real output did not support that: `m` and `n` were
+> indistinguishable from `j`, `k` and `y` in how often they were called non-coding.
+> The separation stands on the vocabulary argument above, which is a narrower claim.
+
+### Reference identity on novel records
+
+Every novel record carries what it was compared against: `ref_gene_id`,
+`ref_gene_name`, `ref_gene_biotype`, `ref_id`, `ref_transcript_name` and
+`ref_transcript_biotype`, on the metadata CSVs and as GTF attributes.
+
+The **transcript**-level biotype is not redundant with the gene-level one, and the
+difference is where the interesting cases live. A `y`-class novel transcript
+containing `TARDBP-221` has `ref_gene_biotype` `protein_coding` and
+`ref_transcript_biotype` `nonsense_mediated_decay` — only the second says what it
+actually contains.
+
+These are named `ref_` rather than `host_` because a host is something a transcript
+sits *inside*, which holds for `i`, `x`, `m` and `n` but is backwards for `k` and
+`y`, where the novel transcript contains the reference. Columns describing what
+*reads* do — `same_strand_as_host`, `reads_with_host_junction`,
+`reads_spliced_into_host_exon` — keep the word, since the step producing them runs
+only on intronic candidates, where it is accurate.
 
 ### Reading `novel_context_flags.csv`
 

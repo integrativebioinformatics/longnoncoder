@@ -14,7 +14,7 @@ easier to plan around than to discover in the results.
 ### Eukaryotic organisms
 
 Splice-aware alignment, the intron-based gffcompare class codes the classification
-depends on, and RNAmining's per-organism models all assume a eukaryotic
+depends on, and the coding-potential models all assume a eukaryotic
 transcriptome. The pipeline has no meaningful behaviour on prokaryotic data.
 
 Reference annotations must come from **Ensembl or GENCODE**. Other sources use
@@ -124,7 +124,36 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `restrand_config` | Optional custom Restrander configuration JSON; overrides `restrand_kit` |
 | `restrand_min_frac` | Minimum oriented fraction, per sample; below it the run stops (default `0.80`, minimum `0.5`) |
 | `skip_class` | Skip transcriptome characterization (runs MultiQC, then finishes pipeline execution) |
-| `organism` | Organism scientific name (e.g. `"Homo_sapiens"`) |
+| `coding_potential_pred` | Coding-potential predictor: `cpc2` (default) or `rnamining` |
+| `organism` | Organism scientific name (e.g. `"Homo_sapiens"`). Required by `rnamining`, ignored by `cpc2` |
+
+### Coding potential
+
+Novel transcripts are sorted into `novel_lncRNA` and `novel_protein_coding` by a
+coding-potential call, so the predictor decides what the pipeline's main output
+contains.
+
+**`cpc2` is the default and needs no organism.**
+
+`rnamining` remains selectable and requires `organism`, which picks a per-organism
+model; the run stops rather than passing an empty one. It is kept so that earlier
+runs can be reproduced and the problem below can be investigated — not because the
+two are interchangeable.
+
+On this pipeline's own test data RNAmining called **86 of 100 GENCODE
+protein-coding transcripts non-coding**, against 1 for CPC2. Comparing the two over
+the same 1,570 novel transcripts, CPC2 reversed 80 of the 88 RNAmining had called
+coding, and 275 of the 1,482 it had called non-coding. An independent check agrees
+with CPC2: among the transcripts RNAmining called coding the median longest reading
+frame is 54 nt — a 17-residue peptide — while many it called non-coding carry full
+ORFs, one of them 3,594 nt covering 94% of its transcript. Selecting `rnamining`
+logs a warning to this effect.
+
+Whichever runs, its output is published to `coding_potential/`, and every novel
+record carries a `coding_predictor` column naming the tool and a `coding_prob`
+column holding P(coding). Those are normalised across the two, because the tools
+report different quantities natively — RNAmining scores the class it chose, CPC2
+scores coding specifically.
 
 ### Library type and strandedness
 
@@ -315,7 +344,7 @@ Check detailed information at the [GENCODE FAQ][1].
 The typical command for running the pipeline is as follows:
 
 ``` bash
-nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --reference [fasta] --annotation [gtf] --organism [Genus_species] --library [ONT_cDNA/ONT_DRS/PacBio] --stranded_library [true/false] -profile [test/medium/large],[container runtime: docker/singularity/apptainer]
+nextflow run main.nf --input ./samplesheet.csv --outdir ./results --minqual [value] --reference [fasta] --annotation [gtf] --coding_potential_pred [cpc2/rnamining] --library [ONT_cDNA/ONT_DRS/PacBio] --stranded_library [true/false] -profile [test/medium/large],[container runtime: docker/singularity/apptainer]
 ```
 
 Note that the pipeline will create the following files in your working directory:

@@ -48,4 +48,6 @@ annotation: "/full/path/to/pulposeq/test_data/references/Homo_sapiens.GRCh38.116
 # ------------------------------------------------------------------------------
 #  Coding potential prediction
 # ------------------------------------------------------------------------------
-organism: "Homo_sapiens"
+# CPC2 needs no organism. To run the RNAmining path instead, set
+# coding_potential_pred: "rnamining" and organism: "Homo_sapiens".
+coding_potential_pred: "cpc2"
