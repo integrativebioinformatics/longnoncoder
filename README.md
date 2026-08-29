@@ -12,23 +12,33 @@ For more details and further functionality, please refer to the [usage](docs/usa
 We can describe each step of the workflow as follows:
 
 1.  Quality control of reads ([NanoComp](https://github.com/wdecoster/nanocomp "wdecoster/nanocomp"))
-2.  Filtering and trimming ([chopper](https://github.com/wdecoster/chopper "wdecoster/chopper"))
-3.  Mapping to a genome reference ([minimap2](https://github.com/lh3/minimap2 "lh3/minimap2") and [samtools](https://github.com/samtools/samtools "samtools"))
-4.  Quality control of mapped reads ([NanoComp](https://github.com/wdecoster/nanocomp "wdecoster/nanocomp"))
-5.  Transcriptome Assembly ([Bambu](https://www.bioconductor.org/packages/release/bioc/html/bambu.html))
-6.  Compare novel transcripts to the annotation reference ([GffCompare](https://github.com/gpertea/gffcompare "gpertea/gffcompare"))
-7.  Convert novel transcripts `GTF` file to `FASTA` ([GffRead](https://github.com/gpertea/gffread "gpertea/gffread"))
-8.  Predict transcripts as protein-coding or non-coding ([RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining"))
-9.  Gather all data from previous steps and generate informative and re-usable metadata `.csv` and `GTF` files for both novel and annotated transcripts, with biotypes read directly from the supplied reference annotation ([tidyverse](https://tidyverse.org/), [rtracklayer](https://bioconductor.org/packages/release/bioc/html/rtracklayer.html), and [GenomicRanges](https://bioconductor.org/packages/release/bioc/html/GenomicRanges.html))
-10. Provide a report and data visualization for the full transcriptome, with emphasis on lncRNAs ([Quarto](https://quarto.org/), [tidyverse](https://tidyverse.org/), [cowplot](https://cran.r-project.org/web/packages/cowplot/index.html), [scales](https://cran.r-project.org/web/packages/scales/index.html), etc)
-11. Gather all possible QC information from the previous steps ([MultiQC](https://github.com/MultiQC/MultiQC "MultiQC"))
+2.  Recover read orientation, for ONT cDNA that is not already oriented ([Restrander](https://github.com/mritchielab/restrander "mritchielab/restrander"))
+3.  Filtering and trimming ([chopper](https://github.com/wdecoster/chopper "wdecoster/chopper"))
+4.  Mapping to a genome reference ([minimap2](https://github.com/lh3/minimap2 "lh3/minimap2") and [samtools](https://github.com/samtools/samtools "samtools"))
+5.  Quality control of mapped reads ([NanoComp](https://github.com/wdecoster/nanocomp "wdecoster/nanocomp"))
+6.  Per-base coverage tracks as `bigWig`, one per sample ([rtracklayer](https://bioconductor.org/packages/release/bioc/html/rtracklayer.html) and [GenomicAlignments](https://bioconductor.org/packages/release/bioc/html/GenomicAlignments.html))
+7.  Transcriptome Assembly ([Bambu](https://www.bioconductor.org/packages/release/bioc/html/bambu.html))
+8.  Compare novel transcripts to the annotation reference ([GffCompare](https://github.com/gpertea/gffcompare "gpertea/gffcompare"))
+9.  Convert novel transcripts `GTF` file to `FASTA` ([GffRead](https://github.com/gpertea/gffread "gpertea/gffread"))
+10. Predict transcripts as protein-coding or non-coding ([CPC2](https://github.com/gao-lab/CPC2_standalone "gao-lab/CPC2_standalone") by default, or [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining"))
+11. Gather all data from previous steps and generate informative and re-usable metadata `.csv` and `GTF` files for both novel and annotated transcripts, with biotypes read directly from the supplied reference annotation ([tidyverse](https://tidyverse.org/), [rtracklayer](https://bioconductor.org/packages/release/bioc/html/rtracklayer.html), and [GenomicRanges](https://bioconductor.org/packages/release/bioc/html/GenomicRanges.html))
+12. Test novel calls against the alignments — strand relative to the reference gene, reads running past transcript boundaries, and reads carrying the reference gene's splice junctions — recording the evidence per candidate rather than filtering on it ([Rsamtools](https://bioconductor.org/packages/release/bioc/html/Rsamtools.html) and [GenomicAlignments](https://bioconductor.org/packages/release/bioc/html/GenomicAlignments.html))
+13. Draw genomic context figures for selected loci and flagged candidates, over the coverage tracks ([plotgardener](https://bioconductor.org/packages/release/bioc/html/plotgardener.html))
+14. Provide a report and data visualization for the full transcriptome, with emphasis on lncRNAs ([Quarto](https://quarto.org/), [tidyverse](https://tidyverse.org/), [cowplot](https://cran.r-project.org/web/packages/cowplot/index.html), [scales](https://cran.r-project.org/web/packages/scales/index.html), etc)
+15. Gather all possible QC information from the previous steps ([MultiQC](https://github.com/MultiQC/MultiQC "MultiQC"))
 
 ## Usage
 
-pulposeq is compatible with Ensembl or GENCODE reference genomes and annotations, and protein-coding potential prediction with [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining") only supports the following list of organisms:
+pulposeq is compatible with **Ensembl or GENCODE** reference genomes and annotations. Transcript and gene biotypes are read directly from the annotation you supply, so no Ensembl release or BioMart dataset needs to be declared.
+
+Coding potential is predicted with [CPC2](https://github.com/gao-lab/CPC2_standalone "gao-lab/CPC2_standalone") by default, which is organism-agnostic — so **the pipeline is no longer restricted to a fixed species list**. Any eukaryote with an Ensembl or GENCODE annotation is in scope; splice-aware alignment and the intron-based gffcompare class codes are what make the eukaryotic assumption, not the predictor.
+
+[RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining") remains selectable with `coding_potential_pred: "rnamining"`, and then requires an `organism` from its supported list:
+
 > *Homo sapiens, Mus musculus, Danio rerio, Anolis carolinensis, Chrysemys picta bellii, Crocodylus porosus, Eptatretus burgeri, Gallus gallus, Latimeria chalumnae, Monodelphis domestica, Notechis scutatus, Ornithorhynchus anatinus, Petromyzon marinus, Rattus norvegicus, Sphenodon punctatus,* and *Xenopus tropicalis.*
 
-**In the next releases, we plan to update the pipeline workflow to cover more organisms or even more general taxonomic classes.**
+> [!WARNING]
+> RNAmining is currently under review and is **not recommended**. On this pipeline's test data it classified 86 of 100 GENCODE protein-coding transcripts as non-coding, where CPC2 misclassified 1. It is kept selectable so earlier runs can be reproduced and the cause investigated. See [Coding potential](docs/usage.md#coding-potential).
 
 > [!WARNING]
 > pulposeq requires Nextflow `>=26.04.0`, where the strict syntax parser is enabled by default. Make sure to setup appropriate configuration. See the current documentation at [Seqera Docs](https://docs.seqera.io/nextflow/strict-syntax).
@@ -85,7 +95,9 @@ In some cases, depending on your system's permissions and configuration regardin
 > [!WARNING]
 > Please provide pipeline parameters via the CLI or input a `yaml` or `json`parameters file  via the Nextflow `-params-file` option (most recommended). Custom config files including those provided by the `-c` Nextflow option can be used to provide any configuration, ***except for parameters***; see [docs](https://nf-co.re/usage/configuration#custom-configuration-files).
 
-You must declare your sequencing library chemistry with the `library` (`ONT_cDNA`, `ONT_DRS` or `PacBio`) and `stranded_library` (`true`/`false`) parameters. These set the `minimap2` alignment preset and Bambu's strandedness together, and a single execution must use one library type. PacBio libraries are expected to have been processed and stranded beforehand by PacBio's own standard workflows, and ONT cDNA libraries need re-orienting outside the pipeline or must be treated as unstranded. See [Library type and strandedness](docs/usage.md#library-type-and-strandedness) for the full details.
+You must declare your sequencing library chemistry with the `library` (`ONT_cDNA`, `ONT_DRS` or `PacBio`) and `stranded_library` (`true`/`false`) parameters. These set the `minimap2` alignment preset and Bambu's strandedness together, and a single execution must use one library type. PacBio libraries are expected to have been processed and stranded beforehand by PacBio's own standard workflows, and ONT direct RNA is oriented by construction.
+
+Unoriented ONT cDNA (`library: "ONT_cDNA"` with `stranded_library: false`) is re-oriented **inside** the pipeline by Restrander, which then requires a `restrand_kit` matching your chemistry — there is no default, since the wrong preset yields a low orientation rate rather than an error. See [Library type and strandedness](docs/usage.md#library-type-and-strandedness) and [Restranding ONT cDNA libraries](docs/usage.md#restranding-ont-cdna-libraries) for the full details.
 
 
 pulposeq publishes results in `symlink` mode by default. Every file in your output directory is a symbolic link pointing at the real file inside `work/`, rather than a copy of it. This costs no additional disk space and completes instantly, which matters when the outputs are large `BAM` and `GTF` files.
