@@ -78,7 +78,23 @@ cov <- lapply(names(lens), function(chr) {
     GenomicAlignments::coverage(ga)[[chr]]
 })
 names(cov) <- names(lens)
-cov <- IRanges::RleList(cov, compress = TRUE)
+
+# compress = FALSE is required, not a preference.
+#
+# A CompressedRleList concatenates every element's runs into one vector addressed
+# by a 32-bit index, so the CUMULATIVE length of the list -- here the sum of all
+# contig lengths, i.e. the genome size -- must stay under 2^31 (~2.147 Gb). GRCh38
+# is ~3.1 Gb, so compressing a genome-wide track fails outright on any mammalian
+# assembly:
+#
+#   input of RleList() is too big for 'compress=TRUE' (the cumulated length of
+#   the list elements in the resulting CompressedRleList object would exceed 2^31)
+#
+# A SimpleRleList keeps each contig's Rle as its own object, so only a single
+# contig has to fit the 32-bit index -- and no chromosome in any assembly comes
+# close. The Rles are already run-length encoded either way, so this costs a small
+# amount of per-element overhead and nothing in the data itself.
+cov <- IRanges::RleList(cov, compress = FALSE)
 
 out_bw <- file.path(opt$outdir, paste0(prefix, ".bw"))
 rtracklayer::export.bw(cov, out_bw)
