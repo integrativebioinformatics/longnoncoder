@@ -562,21 +562,44 @@ Nothing is filtered on structural evidence. Candidates carrying warning signs ar
 
 | Code | Meaning | Admitted | Notes |
 |:--------------|:--------------------|:--------------|:--------------------|
-| `u` | Intergenic — no overlap with any reference | Yes | No reference gene, so nothing to be sense or antisense to |
-| `i` | Contained entirely within a reference intron | Yes | Reported as **sense intronic** or **antisense intronic** |
+| `u` | Unknown or intergenic | Yes | No reference gene, so nothing to be sense or antisense to |
+| `i` | Fully contained within ref intron | Yes | Qualified as **(sense)** or **(antisense)** |
 | `x` | Exonic overlap on the opposite strand | Yes | Antisense by definition |
-| `j` | Multi-exonic, sharing at least one reference splice junction | Yes | The commonest novel isoform |
-| `k` | Contains the reference, extending beyond it | Yes | Where an unannotated exon shows up |
-| `o` | Same-strand exonic overlap matching no splice junction | Yes |  |
-| `y` | Contains a reference gene within its own intron | Yes | Can be a distinct locus rather than an isoform |
-| `m` | Retained intron, every reference intron accounted for | Yes |  |
-| `n` | Retained intron, not covering the full reference structure | Yes |  |
+| `j` | Multi-exonic matching ref splice junction(s) | Yes | The commonest novel isoform |
+| `k` | Contains reference transcript | Yes | Where an unannotated exon shows up |
+| `o` | Exonic overlap on the same strand | Yes |  |
+| `y` | Contains reference within its introns | Yes | Can be a distinct locus rather than an isoform |
+| `m` | Retained intron (all matched or retained) | Yes |  |
+| `n` | Retained intron (not all matched or retained) | Yes |  |
 | `=` | Exact match to a reference transcript | — | Resolved as annotated before this stage |
 | `c` | Fully contained within a reference transcript | — | Resolved as annotated before this stage |
 | `s` | Intron match on the opposite strand | No | Usually a mapping artefact |
 | `e` | Single exon partially covering a reference intron | No | Likely a precursor fragment |
 | `p` | Polymerase run-on, no genuine overlap | No |  |
 | `r` | Repeat region | No |  |
+
+::: {.callout-warning appearance="simple"}
+## Class codes are reported exactly as gffcompare assigns them
+
+pulposeq does not recompute or override a class code. The value in `class_code`,
+and the wording derived from it in `classification`, are what gffcompare emitted.
+
+One consequence is worth knowing when reading these figures. A class code is
+assigned relative to a **single** matched reference transcript, and cases have been
+observed in this pipeline's output where the code did not match the geometry: a
+model overlapping none of its reference gene's annotated exons, and lying wholly
+within one of its introns, was assigned `x` (exonic overlap on the opposite strand)
+rather than `i` (fully contained within ref intron).
+
+Where that happens the `(sense)` / `(antisense)` qualifier under-counts
+intron-contained models, because the affected transcripts never reach the branch
+that adds it. **Routing is unaffected** — `i` and `x` are both decided by the
+coding prediction alone, so a model lands in the same category either way.
+
+If a class code carries weight in a conclusion, check it against the genomic
+context panels. They draw the reference gene's full annotated exon structure, so a
+model said to overlap an exon can be seen to do so.
+:::
 
 ### How novel models are routed
 
@@ -603,7 +626,7 @@ A sense-intronic or antisense lncRNA sitting inside a protein-coding locus is st
 
 ### Sense and antisense intronic transcripts
 
-Class code `i` covers both orientations, and they are not the same finding, so the report separates them.
+Class code `i` — *fully contained within ref intron* — covers both orientations, and they are not the same finding, so the classification qualifies each as **(sense)** or **(antisense)**. The qualifier is pulposeq's addition; gffcompare's own definition says nothing about strand.
 
 A transcript lying inside an intron **on the host gene's own strand** is sequence-identical to part of that host's **unspliced precursor** — the primary transcript, before its introns are removed. Position alone cannot say whether such a model is an independent transcriptional unit or a fragment of the host still being processed.
 
@@ -1906,7 +1929,7 @@ Novel transcripts are candidates, not findings. This section reports the structu
 
 Evidence is reported separately for the three categories a novel model is routed into — **novel lncRNA candidates**, models **predicted protein-coding**, and models **predicted non-coding** — because the same warning sign does not carry the same weight in each.
 
-Strand relative to the reference gene is carried by the classification itself. For every candidate class code except `i` it is fixed: `x` is antisense by definition, and `j`, `k`, `o`, `y`, `m` and `n` are same-strand matches. Class code `i` is reported as **sense intronic** or **antisense intronic**, and that distinction is what the figures below are grouped on.
+Strand relative to the reference gene is carried by the classification itself. For every candidate class code except `i` it is fixed: `x` is antisense by definition, and `j`, `k`, `o`, `y`, `m` and `n` are same-strand matches. Class code `i` is qualified **(sense)** or **(antisense)**, and that distinction is what the figures below are grouped on.
 
 The read-level test asks whether the reads supporting a candidate stop where the candidate stops. Reads running past its boundaries, or carrying splice junctions that belong to the host rather than to the candidate, came from a longer molecule — most often the host's own **unspliced precursor**, the primary transcript before its introns are removed. A sense-intronic candidate is sequence-identical to part of that precursor, so position alone cannot separate the two; an antisense candidate cannot be explained that way at all. Hosts are frequently lncRNA genes rather than protein-coding ones — a lncRNA gene is transcribed by Pol II and spliced just as a protein-coding gene is — so the host biotype is reported alongside every candidate.
 
@@ -2072,7 +2095,7 @@ if (!is.null(ctx_flags)) {
   }
 
   # Strand is not a set here. It varies only for class code i, and that variation is
-  # carried by the classification -- sense intronic against antisense intronic --
+  # carried by the classification -- the (sense) / (antisense) qualifier on i --
   # which is the fill. As a set it would spend a matrix row restating the colour.
   evidence_sets <- ev %>%
     dplyr::mutate(

@@ -244,7 +244,7 @@ Bambu writes only `gene_id`, `transcript_id` and `exon_number` into its GTF outp
 | `gene_name` | Gene symbol, where the reference annotation or gffcompare provides one. |
 | `transcript_name` | Transcript name from the reference annotation (known transcripts only). |
 | `class_code` | gffcompare class code relative to the reference (novel transcripts only). |
-| `classification` | Human-readable reading of `class_code`: intergenic, sense intronic, antisense intronic, antisense, multiexon SJ match, extends reference, same-strand overlap, reference within intron, total intron retention or partial intron retention (novel transcripts only). |
+| `classification` | Human-readable reading of `class_code`, following gffcompare's own definitions, with `i` qualified `(sense)` or `(antisense)` (novel transcripts only). See [Which class codes become candidates](#which-class-codes-become-candidates). |
 | `ref_gene_id` | Reference gene the novel transcript was matched against, where gffcompare found one (novel transcripts only). |
 
 > [!NOTE]
@@ -331,15 +331,37 @@ With `rnamining`:
 
 ### Which class codes become candidates
 
-Nine gffcompare class codes are eligible: `u` intergenic, `i` intronic, `x`
-antisense, `j` multiexon SJ match, `k` extends reference, `o` same-strand overlap,
-`y` reference within intron, `m` total intron retention and `n` partial intron
-retention. Each is given its wording in the `classification` column, so the letter
-never has to be looked up.
+Nine gffcompare class codes are eligible. Each is given its wording in the
+`classification` column, following gffcompare's own definitions so the letter never
+has to be looked up and the phrasing does not drift from what the tool asserts:
 
-`i` is split by orientation, as **sense intronic** or **antisense intronic**. That
-is the only class code whose strand relative to the reference varies: `x` is
-antisense by definition and the rest are same-strand matches.
+| Code | `classification` |
+|---|---|
+| `u` | unknown or intergenic |
+| `i` | fully contained within ref intron |
+| `x` | exonic overlap on the opposite strand |
+| `j` | multi-exonic matching ref splice junction(s) |
+| `k` | contains reference transcript |
+| `o` | exonic overlap on the same strand |
+| `y` | contains reference within its introns |
+| `m` | retained intron (all matched or retained) |
+| `n` | retained intron (not all matched or retained) |
+
+`i` is additionally qualified by orientation — `fully contained within ref intron
+(sense)` or `(antisense)`. That is the only class code whose strand relative to the
+reference varies: `x` is antisense by definition and the rest are same-strand
+matches. The qualifier is pulposeq's addition; gffcompare's definition of `i` says
+nothing about strand.
+
+> [!NOTE]
+> Class codes are reported exactly as gffcompare assigns them — pulposeq never
+> recomputes or overrides one. A code is assigned relative to a single matched
+> reference transcript, and cases have been observed where it did not match the
+> geometry: a model overlapping none of its reference gene's annotated exons, and
+> lying wholly within one of its introns, was assigned `x` rather than `i`. Where
+> that happens the sense/antisense qualifier under-counts intron-contained models.
+> Routing is unaffected, since `i` and `x` are both decided by the coding
+> prediction alone.
 
 `=` and `c` never appear. Only novel transcripts reach gffcompare, so a model
 matching or contained by a reference was already resolved as annotated. `s`, `e`,

@@ -208,32 +208,41 @@ tx_info <- tx_info[tx_info$qry_id %in% tx_counts$TXNAME, ]
 
 #' Human-readable label for a gffcompare class code. Kept in one place because
 #' three outputs need the same mapping and copies of it drifted apart.
+#'
+#' The wording follows gffcompare's own definitions rather than paraphrasing them.
+#' A shorter gloss reads better on a figure but invites the reader to reason from
+#' the paraphrase instead of from what the tool actually asserts, and the two are
+#' not always the same thing -- see the note on class code assignment in the
+#' report's introduction.
 CLASS_LABELS <- c(
-    u = 'intergenic',
-    i = 'intronic',
-    x = 'antisense',
-    j = 'multiexon SJ match',
-    k = 'extends reference',
-    o = 'same-strand overlap',
-    y = 'reference within intron',
-    m = 'total intron retention',
-    n = 'partial intron retention'
+    u = 'unknown or intergenic',
+    i = 'fully contained within ref intron',
+    x = 'exonic overlap on the opposite strand',
+    j = 'multi-exonic matching ref splice junction(s)',
+    k = 'contains reference transcript',
+    o = 'exonic overlap on the same strand',
+    y = 'contains reference within its introns',
+    m = 'retained intron (all matched or retained)',
+    n = 'retained intron (not all matched or retained)'
 )
 
-#' Human-readable label for a class code, with i split by orientation.
+#' Human-readable label for a class code, with i qualified by orientation.
 #'
-#' "Intronic" on its own conflates two situations that warrant different scrutiny.
-#' A model lying inside a same-strand intron cannot be told apart from a fragment
-#' of that gene's pre-mRNA without independent evidence -- the lncDACH1 problem --
-#' while an antisense one is not explainable that way at all. Where the orientation
-#' is unknown the label stays the unqualified "intronic" rather than guessing.
+#' Containment within an intron covers two situations that warrant different
+#' scrutiny. A model lying inside a same-strand intron cannot be told apart from a
+#' fragment of that gene's unspliced precursor without independent evidence -- the
+#' lncDACH1 problem -- while an antisense one is not explainable that way at all.
+#' The orientation is a pulposeq addition, not part of gffcompare's definition, so
+#' it is appended in parentheses rather than replacing the wording. Where the
+#' orientation is unknown the label stays unqualified rather than guessing.
 classify_class_code <- function(codes, same_strand = NULL) {
     codes <- as.character(codes)
     out   <- unname(CLASS_LABELS[codes])
 
     if (!is.null(same_strand)) {
         is_i      <- !is.na(codes) & codes == 'i' & !is.na(same_strand)
-        out[is_i] <- ifelse(same_strand[is_i], 'sense intronic', 'antisense intronic')
+        out[is_i] <- paste0(CLASS_LABELS[['i']], " (",
+                            ifelse(same_strand[is_i], "sense", "antisense"), ")")
     }
     out
 }
