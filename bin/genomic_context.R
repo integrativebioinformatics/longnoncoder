@@ -508,6 +508,8 @@ bare_id <- function(x) sub("\\.[0-9]+$", "", as.character(x))
 
 ref_exons_by_gene   <- list()
 ref_introns_by_gene <- list()
+ref_span_s          <- numeric(0)
+ref_span_e          <- numeric(0)
 
 wanted_genes <- unique(c(
   if (nrow(cand))    unlist(strsplit(cand$panel_genes, ";")) else character(0),
@@ -530,6 +532,13 @@ if (length(wanted_genes) && !is.null(opt$annotation) && file.exists(opt$annotati
     g_r <- unlist(range(by_g), use.names = TRUE)
     g_r <- g_r[!duplicated(names(g_r))]
     ref_introns_by_gene <- as.list(GenomicRanges::psetdiff(g_r, ex_r[names(g_r)]))
+
+    # The gene's annotated extent, which decides which OTHER genes' transcripts
+    # belong in its panel. The drawing window is the gene padded by 5%, and that
+    # padding is enough to clip a neighbour: at AK5 it catches the start of ZZZ3,
+    # whose 18 isoforms then each claimed a row at the edge of the figure.
+    ref_span_s <- setNames(BiocGenerics::start(g_r), names(g_r))
+    ref_span_e <- setNames(BiocGenerics::end(g_r),   names(g_r))
   }
 }
 
@@ -692,53 +701,88 @@ if (length(windows) && !is.null(opt$annotation) && file.exists(opt$annotation)) 
 # out the ones the figure is about: a plain overlap query on one 84 kb window pulled in
 # five genes and 31 transcripts to draw a caption that promised eight.
 draw_ids <- character(0)
+# What belongs in a panel is decided by the GENE, not by the window. The window is
+# the gene padded by 5%, and that padding reaches into whatever sits next door.
+#
+# Three things qualify:
+#
+#   own    every transcript of the panel's genes, detected or not
+#   mine   novel models classified against one of those genes. Bambu gives each
+#          intronic and antisense model its own gene id, so restricting to gene id
+#          alone hides the pile -- at AK5, four single-exon antisense models sit
+#          over one transcript, each in its own Bambu gene
+#   near   other genes' annotated transcripts lying inside the reference gene's
+#          own span. This is what puts AK5-AS1 on the page, an annotated antisense
+#          gene inside an AK5 intron, without admitting a neighbour the padding
+#          merely clips
+#
+# Kept per panel rather than pooled, because a pooled set leaks between panels that
+# happen to overlap.
+panel_ids <- vector("list", nrow(cand))
+
 if (nrow(cand)) {
-  # The panel's own genes, plus every novel model falling in the window.
-  #
-  # Bambu gives each intronic or antisense model its own gene id, so a panel
-  # restricted to the reference gene and the example's gene hides the others at the
-  # same locus -- and when several novel models pile onto one gene, that pile is the
-  # finding. At AK5, four single-exon antisense models sit over one transcript, each
-  # in its own Bambu gene, and a panel built from two gene ids showed one of them.
   for (i in seq_len(nrow(cand))) {
     in_win <- tx$chrom == cand$chrom[i] &
               tx$end   >= cand$win_s[i] &
               tx$start <= cand$win_e[i]
     row_genes <- strsplit(cand$panel_genes[i], ";")[[1]]
-    draw_ids  <- c(draw_ids,
-                   tx$transcript_id[in_win & (tx$gene_id %in% row_genes |
-                                              tx$transcript_status == "novel")])
 
-    # Annotated transcripts in the window, capped. The cap only bites at a
-    # pathologically isoform-dense locus; ordering by position keeps the choice
-    # deterministic rather than dependent on annotation file order.
-    ann <- which(in_win & tx$transcript_status == "annotated")
-    if (length(ann)) {
-      ann <- ann[order(tx$start[ann], tx$end[ann], tx$transcript_id[ann])]
-      draw_ids <- c(draw_ids, tx$transcript_id[head(ann, MAX_ANNOTATED)])
+    own  <- tx$gene_id %in% row_genes
+    mine <- tx$transcript_status %in% "novel" &
+              (tx$ref_gene_id %in% row_genes | own)
+
+    ids <- tx$transcript_id[in_win & (own | mine)]
+
+    key <- bare_id(cand$gene_id[i])
+    if (key %in% names(ref_span_s)) {
+      near <- which(in_win & !own & tx$transcript_status %in% "annotated" &
+                    tx$end >= ref_span_s[[key]] & tx$start <= ref_span_e[[key]])
+      if (length(near)) {
+        # Ordered by position so the choice is deterministic rather than dependent
+        # on the order the annotation file happens to list them in.
+        near <- near[order(tx$start[near], tx$end[near], tx$transcript_id[near])]
+        ids  <- c(ids, tx$transcript_id[head(near, MAX_ANNOTATED)])
+      }
     }
+
+    panel_ids[[i]] <- unique(ids[!is.na(ids)])
+    draw_ids <- c(draw_ids, panel_ids[[i]])
   }
 }
+
+flagged_ids <- vector("list", nrow(flagged))
+
 if (nrow(flagged)) {
   for (i in seq_len(nrow(flagged))) {
     in_win <- tx$chrom == flagged$chrom[i] &
               tx$end   >= flagged$win_s[i] &
               tx$start <= flagged$win_e[i]
-    # The host's isoforms for context plus every novel model in the window: an
-    # intronic candidate carries its own Bambu gene id, so filtering on the host gene
-    # alone would drop the transcript the figure exists to show.
-    draw_ids <- c(draw_ids,
-                  tx$transcript_id[in_win & (tx$gene_id == flagged$ref_gene_id[i] |
-                                             tx$transcript_status == "novel")])
+    # The host's isoforms for context, plus novel models classified against the host:
+    # an intronic candidate carries its own Bambu gene id, so filtering on the host
+    # gene alone would drop the transcript the figure exists to show.
+    # %in% throughout rather than ==: ref_gene_id is NA for every known transcript,
+    # and == would return NA, which indexes as NA and injects missing values.
+    host <- tx$gene_id %in% flagged$ref_gene_id[i]
+    ids  <- tx$transcript_id[in_win &
+                             (host |
+                              (tx$transcript_status %in% "novel" &
+                               (tx$ref_gene_id %in% flagged$ref_gene_id[i] | host)))]
 
-    # Annotated transcripts in the host intron matter most here of anywhere: a
-    # candidate sharing an intron with an annotated gene may be that gene rather
-    # than a new one, and the panel exists to let a reader tell.
-    ann <- which(in_win & tx$transcript_status == "annotated")
-    if (length(ann)) {
-      ann <- ann[order(tx$start[ann], tx$end[ann], tx$transcript_id[ann])]
-      draw_ids <- c(draw_ids, tx$transcript_id[head(ann, MAX_ANNOTATED)])
+    # Annotated transcripts inside the host's span matter more here than anywhere: a
+    # candidate sharing an intron with an annotated gene may BE that gene rather than
+    # a new one, and the panel exists to let a reader tell.
+    key <- bare_id(flagged$ref_gene_id[i])
+    if (key %in% names(ref_span_s)) {
+      near <- which(in_win & !host & tx$transcript_status %in% "annotated" &
+                    tx$end >= ref_span_s[[key]] & tx$start <= ref_span_e[[key]])
+      if (length(near)) {
+        near <- near[order(tx$start[near], tx$end[near], tx$transcript_id[near])]
+        ids  <- c(ids, tx$transcript_id[head(near, MAX_ANNOTATED)])
+      }
     }
+
+    flagged_ids[[i]] <- unique(ids[!is.na(ids)])
+    draw_ids <- c(draw_ids, flagged_ids[[i]])
   }
 }
 draw_ids <- unique(draw_ids[!is.na(draw_ids)])
@@ -1117,12 +1161,10 @@ if (nrow(cand)) {
     # holds exactly that set, so a known neighbouring gene cannot crowd in -- one
     # 84 kb window once pulled five genes and 31 transcripts into a panel whose
     # caption promised eight -- while sibling novel models at the same locus stay.
-    row_genes <- strsplit(row$panel_genes, ";")[[1]]
-    panel_tx  <- tx[tx$chrom == row$chrom & tx$end >= row$win_s &
-                    tx$start <= row$win_e & tx$transcript_id %in% draw_ids &
-                    (tx$gene_id %in% row_genes |
-                     tx$transcript_status %in% c("novel", "annotated")), ,
-                    drop = FALSE]
+    # The set chosen for this panel specifically. draw_ids is the pooled union used
+    # to size the shared TxDb, and filtering on it would let an overlapping panel's
+    # transcripts in.
+    panel_tx <- tx[tx$transcript_id %in% panel_ids[[i]], , drop = FALSE]
 
     # Counted from what is actually drawn, not from the genes the panel was built
     # around. The caption has to describe the picture.
@@ -1203,8 +1245,7 @@ if (nrow(flagged)) {
     # row above the track as well, which drew it twice; the track entry is the one kept,
     # because it carries the full label -- identifier, class code wording and strand --
     # where the dedicated row could only show the bare id.
-    in_window <- tx$chrom == row$chrom & tx$end >= row$win_s & tx$start <= row$win_e
-    panel_tx  <- tx[in_window & tx$transcript_id %in% draw_ids, , drop = FALSE]
+    panel_tx <- tx[tx$transcript_id %in% flagged_ids[[i]], , drop = FALSE]
 
     host_lab <- if (is.na(row$ref_gene_name) || !nzchar(row$ref_gene_name)) {
       row$ref_gene_id
