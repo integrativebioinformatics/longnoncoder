@@ -224,6 +224,9 @@ tx <- data.frame(
   ref_gene_id        = tx_col("ref_gene_id"),
   ref_gene_name      = tx_col("ref_gene_name"),
   ref_gene_biotype   = tx_col("ref_gene_biotype"),
+  # The reference TRANSCRIPT a novel model was classified against, which decides
+  # which undetected isoforms are worth drawing.
+  ref_transcript_id  = tx_col("ref_transcript_id"),
   chrom              = as.character(GenomeInfoDb::seqnames(tx_gr)),
   strand             = as.character(BiocGenerics::strand(tx_gr)),
   start              = BiocGenerics::start(tx_gr),
@@ -673,6 +676,7 @@ if (length(windows) && !is.null(opt$annotation) && file.exists(opt$annotation)) 
       ref_gene_id        = NA_character_,
       ref_gene_name      = NA_character_,
       ref_gene_biotype   = NA_character_,
+      ref_transcript_id  = NA_character_,
       chrom              = as.character(GenomeInfoDb::seqnames(rt)),
       strand             = as.character(BiocGenerics::strand(rt)),
       start              = BiocGenerics::start(rt),
@@ -731,7 +735,18 @@ if (nrow(cand)) {
     mine <- tx$transcript_status %in% "novel" &
               (tx$ref_gene_id %in% row_genes | own)
 
-    ids <- tx$transcript_id[in_win & (own | mine)]
+    # An undetected isoform of the panel's own gene earns a row only if gffcompare
+    # classified one of these novel models against it. Those are the transcripts a
+    # class code actually refers to -- AK5-202 for the four antisense models here.
+    # The rest add a row each while saying nothing the gene track above, which is
+    # already the gene's full annotated footprint, does not show.
+    ref_txids <- unique(tx$ref_transcript_id[in_win & mine])
+    ref_txids <- bare_id(ref_txids[!is.na(ref_txids) & nzchar(ref_txids)])
+
+    keep_own <- own & (!tx$transcript_status %in% "annotated" |
+                       bare_id(tx$transcript_id) %in% ref_txids)
+
+    ids <- tx$transcript_id[in_win & (keep_own | mine)]
 
     key <- bare_id(cand$gene_id[i])
     if (key %in% names(ref_span_s)) {
@@ -763,10 +778,18 @@ if (nrow(flagged)) {
     # %in% throughout rather than ==: ref_gene_id is NA for every known transcript,
     # and == would return NA, which indexes as NA and injects missing values.
     host <- tx$gene_id %in% flagged$ref_gene_id[i]
-    ids  <- tx$transcript_id[in_win &
-                             (host |
-                              (tx$transcript_status %in% "novel" &
-                               (tx$ref_gene_id %in% flagged$ref_gene_id[i] | host)))]
+    mine <- tx$transcript_status %in% "novel" &
+              (tx$ref_gene_id %in% flagged$ref_gene_id[i] | host)
+
+    # Same rule as the stratified panels: an undetected host isoform is drawn only
+    # where a novel model here was classified against it.
+    ref_txids <- unique(tx$ref_transcript_id[in_win & mine])
+    ref_txids <- bare_id(ref_txids[!is.na(ref_txids) & nzchar(ref_txids)])
+
+    keep_host <- host & (!tx$transcript_status %in% "annotated" |
+                         bare_id(tx$transcript_id) %in% ref_txids)
+
+    ids <- tx$transcript_id[in_win & (keep_host | mine)]
 
     # Annotated transcripts inside the host's span matter more here than anywhere: a
     # candidate sharing an intron with an annotated gene may BE that gene rather than
