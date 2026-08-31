@@ -215,15 +215,15 @@ tx_info <- tx_info[tx_info$qry_id %in% tx_counts$TXNAME, ]
 #' not always the same thing -- see the note on class code assignment in the
 #' report's introduction.
 CLASS_LABELS <- c(
-    u = 'unknown or intergenic',
-    i = 'fully contained within ref intron',
-    x = 'exonic overlap on the opposite strand',
-    j = 'multi-exonic matching ref splice junction(s)',
-    k = 'contains reference transcript',
-    o = 'exonic overlap on the same strand',
-    y = 'contains reference within its introns',
-    m = 'retained intron (all matched or retained)',
-    n = 'retained intron (not all matched or retained)'
+    u = 'unknown or intergenic (u)',
+    i = 'intronic (i)',
+    x = 'antisense exonic overlap (x)',
+    j = 'multi-exon SJ match (j)',
+    k = 'contains reference (k)',
+    o = 'sense exonic overlap (o)',
+    y = 'contains reference within intron (y)',
+    m = 'retained intron (m)',
+    n = 'retained intron (n)'
 )
 
 #' Human-readable label for a class code, with i qualified by orientation.
@@ -241,8 +241,8 @@ classify_class_code <- function(codes, same_strand = NULL) {
 
     if (!is.null(same_strand)) {
         is_i      <- !is.na(codes) & codes == 'i' & !is.na(same_strand)
-        out[is_i] <- paste0(CLASS_LABELS[['i']], " (",
-                            ifelse(same_strand[is_i], "sense", "antisense"), ")")
+        out[is_i] <- ifelse(same_strand[is_i], 'sense intronic (i)',
+                                               'antisense intronic (i)')
     }
     out
 }
