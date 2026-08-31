@@ -10,7 +10,7 @@ process GENOMIC_CONTEXT {
     path gtf_file      // validated, enriched transcriptome GTF
     path bigwigs       // every sample's coverage track, collected
     path context_flags // per-transcript strand and read-through flags
-    path annotation    // reference annotation, for host gene structure
+    path annotation    // reference annotation, for annotated gene and intron structure
     path r_script
 
     output:

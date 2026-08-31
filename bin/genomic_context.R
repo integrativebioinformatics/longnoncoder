@@ -5,7 +5,7 @@
 #
 #   title       the subject and the region actually plotted, chromosome included
 #   chromosome  a bar marking where on the chromosome this window sits
-#   structure   the union of the gene's (or the host's) exons, collapsed to one row
+#   structure   the gene's (or host's) annotated exon footprint, collapsed to one row
 #   isoforms    every validated transcript in the window, coloured by biotype. In an
 #               intronic panel the candidate is one of these, labelled like the rest
 #   coverage    one track per sample, on a y range shared across samples
@@ -20,11 +20,20 @@
 # lncRNA gene competes for a panel on the same terms as one inside a protein-coding
 # gene.
 #
-# The isoform track shows the VALIDATED set -- transcripts supported in these samples --
+# The two tracks deliberately draw from different sources.
+#
+# The isoform rows show the VALIDATED set -- transcripts supported in these samples --
 # and not the reference in full. A reference isoform with no support here is absent by
-# design: the panel is a picture of what the data contains, and an unexpressed model
+# design: those rows are a picture of what the data contains, and an unexpressed model
 # drawn solid over flat coverage reads as evidence it is not. The bigWigs are published,
 # so the complete annotation can be opened against them in IGV.
+#
+# The structure row is the opposite: the gene's full ANNOTATED exon footprint, taken
+# from --annotation. It has to be, because gffcompare assigns class codes against the
+# whole annotation. Built from the validated set instead, the row omits the exons of
+# undetected isoforms and a panel can contradict its own caption -- a model coded `x`,
+# antisense exonic overlap, against an isoform that was never detected appears to sit
+# in an empty intron with no exon drawn anywhere near it.
 
 suppressPackageStartupMessages({
   library(optparse)
@@ -44,7 +53,7 @@ option_list <- list(
   make_option(c("-c", "--context_flags"), type = "character", default = NULL,
               help = "novel_context_flags.csv from VALIDATE_NOVEL_CONTEXT", metavar = "character"),
   make_option(c("-a", "--annotation"), type = "character", default = NULL,
-              help = "Reference annotation GTF, for host gene intron structure", metavar = "character")
+              help = "Reference annotation GTF, for annotated gene and intron structure", metavar = "character")
 )
 opt <- parse_args(OptionParser(option_list = option_list))
 
@@ -477,26 +486,55 @@ if (!is.null(opt$context_flags) && file.exists(opt$context_flags)) {
   }
 }
 
+# --- Reference exon structure -------------------------------------------------
+
+# The gene track is drawn from the REFERENCE annotation, not from the validated
+# GTF, and that distinction decides whether a panel can be checked at all.
+#
+# gffcompare assigns every class code against the full annotation, including
+# isoforms never detected in these samples. The validated GTF holds only what was
+# detected. Building the gene track from the latter produces panels that
+# contradict their own captions: a model coded `x` -- antisense exonic overlap --
+# against an undetected isoform appears to sit in an empty intron, with no exon
+# drawn anywhere near it, because the isoform carrying that exon was filtered out
+# before the figure was made.
+#
+# Reduced per gene, so the track is the gene's full annotated exonic footprint and
+# the class code refers to something visible.
+bare_id <- function(x) sub("\\.[0-9]+$", "", as.character(x))
+
+ref_exons_by_gene   <- list()
+ref_introns_by_gene <- list()
+
+wanted_genes <- unique(c(
+  if (nrow(cand))    unlist(strsplit(cand$panel_genes, ";")) else character(0),
+  if (nrow(flagged)) flagged$ref_gene_id else character(0)))
+wanted_genes <- wanted_genes[!is.na(wanted_genes) & nzchar(wanted_genes)]
+
+if (length(wanted_genes) && !is.null(opt$annotation) && file.exists(opt$annotation)) {
+  ref_ex  <- rtracklayer::import(opt$annotation, feature.type = "exon")
+  ref_gid <- as.character(S4Vectors::mcols(ref_ex)$gene_id)
+
+  # Ensembl carries the gene version in a separate attribute and GENCODE inline, so
+  # a novel record can name either form. Both sides are matched on the bare id.
+  ref_ex <- ref_ex[bare_id(ref_gid) %in% bare_id(wanted_genes)]
+
+  if (length(ref_ex)) {
+    by_g <- split(ref_ex, bare_id(S4Vectors::mcols(ref_ex)$gene_id))
+    ex_r <- GenomicRanges::reduce(by_g)
+    ref_exons_by_gene <- as.list(ex_r)
+
+    g_r <- unlist(range(by_g), use.names = TRUE)
+    g_r <- g_r[!duplicated(names(g_r))]
+    ref_introns_by_gene <- as.list(GenomicRanges::psetdiff(g_r, ex_r[names(g_r)]))
+  }
+}
+
 if (nrow(flagged)) {
   # Window on the host intron the candidate sits in rather than the candidate
   # itself. A window drawn tight around a truncated fragment looks like a discrete
   # transcript no matter what it is; the flanking intron is where the difference
   # shows.
-  host_introns_by_gene <- list()
-  if (!is.null(opt$annotation) && file.exists(opt$annotation)) {
-    ref_ex   <- rtracklayer::import(opt$annotation, feature.type = "exon")
-    ref_gid  <- as.character(S4Vectors::mcols(ref_ex)$gene_id)
-    wanted   <- unique(flagged$ref_gene_id)
-    ref_ex   <- ref_ex[ref_gid %in% wanted]
-    if (length(ref_ex)) {
-      by_g <- split(ref_ex, as.character(S4Vectors::mcols(ref_ex)$gene_id))
-      ex_r <- GenomicRanges::reduce(by_g)
-      g_r  <- unlist(range(by_g), use.names = TRUE)
-      g_r  <- g_r[!duplicated(names(g_r))]
-      host_introns_by_gene <- as.list(GenomicRanges::psetdiff(g_r, ex_r[names(g_r)]))
-    }
-  }
-
   tx_pos <- tx[match(flagged$qry_id, tx$transcript_id), c("chrom", "start", "end")]
   flagged$chrom <- tx_pos$chrom
   flagged$start <- tx_pos$start
@@ -515,8 +553,8 @@ if (nrow(flagged)) {
 
 if (nrow(flagged)) {
   win <- t(vapply(seq_len(nrow(flagged)), function(i) {
-    gid <- flagged$ref_gene_id[i]
-    ivs <- host_introns_by_gene[[gid]]
+    gid <- bare_id(flagged$ref_gene_id[i])
+    ivs <- ref_introns_by_gene[[gid]]
     if (!is.null(ivs) && length(ivs)) {
       # The intron containing the candidate; if it straddles more than one, the
       # union of those it touches.
@@ -581,12 +619,22 @@ windows <- c(
 # five genes and 31 transcripts to draw a caption that promised eight.
 draw_ids <- character(0)
 if (nrow(cand)) {
-  # Both genes behind each panel, not just the one the structure track is drawn from:
-  # an intronic or antisense model carries its own Bambu gene id, so restricting to
-  # the reference gene would drop the transcript the panel exists to show.
-  draw_ids <- c(draw_ids,
-                tx$transcript_id[tx$gene_id %in%
-                                   unique(unlist(strsplit(cand$panel_genes, ";")))])
+  # The panel's own genes, plus every novel model falling in the window.
+  #
+  # Bambu gives each intronic or antisense model its own gene id, so a panel
+  # restricted to the reference gene and the example's gene hides the others at the
+  # same locus -- and when several novel models pile onto one gene, that pile is the
+  # finding. At AK5, four single-exon antisense models sit over one transcript, each
+  # in its own Bambu gene, and a panel built from two gene ids showed one of them.
+  for (i in seq_len(nrow(cand))) {
+    in_win <- tx$chrom == cand$chrom[i] &
+              tx$end   >= cand$win_s[i] &
+              tx$start <= cand$win_e[i]
+    row_genes <- strsplit(cand$panel_genes[i], ";")[[1]]
+    draw_ids  <- c(draw_ids,
+                   tx$transcript_id[in_win & (tx$gene_id %in% row_genes |
+                                              tx$transcript_status == "novel")])
+  }
 }
 if (nrow(flagged)) {
   for (i in seq_len(nrow(flagged))) {
@@ -648,6 +696,20 @@ pulposeq_assembly <- assembly(
 
 exons_gr  <- gtf[as.character(S4Vectors::mcols(gtf)$type) == "exon"]
 exon_gid  <- as.character(S4Vectors::mcols(exons_gr)$gene_id)
+
+#' Exon footprint for the gene track.
+#'
+#' The reference gene's annotated structure where the annotation has it, so the
+#' track shows every exon a class code could have been assigned against -- not
+#' only the exons of isoforms that happened to be detected. Falls back to the
+#' validated GTF for a novel Bambu gene, which has no reference entry at all.
+gene_structure <- function(gene_id) {
+  key <- bare_id(gene_id)
+  if (!is.na(key) && key %in% names(ref_exons_by_gene)) {
+    return(ref_exons_by_gene[[key]])
+  }
+  GenomicRanges::reduce(exons_gr[exon_gid == gene_id])
+}
 exon_txid <- as.character(S4Vectors::mcols(exons_gr)$transcript_id)
 
 #' Assign each model to a row, packing models that do not overlap onto the same one.
@@ -941,18 +1003,29 @@ if (nrow(cand)) {
   cand$figure <- NA_character_
   for (i in seq_len(nrow(cand))) {
     row <- cand[i, ]
-    cat(sprintf("Drawing [%s] %s at %s:%d-%d (%d isoforms: %d known, %d novel)\n",
-                row$stratum, row$label, row$chrom, row$win_s, row$win_e,
-                row$n_tx, row$n_known, row$n_novel))
 
-    # Restricted to the two genes behind this panel. A plain window query pulls in
-    # whatever neighbours happen to overlap -- one 84 kb window returned five genes
-    # and 31 transcripts for a caption promising eight -- and the panel is coloured
-    # from these rows as well as sized by them.
+    # The panel's own genes plus any novel model in the window. draw_ids already
+    # holds exactly that set, so a known neighbouring gene cannot crowd in -- one
+    # 84 kb window once pulled five genes and 31 transcripts into a panel whose
+    # caption promised eight -- while sibling novel models at the same locus stay.
     row_genes <- strsplit(row$panel_genes, ";")[[1]]
     panel_tx  <- tx[tx$chrom == row$chrom & tx$end >= row$win_s &
                     tx$start <= row$win_e & tx$transcript_id %in% draw_ids &
-                    tx$gene_id %in% row_genes, , drop = FALSE]
+                    (tx$gene_id %in% row_genes | tx$transcript_status == "novel"), ,
+                    drop = FALSE]
+
+    # Counted from what is actually drawn, not from the two genes the panel was
+    # built around. The caption has to describe the picture.
+    n_drawn <- nrow(panel_tx)
+    n_nov   <- sum(panel_tx$transcript_status == "novel", na.rm = TRUE)
+    n_kno   <- n_drawn - n_nov
+    cand$n_tx[i]    <- n_drawn
+    cand$n_novel[i] <- n_nov
+    cand$n_known[i] <- n_kno
+
+    cat(sprintf("Drawing [%s] %s at %s:%d-%d (%d isoforms: %d known, %d novel)\n",
+                row$stratum, row$label, row$chrom, row$win_s, row$win_e,
+                n_drawn, n_kno, n_nov))
 
     ref_bt <- if (is.na(row$ref_gene_biotype) || !nzchar(row$ref_gene_biotype)) {
       row$ref_class
@@ -960,17 +1033,18 @@ if (nrow(cand)) {
 
     cand$figure[i] <- draw_panel(
       chrom        = row$chrom, win_s = row$win_s, win_e = row$win_e,
-      # The union of every exon the gene has, so a reader sees the full exonic
-      # footprint before the isoforms start differing from it.
-      structure_gr = GenomicRanges::reduce(exons_gr[exon_gid == row$gene_id]),
+      # The gene's full ANNOTATED exon footprint, so every exon a class code could
+      # have been assigned against is on screen -- including those of isoforms not
+      # detected in these samples, which the isoform rows below cannot show.
+      structure_gr = gene_structure(row$gene_id),
       panel_tx     = panel_tx,
       title        = row$label,
       # The stratum is the point of the panel, so it leads: this figure is here as
       # the example of its kind, not because the locus is remarkable.
       subtitle     = sprintf(
-        "%s, %s | reference: %s | %d isoforms: %d known, %d novel",
+        "%s, %s | reference: %s | %d isoforms drawn: %d known, %d novel",
         row$novel_biotype, row$classification, ref_bt,
-        row$n_tx, row$n_known, row$n_novel),
+        n_drawn, n_kno, n_nov),
       out_png      = file.path(opt$outdir,
                                sprintf("genomic_context_%s_%s.png",
                                        slug(row$label), slug(row$stratum)))
@@ -1028,7 +1102,7 @@ if (nrow(flagged)) {
 
     flagged$figure[i] <- draw_panel(
       chrom        = row$chrom, win_s = row$win_s, win_e = row$win_e,
-      structure_gr = GenomicRanges::reduce(exons_gr[exon_gid == row$ref_gene_id]),
+      structure_gr = gene_structure(row$ref_gene_id),
       panel_tx     = panel_tx,
       title        = sprintf("%s in %s", row$qry_id, host_lab),
       # Percentages, because the ranking is on fractions and a bare count invites the
