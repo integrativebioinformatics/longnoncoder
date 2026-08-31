@@ -6,8 +6,8 @@
 #   title       the subject and the region actually plotted, chromosome included
 #   chromosome  a bar marking where on the chromosome this window sits
 #   structure   the gene's (or host's) annotated exon footprint, collapsed to one row
-#   isoforms    every validated transcript in the window, coloured by biotype. In an
-#               intronic panel the candidate is one of these, labelled like the rest
+#   isoforms    every transcript in the window -- detected, novel, and annotated but
+#               not detected -- coloured by biotype and labelled with its status
 #   coverage    one track per sample, on a y range shared across samples
 #   axis        genomic coordinates
 #   legend      the biotypes this panel contains
@@ -20,20 +20,23 @@
 # lncRNA gene competes for a panel on the same terms as one inside a protein-coding
 # gene.
 #
-# The two tracks deliberately draw from different sources.
+# Both tracks are drawn against the REFERENCE annotation, not only the validated set,
+# and that is what makes a panel interpretable.
 #
-# The isoform rows show the VALIDATED set -- transcripts supported in these samples --
-# and not the reference in full. A reference isoform with no support here is absent by
-# design: those rows are a picture of what the data contains, and an unexpressed model
-# drawn solid over flat coverage reads as evidence it is not. The bigWigs are published,
-# so the complete annotation can be opened against them in IGV.
+# The structure row is the gene's full annotated exon footprint, taken from
+# --annotation. It has to be, because gffcompare assigns class codes against the whole
+# annotation. Built from the validated set instead, the row omits the exons of
+# undetected isoforms and a panel can contradict its own caption.
 #
-# The structure row is the opposite: the gene's full ANNOTATED exon footprint, taken
-# from --annotation. It has to be, because gffcompare assigns class codes against the
-# whole annotation. Built from the validated set instead, the row omits the exons of
-# undetected isoforms and a panel can contradict its own caption -- a model coded `x`,
-# antisense exonic overlap, against an isoform that was never detected appears to sit
-# in an empty intron with no exon drawn anywhere near it.
+# The isoform rows carry three kinds of model: detected known transcripts, novel
+# models, and annotated transcripts with no support in these samples. The last are
+# there because without them a panel cannot answer its own question. AK5 has an
+# annotated antisense gene, AK5-AS1, inside one of its introns; with none of its
+# transcripts detected it never appeared, and a novel antisense model in that intron
+# looked like a new locus when it might be an undetected form of something already
+# named. Undetected models keep their real biotype colour and carry "not detected" in
+# the label, so they are never read as observed -- the coverage tracks below say what
+# was actually seen.
 
 suppressPackageStartupMessages({
   library(optparse)
@@ -612,6 +615,77 @@ windows <- c(
   if (nrow(flagged)) GenomicRanges::GRanges(
     flagged$chrom, IRanges::IRanges(flagged$win_s, flagged$win_e)) else GenomicRanges::GRanges()
 )
+# --- Annotated transcripts at the drawn loci ----------------------------------
+#
+# The isoform track shows what was detected, and on its own that can leave a panel
+# impossible to read. AK5 has an annotated antisense gene, AK5-AS1, sitting inside
+# one of its introns. With none of its transcripts detected it never appeared, so a
+# novel antisense model in that intron looked like it had arrived from nowhere --
+# when the question worth asking is whether it is a new locus at all, or an
+# undetected form of something already annotated. That question cannot be put
+# without the annotation on the page.
+#
+# Every annotated transcript overlapping a drawn window is added, except those
+# already in the validated set, which are drawn from their own record. They keep
+# their real biotype colour, so the palette still says what they are, and carry
+# "not detected" in the label so they are never read as observed.
+MAX_ANNOTATED <- 40L
+
+ref_draw_gr <- NULL
+if (length(windows) && !is.null(opt$annotation) && file.exists(opt$annotation)) {
+  ref_all <- rtracklayer::import(opt$annotation,
+                                 feature.type = c("transcript", "exon"))
+  ref_all <- IRanges::subsetByOverlaps(ref_all, windows)
+
+  # Compared on the bare id: the validated GTF and the annotation can disagree on
+  # whether the version suffix is carried inline, and a mismatch would draw the same
+  # transcript twice -- once as detected and once as not.
+  ref_txid <- as.character(S4Vectors::mcols(ref_all)$transcript_id)
+  ref_all  <- ref_all[!is.na(ref_txid) &
+                        !(bare_id(ref_txid) %in% bare_id(tx$transcript_id))]
+
+  if (length(ref_all)) {
+    ref_draw_gr <- ref_all
+
+    rt     <- ref_all[as.character(S4Vectors::mcols(ref_all)$type) == "transcript"]
+    rt_md  <- S4Vectors::mcols(rt)
+    rcol   <- function(n) if (n %in% colnames(rt_md)) as.character(rt_md[[n]]) else NA_character_
+    bt_col <- if ("transcript_biotype" %in% colnames(rt_md)) "transcript_biotype" else "transcript_type"
+
+    ref_tx <- data.frame(
+      gene_id            = rcol("gene_id"),
+      gene_name          = rcol("gene_name"),
+      transcript_id      = rcol("transcript_id"),
+      transcript_name    = rcol("transcript_name"),
+      transcript_biotype = rcol(bt_col),
+      transcript_status  = "annotated",
+      class_code         = NA_character_,
+      classification     = NA_character_,
+      ref_gene_id        = NA_character_,
+      ref_gene_name      = NA_character_,
+      ref_gene_biotype   = NA_character_,
+      chrom              = as.character(GenomeInfoDb::seqnames(rt)),
+      strand             = as.character(BiocGenerics::strand(rt)),
+      start              = BiocGenerics::start(rt),
+      end                = BiocGenerics::end(rt),
+      stringsAsFactors   = FALSE
+    )
+
+    ref_tx$label <- paste0(
+      ifelse(!is.na(ref_tx$transcript_name) & nzchar(ref_tx$transcript_name),
+             ref_tx$transcript_name, ref_tx$transcript_id),
+      " | not detected",
+      ifelse(ref_tx$strand %in% c("+", "-"), paste0(" | ", ref_tx$strand), ""))
+    ref_tx$biotype_key <- ifelse(
+      is.na(ref_tx$transcript_biotype) | !nzchar(ref_tx$transcript_biotype),
+      "biotype not set", ref_tx$transcript_biotype)
+
+    tx <- rbind(tx, ref_tx)
+    cat(sprintf("Added %d annotated transcripts not present in the validated set\n",
+                nrow(ref_tx)))
+  }
+}
+
 # Which transcripts each panel is meant to contain -- this set, not the window alone,
 # is what decides a panel's contents. Restricting it stops a neighbouring gene's
 # isoforms from crowding
@@ -634,6 +708,15 @@ if (nrow(cand)) {
     draw_ids  <- c(draw_ids,
                    tx$transcript_id[in_win & (tx$gene_id %in% row_genes |
                                               tx$transcript_status == "novel")])
+
+    # Annotated transcripts in the window, capped. The cap only bites at a
+    # pathologically isoform-dense locus; ordering by position keeps the choice
+    # deterministic rather than dependent on annotation file order.
+    ann <- which(in_win & tx$transcript_status == "annotated")
+    if (length(ann)) {
+      ann <- ann[order(tx$start[ann], tx$end[ann], tx$transcript_id[ann])]
+      draw_ids <- c(draw_ids, tx$transcript_id[head(ann, MAX_ANNOTATED)])
+    }
   }
 }
 if (nrow(flagged)) {
@@ -647,11 +730,36 @@ if (nrow(flagged)) {
     draw_ids <- c(draw_ids,
                   tx$transcript_id[in_win & (tx$gene_id == flagged$ref_gene_id[i] |
                                              tx$transcript_status == "novel")])
+
+    # Annotated transcripts in the host intron matter most here of anywhere: a
+    # candidate sharing an intron with an annotated gene may be that gene rather
+    # than a new one, and the panel exists to let a reader tell.
+    ann <- which(in_win & tx$transcript_status == "annotated")
+    if (length(ann)) {
+      ann <- ann[order(tx$start[ann], tx$end[ann], tx$transcript_id[ann])]
+      draw_ids <- c(draw_ids, tx$transcript_id[head(ann, MAX_ANNOTATED)])
+    }
   }
 }
 draw_ids <- unique(draw_ids[!is.na(draw_ids)])
 
-sub_gtf   <- IRanges::subsetByOverlaps(gtf, windows)
+# The validated and reference records carry different attribute sets, so both are
+# cut down to the three fields the TxDb build actually reads before being combined.
+# It also keeps the exported GTF small, which is the point of subsetting at all.
+minimal_gtf <- function(gr) {
+  out <- GenomicRanges::granges(gr)
+  m   <- S4Vectors::mcols(gr)
+  S4Vectors::mcols(out) <- S4Vectors::DataFrame(
+    type          = as.character(m$type),
+    gene_id       = as.character(m$gene_id),
+    transcript_id = as.character(m$transcript_id))
+  out
+}
+
+sub_gtf <- minimal_gtf(IRanges::subsetByOverlaps(gtf, windows))
+if (!is.null(ref_draw_gr)) {
+  sub_gtf <- c(sub_gtf, minimal_gtf(ref_draw_gr))
+}
 row_tx_id <- as.character(S4Vectors::mcols(sub_gtf)$transcript_id)
 # Gene-level rows carry no transcript_id and are kept regardless.
 sub_gtf   <- sub_gtf[is.na(row_tx_id) | row_tx_id %in% draw_ids]
@@ -1000,7 +1108,8 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
 # --- Genes carrying novel isoforms --------------------------------------------
 
 if (nrow(cand)) {
-  cand$figure <- NA_character_
+  cand$figure      <- NA_character_
+  cand$n_annotated <- 0L
   for (i in seq_len(nrow(cand))) {
     row <- cand[i, ]
 
@@ -1011,21 +1120,24 @@ if (nrow(cand)) {
     row_genes <- strsplit(row$panel_genes, ";")[[1]]
     panel_tx  <- tx[tx$chrom == row$chrom & tx$end >= row$win_s &
                     tx$start <= row$win_e & tx$transcript_id %in% draw_ids &
-                    (tx$gene_id %in% row_genes | tx$transcript_status == "novel"), ,
+                    (tx$gene_id %in% row_genes |
+                     tx$transcript_status %in% c("novel", "annotated")), ,
                     drop = FALSE]
 
-    # Counted from what is actually drawn, not from the two genes the panel was
-    # built around. The caption has to describe the picture.
+    # Counted from what is actually drawn, not from the genes the panel was built
+    # around. The caption has to describe the picture.
     n_drawn <- nrow(panel_tx)
-    n_nov   <- sum(panel_tx$transcript_status == "novel", na.rm = TRUE)
-    n_kno   <- n_drawn - n_nov
-    cand$n_tx[i]    <- n_drawn
-    cand$n_novel[i] <- n_nov
-    cand$n_known[i] <- n_kno
+    n_nov   <- sum(panel_tx$transcript_status == "novel",     na.rm = TRUE)
+    n_ann   <- sum(panel_tx$transcript_status == "annotated", na.rm = TRUE)
+    n_kno   <- n_drawn - n_nov - n_ann
+    cand$n_tx[i]        <- n_drawn
+    cand$n_novel[i]     <- n_nov
+    cand$n_known[i]     <- n_kno
+    cand$n_annotated[i] <- n_ann
 
-    cat(sprintf("Drawing [%s] %s at %s:%d-%d (%d isoforms: %d known, %d novel)\n",
+    cat(sprintf("Drawing [%s] %s at %s:%d-%d (%d drawn: %d detected, %d novel, %d annotated only)\n",
                 row$stratum, row$label, row$chrom, row$win_s, row$win_e,
-                n_drawn, n_kno, n_nov))
+                n_drawn, n_kno, n_nov, n_ann))
 
     ref_bt <- if (is.na(row$ref_gene_biotype) || !nzchar(row$ref_gene_biotype)) {
       row$ref_class
@@ -1042,9 +1154,9 @@ if (nrow(cand)) {
       # The stratum is the point of the panel, so it leads: this figure is here as
       # the example of its kind, not because the locus is remarkable.
       subtitle     = sprintf(
-        "%s, %s | reference: %s | %d isoforms drawn: %d known, %d novel",
+        "%s, %s | reference: %s | %d drawn: %d detected, %d novel, %d annotated only",
         row$novel_biotype, row$classification, ref_bt,
-        n_drawn, n_kno, n_nov),
+        n_drawn, n_kno, n_nov, n_ann),
       out_png      = file.path(opt$outdir,
                                sprintf("genomic_context_%s_%s.png",
                                        slug(row$label), slug(row$stratum)))
@@ -1055,7 +1167,7 @@ if (nrow(cand)) {
                      "ref_class", "ref_gene_biotype", "example_tx",
                      "gene_id", "gene_name", "label", "panel_genes", "chrom",
                      "start", "end", "win_s", "win_e", "n_tx", "n_known",
-                     "n_novel", "n_novel_lnc", "biotypes", "figure")],
+                     "n_novel", "n_annotated", "n_novel_lnc", "biotypes", "figure")],
             file.path(opt$outdir, "genomic_context_candidates.csv"), row.names = FALSE)
 } else {
   # Same columns as the populated case. The report reads this file by name, and a
@@ -1064,7 +1176,7 @@ if (nrow(cand)) {
   empty_cols <- c("stratum", "novel_biotype", "classification", "class_code",
                   "ref_class", "ref_gene_biotype", "example_tx", "gene_id",
                   "gene_name", "label", "panel_genes", "chrom", "start", "end",
-                  "win_s", "win_e", "n_tx", "n_known", "n_novel", "n_novel_lnc",
+                  "win_s", "win_e", "n_tx", "n_known", "n_novel", "n_annotated", "n_novel_lnc",
                   "biotypes", "figure")
   write.csv(as.data.frame(setNames(replicate(length(empty_cols), character(0),
                                              simplify = FALSE), empty_cols)),

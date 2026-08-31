@@ -529,17 +529,17 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 [^1]: Chen, Ying, et al. "Context-aware transcript quantification from long-read RNA-seq data with Bambu." Nature methods 20.8 (2023): 1187-1195. https://doi.org/10.1038/s41592-023-01908-w
 
 1.  Any gene or transcript that had zero counts across all samples were subset out(check the subset quantification files in the results folder `bambu_subset/`).
-2.  Novel transcript isoforms were compared to the reference annotation by **GffCompare** [^3] and submitted to coding-potential prediction with **CPC2** [^2], or with **RNAmining** [^6] where that predictor was selected. Each was then routed into one of three categories from its class code, its prediction and the biotype of the reference gene it was matched against.
-3.  The structure of the isoforms is characterized, and metadata regarding isoform-level structure is retrieved directly from the reference annotation and assembly GTF files with **rtracklayer**[^4].
+2.  Novel transcript isoforms were compared to the reference annotation by **GffCompare** [^2] and submitted to coding-potential prediction with **CPC2** [^3], or with **RNAmining** [^4] where that predictor was selected. Each was then routed into one of three categories from its class code, its prediction and the biotype of the reference gene it was matched against.
+3.  The structure of the isoforms is characterized, and metadata regarding isoform-level structure is retrieved directly from the reference annotation and assembly GTF files with **rtracklayer**[^5].
 4.  Finally, annotations, count matrices and characterization metadata are standardized into comprehensive metadatasets that are easily accessible for downstream analyses, and the overall statistics of the assembly are summarized in the following sections of this report.
 
-[^2]: Kang, Yu-Jian, et al. "CPC2: a fast and accurate coding potential calculator based on sequence intrinsic features." Nucleic Acids Research 45.W1 (2017): W12-W16. https://doi.org/10.1093/nar/gkx428
+[^2]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1
 
-[^6]: Ramos, Thaís AR, et al. "RNAmining: A machine learning stand-alone and web server tool for RNA coding potential prediction." F1000Research 10 (2021): 323. https://doi.org/10.12688/f1000research.52350.2
+[^3]: Kang, Yu-Jian, et al. "CPC2: a fast and accurate coding potential calculator based on sequence intrinsic features." Nucleic Acids Research 45.W1 (2017): W12-W16. https://doi.org/10.1093/nar/gkx428
 
-[^3]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1
+[^4]: Ramos, Thaís AR, et al. "RNAmining: A machine learning stand-alone and web server tool for RNA coding potential prediction." F1000Research 10 (2021): 323. https://doi.org/10.12688/f1000research.52350.2
 
-[^4]: Lawrence, Michael, Robert Gentleman, and Vincent Carey. "rtracklayer: an R package for interfacing with genome browsers." Bioinformatics 25.14 (2009): 1841-1842. https://doi.org/10.1093/bioinformatics/btp328
+[^5]: Lawrence, Michael, Robert Gentleman, and Vincent Carey. "rtracklayer: an R package for interfacing with genome browsers." Bioinformatics 25.14 (2009): 1841-1842. https://doi.org/10.1093/bioinformatics/btp328
 
 Final validated results are organized into the folders `bambu_validated`, `novel_trancripts` and `annotated_transcripts` in the output directory.
 
@@ -553,28 +553,30 @@ A novel transcript is carried forward only if it meets **all** of the following:
 - **Non-zero counts** in at least one sample.
 - **An accepted gffcompare class code** — `u`, `i`, `x`, `j`, `k`, `o`, `y`, `m` or `n`.
 
-Nothing is filtered on structural evidence. Candidates carrying warning signs are reported with those signs attached, in [Structural Validation of Novel Calls](#structural-validation-of-novel-calls).
+Nothing is filtered on structural evidence. Candidates carrying warning signs are reported with those signs attached, in [Structural Validation of Novel Calls].
 :::
+
+  [Structural Validation of Novel Calls]: #structural-validation-of-novel-calls
 
 ### gffcompare class codes
 
 | Code | Meaning | Admitted | Notes |
-|:--|:-----|:--|:-----|
+|:--------------|:--------------------|:--------------|:--------------------|
 | `u` | Intergenic — no overlap with any reference | Yes | No reference gene, so nothing to be sense or antisense to |
 | `i` | Contained entirely within a reference intron | Yes | Reported as **sense intronic** or **antisense intronic** |
 | `x` | Exonic overlap on the opposite strand | Yes | Antisense by definition |
 | `j` | Multi-exonic, sharing at least one reference splice junction | Yes | The commonest novel isoform |
 | `k` | Contains the reference, extending beyond it | Yes | Where an unannotated exon shows up |
-| `o` | Same-strand exonic overlap matching no splice junction | Yes | |
+| `o` | Same-strand exonic overlap matching no splice junction | Yes |  |
 | `y` | Contains a reference gene within its own intron | Yes | Can be a distinct locus rather than an isoform |
-| `m` | Retained intron, every reference intron accounted for | Yes | |
-| `n` | Retained intron, not covering the full reference structure | Yes | |
+| `m` | Retained intron, every reference intron accounted for | Yes |  |
+| `n` | Retained intron, not covering the full reference structure | Yes |  |
 | `=` | Exact match to a reference transcript | — | Resolved as annotated before this stage |
 | `c` | Fully contained within a reference transcript | — | Resolved as annotated before this stage |
 | `s` | Intron match on the opposite strand | No | Usually a mapping artefact |
 | `e` | Single exon partially covering a reference intron | No | Likely a precursor fragment |
-| `p` | Polymerase run-on, no genuine overlap | No | |
-| `r` | Repeat region | No | |
+| `p` | Polymerase run-on, no genuine overlap | No |  |
+| `r` | Repeat region | No |  |
 
 ### How novel models are routed
 
@@ -582,20 +584,20 @@ Each admitted model is assigned one of **three categories**, and those categorie
 
 **`u`, `i` and `x` share no splice structure with a reference.** `u` has no reference at all, `i` lies wholly inside an intron, and `x` overlaps on the opposite strand. The coding prediction stands on its own here, so it decides alone:
 
-| Prediction | Category |
-|:--------|:--------|
-| non-coding | **novel lncRNA candidate** |
-| coding | **predicted protein-coding** |
+| Prediction | Category                     |
+|:-----------|:-----------------------------|
+| non-coding | **novel lncRNA candidate**   |
+| coding     | **predicted protein-coding** |
 
 A sense-intronic or antisense lncRNA sitting inside a protein-coding locus is still an lncRNA, and both Ensembl and GENCODE annotate them that way.
 
 **`j`, `k`, `o`, `y`, `m` and `n` do share structure with a reference transcript.** A non-coding call carries less weight here: an unproductive isoform of a protein-coding gene — a retained intron, an NMD target, a truncated model — is predicted non-coding too, and calling one a novel lncRNA would assert a new non-coding gene at a locus that already has a coding one. So the reference gene's biotype is taken into account:
 
-| Prediction | Reference gene | Category |
-|:--------|:--------|:--------|
-| coding | any | **predicted protein-coding** |
-| non-coding | lncRNA | **novel lncRNA candidate** |
-| non-coding | anything else | **predicted non-coding** |
+| Prediction | Reference gene | Category                     |
+|:-----------|:---------------|:-----------------------------|
+| coding     | any            | **predicted protein-coding** |
+| non-coding | lncRNA         | **novel lncRNA candidate**   |
+| non-coding | anything else  | **predicted non-coding**     |
 
 **Predicted non-coding** says a model has no coding potential without asserting what it is, which is as much as the evidence supports for a non-coding isoform of a coding gene.
 
@@ -607,7 +609,9 @@ A transcript lying inside an intron **on the host gene's own strand** is sequenc
 
 **On the opposite strand there is no such ambiguity.** The host's precursor runs the other way and cannot produce it.
 
-The ambiguity comes from splicing, not from coding potential, so it applies to any host carrying introns whatever its biotype — lncRNA genes are transcribed by Pol II and spliced exactly as protein-coding genes are, and the hosts here are frequently lncRNA genes. Sense-intronic candidates are kept, never dropped; the read-level evidence gathered for each is reported in [Structural Validation of Novel Calls](#structural-validation-of-novel-calls).
+The ambiguity comes from splicing, not from coding potential, so it applies to any host carrying introns whatever its biotype — lncRNA genes are transcribed by Pol II and spliced exactly as protein-coding genes are, and the hosts here are frequently lncRNA genes. Sense-intronic candidates are kept, never dropped; the read-level evidence gathered for each is reported in [Structural Validation of Novel Calls].
+
+  [Structural Validation of Novel Calls]: #structural-validation-of-novel-calls
 
 ::: details
 ### pulposeq follows the current consensus statement for lncRNA classification
@@ -619,7 +623,7 @@ pulposeq adresses this conceptual bottleneck when classifying novel isoforms tha
 1.  Coding potential predictions;
 2.  Structural features identified based on their length, relationship with reference transcripts and their exon-intron structures.
 
-Consequently, a newly discovered isoform lacking coding potential but originating from a known protein-coding locus or any other gene biotype is classified strictly as a novel lncRNA transcript. This standardization process follows the current recommendations of the consensus statement of Mattick and colleagues [^5] for lncRNA classification and naming.
+Consequently, a newly discovered isoform lacking coding potential but originating from a known protein-coding locus or any other gene biotype is classified strictly as a novel lncRNA transcript. This standardization process follows the current recommendations of the consensus statement of Mattick and colleagues [^6] for lncRNA classification and naming.
 
 #### Why the report says *candidate*
 
@@ -630,10 +634,12 @@ It is not a set of validated lncRNAs. A coding-potential prediction is evidence 
 - A **sense-intronic** model cannot be distinguished from a fragment of its host's unspliced precursor by position alone.
 - A model **sharing splice structure with a protein-coding gene** may be an unproductive isoform of that gene rather than a new non-coding locus; these are reported as *predicted non-coding* rather than as lncRNA candidates.
 
-The [Structural Validation of Novel Calls](#structural-validation-of-novel-calls) section reports what other evidence each candidate carries. Nothing is filtered on that basis: a candidate set with the evidence stated per member is a stronger result than an unqualified count.
+The [Structural Validation of Novel Calls] section reports what other evidence each candidate carries. Nothing is filtered on that basis: a candidate set with the evidence stated per member is a stronger result than an unqualified count.
 :::
 
-[^5]: Mattick, J.S., Amaral, P.P., Carninci, P. et al. Long non-coding RNAs: definitions, functions, challenges and recommendations. Nat Rev Mol Cell Biol 24, 430–447 (2023). https://doi.org/10.1038/s41580-022-00566-8
+[^6]: Mattick, J.S., Amaral, P.P., Carninci, P. et al. Long non-coding RNAs: definitions, functions, challenges and recommendations. Nat Rev Mol Cell Biol 24, 430–447 (2023). https://doi.org/10.1038/s41580-022-00566-8
+
+  [Structural Validation of Novel Calls]: #structural-validation-of-novel-calls
 
 ## Overall Assembly Statistics
 
@@ -1188,11 +1194,7 @@ create_plot <- function(data, row, col, title, fig_width = 12) {
 
 #### Transcript biotype diversity by gene biotype
 
-Each tab holds one category group. Within a tab, every gene biotype in that group is
-a facet row, its transcript biotypes are spread along the x axis, and the exact
-transcript count is printed above each point. The count axis is log-like but
-includes zero, so a transcript biotype that is annotated in the group yet absent
-from these samples reads as a labelled `0` rather than disappearing.
+Each tab holds one category group. Within a tab, every gene biotype in that group is a facet row, its transcript biotypes are spread along the x axis, and the exact transcript count is printed above each point. The count axis is log-like but includes zero, so a transcript biotype that is annotated in the group yet absent from these samples reads as a labelled `0` rather than disappearing.
 
 Only groups actually present in the supplied annotation get a tab.
 
@@ -1464,7 +1466,9 @@ p19
 
 ## Novel Protein-Coding and lncRNA Candidates Overview
 
-This section focuses on the characterization of newly identified protein-coding and lncRNA transcripts that were not present in the reference annotation. Every count below is a count of **candidates**: transcripts that meet the classification criteria and have not yet been shown to be independent transcriptional units. The evidence gathered for them is reported in [Structural Validation of Novel Calls](#structural-validation-of-novel-calls).
+This section focuses on the characterization of newly identified protein-coding and lncRNA transcripts that were not present in the reference annotation. Every count below is a count of **candidates**: transcripts that meet the classification criteria and have not yet been shown to be independent transcriptional units. The evidence gathered for them is reported in [Structural Validation of Novel Calls].
+
+  [Structural Validation of Novel Calls]: #structural-validation-of-novel-calls
 
 > **About the Tools:**
 >
@@ -1497,11 +1501,7 @@ p20
 
 #### What each novel call was compared against
 
-Every novel model except the intergenic ones (`u`) was matched to a reference
-transcript. The reference is recorded at two levels, and they disagree in exactly
-the cases worth looking at: a model containing `TARDBP-221` has a reference *gene*
-biotype of `protein_coding` and a reference *transcript* biotype of
-`nonsense_mediated_decay`, and only the second says what it actually contains.
+Every novel model except the intergenic ones (`u`) was matched to a reference transcript. The reference is recorded at two levels, and they disagree in exactly the cases worth looking at: a model containing `TARDBP-221` has a reference *gene* biotype of `protein_coding` and a reference *transcript* biotype of `nonsense_mediated_decay`, and only the second says what it actually contains.
 
 ```{r}
 #| label: prep-ref-biotype
@@ -1591,10 +1591,7 @@ for (cat_name in c("predicted protein-coding", "predicted non-coding",
 
 #### Read support behind the lncRNA candidates
 
-Bambu writes each transcript into three matrices: all assigned reads, reads spanning
-the full structure, and reads mapping uniquely. Full-length and unique support are
-both subsets of total, so the counts below are nested — the question they answer is
-how much of each classification survives the stricter definitions.
+Bambu writes each transcript into three matrices: all assigned reads, reads spanning the full structure, and reads mapping uniquely. Full-length and unique support are both subsets of total, so the counts below are nested — the question they answer is how much of each classification survives the stricter definitions.
 
 ```{r}
 #| label: fig-lnc-matrix-support
@@ -1902,34 +1899,16 @@ p32 <- ggplot(exlen_novel, aes(x = biotype, y = width,
 
 p32
 ```
-## Structural Validation of Novel Calls
 
-Novel transcripts are candidates, not findings. This section reports the
-structural evidence gathered for each one, and nothing here filters the output:
-every transcript counted above is still present. The point is to say which
-candidates carry warning signs and which do not, so that a count is never quoted
-without knowing what sits behind it.
+## Structural Validation of Novel Calls {#structural-validation-of-novel-calls}
 
-Evidence is reported separately for the three categories a novel model is routed
-into — **novel lncRNA candidates**, models **predicted protein-coding**, and models
-**predicted non-coding** — because the same warning sign does not carry the same
-weight in each.
+Novel transcripts are candidates, not findings. This section reports the structural evidence gathered for each one, and nothing here filters the output: every transcript counted above is still present. The point is to say which candidates carry warning signs and which do not, so that a count is never quoted without knowing what sits behind it.
 
-Strand relative to the reference gene is carried by the classification itself. For
-every candidate class code except `i` it is fixed: `x` is antisense by definition,
-and `j`, `k`, `o`, `y`, `m` and `n` are same-strand matches. Class code `i` is
-reported as **sense intronic** or **antisense intronic**, and that distinction is
-what the figures below are grouped on.
+Evidence is reported separately for the three categories a novel model is routed into — **novel lncRNA candidates**, models **predicted protein-coding**, and models **predicted non-coding** — because the same warning sign does not carry the same weight in each.
 
-The read-level test asks whether the reads supporting a candidate stop where the
-candidate stops. Reads running past its boundaries, or carrying splice junctions
-that belong to the host rather than to the candidate, came from a longer molecule —
-most often the host's own **unspliced precursor**, the primary transcript before its
-introns are removed. A sense-intronic candidate is sequence-identical to part of
-that precursor, so position alone cannot separate the two; an antisense candidate
-cannot be explained that way at all. Hosts are frequently lncRNA genes rather than
-protein-coding ones — a lncRNA gene is transcribed by Pol II and spliced just as a
-protein-coding gene is — so the host biotype is reported alongside every candidate.
+Strand relative to the reference gene is carried by the classification itself. For every candidate class code except `i` it is fixed: `x` is antisense by definition, and `j`, `k`, `o`, `y`, `m` and `n` are same-strand matches. Class code `i` is reported as **sense intronic** or **antisense intronic**, and that distinction is what the figures below are grouped on.
+
+The read-level test asks whether the reads supporting a candidate stop where the candidate stops. Reads running past its boundaries, or carrying splice junctions that belong to the host rather than to the candidate, came from a longer molecule — most often the host's own **unspliced precursor**, the primary transcript before its introns are removed. A sense-intronic candidate is sequence-identical to part of that precursor, so position alone cannot separate the two; an antisense candidate cannot be explained that way at all. Hosts are frequently lncRNA genes rather than protein-coding ones — a lncRNA gene is transcribed by Pol II and spliced just as a protein-coding gene is — so the host biotype is reported alongside every candidate.
 
 ```{r}
 #| label: context-prep
@@ -2064,18 +2043,11 @@ ggplot(reads_df, aes(x = classification, y = fraction, fill = measure)) +
 
 ### Which warning signs occur together
 
-The figures above each show one signal at a time. What decides whether a candidate
-is worth distrusting is whether the signals **agree** — and that is a question
-about combinations, not about any single distribution.
+The figures above each show one signal at a time. What decides whether a candidate is worth distrusting is whether the signals **agree** — and that is a question about combinations, not about any single distribution.
 
-Each bar below is one exact combination of flags. The transcripts to look at first
-are in the bar carrying the most flags at once: intronic, on the host's strand,
-unspliced, supported by reads that run past its boundaries and carry the host's
-junctions. That is the profile of a precursor fragment, and it is one bar you can
-point at rather than a conjunction you have to assemble from five figures.
+Each bar below is one exact combination of flags. The transcripts to look at first are in the bar carrying the most flags at once: intronic, on the host's strand, unspliced, supported by reads that run past its boundaries and carry the host's junctions. That is the profile of a precursor fragment, and it is one bar you can point at rather than a conjunction you have to assemble from five figures.
 
-Every flag here is structural and threshold-free — each is a count being zero or
-non-zero, not a value crossing a cutoff.
+Every flag here is structural and threshold-free — each is a count being zero or non-zero, not a value crossing a cutoff.
 
 ```{r}
 #| label: evidence-sets-prep
@@ -2170,25 +2142,16 @@ if (!is.null(evidence_sets)) {
 }
 ```
 
-
 ### Full-length and uniquely-mapped support
 
-Bambu reports, per transcript, how many reads support it in total, how many span
-its full structure, and how many map to it uniquely. Read alongside the class
-code, these separate a transcript that reads *fit* from one that reads merely
-*overlap*.
+Bambu reports, per transcript, how many reads support it in total, how many span its full structure, and how many map to it uniquely. Read alongside the class code, these separate a transcript that reads *fit* from one that reads merely *overlap*.
 
 ::: {.callout-important appearance="simple"}
 ## Read the low tail, not the high one
 
-A novel model's boundaries were placed **by** the reads now being counted against
-it. A read that spans the model end to end is, in large part, a read that decided
-where those ends go — so a high full-length fraction restates how the model was
-built rather than testing it, and confirms nothing.
+A novel model's boundaries were placed **by** the reads now being counted against it. A read that spans the model end to end is, in large part, a read that decided where those ends go — so a high full-length fraction restates how the model was built rather than testing it, and confirms nothing.
 
-The informative direction is the **low** tail: a candidate whose supporting reads
-mostly fail to span it is a fragment of something longer. Treat this as a screen
-that points at transcripts worth inspecting, not as a verdict on any of them.
+The informative direction is the **low** tail: a candidate whose supporting reads mostly fail to span it is a fragment of something longer. Treat this as a screen that points at transcripts worth inspecting, not as a verdict on any of them.
 :::
 
 ```{r}
@@ -2317,9 +2280,7 @@ if (is.null(novel_nc)) {
 
 ## Genomic Context
 
-Coverage and transcript models drawn together at selected loci. The bigWig tracks
-behind these figures are published alongside the report, so any region can be
-opened in IGV to explore beyond the windows chosen here.
+Coverage and transcript models drawn together at selected loci. The bigWig tracks behind these figures are published alongside the report, so any region can be opened in IGV to explore beyond the windows chosen here.
 
 ```{r}
 #| label: genomic-context-prep
@@ -2358,19 +2319,11 @@ embed_figures <- function(df, file_col, tab_col, caption_fn) {
 
 ### One example per kind of novel call
 
-These panels are chosen to span the ways a novel model can relate to the
-annotation. A stratum is the combination of routed category, classification and
-reference gene class — a sense-intronic lncRNA candidate inside a protein-coding
-gene is a different claim from the same model inside an lncRNA gene, and each gets
-its own panel. Within a stratum the richest locus is chosen, so every panel is the
-most informative example of its kind.
+These panels are chosen to span the ways a novel model can relate to the annotation. A stratum is the combination of routed category, classification and reference gene class — a sense-intronic lncRNA candidate inside a protein-coding gene is a different claim from the same model inside an lncRNA gene, and each gets its own panel. Within a stratum the richest locus is chosen, so every panel is the most informative example of its kind.
 
-Class code `u` is not represented: it is intergenic, so there is no reference gene
-to draw it against.
+Class code `u` is not represented: it is intergenic, so there is no reference gene to draw it against.
 
-Each panel shows the reference gene's full exonic footprint, then every isoform at
-the locus with novel ones coloured by biotype, then one coverage track per sample on
-a shared scale.
+Each panel shows the reference gene's full exonic footprint, then every isoform at the locus with novel ones coloured by biotype, then one coverage track per sample on a shared scale.
 
 ```{r}
 #| label: fig-genomic-context-clean
@@ -2393,20 +2346,12 @@ embed_figures(gc_clean, "figure", c("stratum", "label"), function(r) {
 
 ### Flagged intronic candidates
 
-These are chosen for the opposite reason: each is an intronic candidate on its
-host's strand whose supporting reads run past its boundaries or carry the host's
-splice junctions. They are drawn windowed on the **whole host intron**, because a
-window drawn tightly around a truncated fragment looks like a discrete transcript
-whatever it is. The flanking intron is where the difference shows.
+These are chosen for the opposite reason: each is an intronic candidate on its host's strand whose supporting reads run past its boundaries or carry the host's splice junctions. They are drawn windowed on the **whole host intron**, because a window drawn tightly around a truncated fragment looks like a discrete transcript whatever it is. The flanking intron is where the difference shows.
 
 ::: {.callout-tip appearance="simple"}
 ## What to look for
 
-A candidate that really is host precursor shows coverage running flat across the
-entire intron and continuous with the flanking exons. A candidate that is a
-genuine independent transcript shows a discrete block of coverage with quiet
-intron either side. If a flagged candidate looks discrete here, the flag is what
-needs revisiting, not the transcript.
+A candidate that really is host precursor shows coverage running flat across the entire intron and continuous with the flanking exons. A candidate that is a genuine independent transcript shows a discrete block of coverage with quiet intron either side. If a flagged candidate looks discrete here, the flag is what needs revisiting, not the transcript.
 :::
 
 ```{r}

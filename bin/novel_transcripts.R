@@ -324,18 +324,11 @@ RELATED_CODES     <- c('j', 'k', 'o', 'y', 'm', 'n')
 CANDIDATE_CODES   <- c(INDEPENDENT_CODES, RELATED_CODES)
 
 # Reference gene biotypes that count as lncRNA when deciding whether a
-# structurally-related model can be called one.
-#
-# Current Ensembl and GENCODE releases have consolidated on "lncRNA", but users do
-# supply older annotations, which split the same class across several names. On one
-# of those, every lncRNA locus would otherwise fall through to novel_non_coding.
-# processed_transcript is included for the same reason -- it was a non-coding gene
-# biotype before the merge -- though it is the least clear-cut of these.
+# structurally-related model can be called one. Ensembl and GENCODE have
+# consolidated on "lncRNA"; an annotation predating that merge would need its own
+# names adding here.
 LNCRNA_GENE_BIOTYPES <- c(
-    "lncRNA", "lincRNA", "antisense", "antisense_RNA",
-    "sense_intronic", "sense_overlapping", "macro_lncRNA",
-    "bidirectional_promoter_lncRNA", "3prime_overlapping_ncRNA",
-    "non_coding", "processed_transcript"
+    "lncRNA"
 )
 
 is_lnc_ref  <- !is.na(tx_info$ref_gene_biotype) &
