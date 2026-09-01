@@ -105,7 +105,7 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `input` | Full path to the `samplesheet.csv` file |
 | `outdir` | Full path to the output directory where you want the results to be saved |
 | `skip_nanocomp` | `NanoComp` reports to skip: `raw`, `restrander`, `chopper`, `minimap2` or `all`, comma-separated (see [below](#choosing-which-nanocomp-reports-to-run)) |
-| `skip_chopper` | Skip filtering and trimming with `chopper`; the reads reach alignment as they came out of restranding |
+| `skip_chopper` | Skip filtering and trimming with `chopper`; the reads reach alignment exactly as supplied — or as Restrander left them, for unoriented ONT cDNA (`library: ONT_cDNA` with `stranded_library: false`) |
 | `minqual` | Minimum read average Phred-score quality cut-off |
 | `minlen` | Minimum read length (bp) |
 | `maxlen` | Maximum read length (bp), optional — leave unset for no upper limit |
