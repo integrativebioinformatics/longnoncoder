@@ -29,12 +29,8 @@
 # undetected isoforms and a panel can contradict its own caption.
 #
 # The isoform rows carry three kinds of model: detected known transcripts, novel
-# models, and annotated transcripts with no support in these samples. The last are
-# there because without them a panel cannot answer its own question. AK5 has an
-# annotated antisense gene, AK5-AS1, inside one of its introns; with none of its
-# transcripts detected it never appeared, and a novel antisense model in that intron
-# looked like a new locus when it might be an undetected form of something already
-# named. Undetected models keep their real biotype colour and carry "not detected" in
+# models, and annotated transcripts with no support in these samples.
+# Undetected models keep their real biotype colour and carry "not detected" in
 # the label, so they are never read as observed -- the coverage tracks below say what
 # was actually seen.
 
@@ -120,10 +116,8 @@ BIOTYPE_FALLBACK <- "#969696"
 # against the same thin intron line is the thick-against-thin reading we want, and
 # plotTranscripts draws UTR thinner than CDS by itself, so that comes free.
 #
-# It is NOT the reason labels go missing, which was the earlier guess. plotTranscripts
-# centres a label on the transcript's true midpoint and does not draw it when that falls
-# outside the window: in the ACOT7 intronic panel exactly two of ten models had an
-# in-window midpoint, and exactly those two were labelled. Gene panels never hit this,
+# plotTranscripts centres a label on the transcript's true midpoint and does not draw it
+# when that falls outside the window. Gene panels never hit this,
 # because their window spans min(start) to max(end) over the gene's own transcripts, so
 # every midpoint is inside it by construction. Intronic panels are windowed on one host
 # intron, so host isoforms running the length of the gene lose their names -- see the
@@ -237,7 +231,7 @@ tx <- tx[!is.na(tx$gene_id) & nzchar(tx$gene_id), , drop = FALSE]
 
 # Label each model by transcript_name where the annotation supplies one, falling
 # back to the identifier. Bambu writes no transcript_name at all, so novel isoforms
-# always fall back -- which is the desired result, since BambuTx101 is what you would
+# always fall back -- which is the desired result, since BambuTx is what you would
 # search the GTF for. The biotype rides along because it is the thing a reader most
 # wants to know about an isoform they have never seen before.
 display_name <- ifelse(!is.na(tx$transcript_name) & nzchar(tx$transcript_name),
@@ -443,7 +437,7 @@ if (nrow(novel_tx)) {
 # transcript does. Drawn on purpose so the report can show what a flagged call
 # looks like beside a clean one.
 FLAG_COLS <- c("qry_id", "ref_gene_id", "ref_gene_biotype", "class_code",
-               "strand", "reads_total", "reads_crossing_boundary",
+               "strand", "reads_total", "median_overrun_3p",
                "reads_with_host_junction")
 
 flagged <- data.frame()
@@ -473,10 +467,17 @@ if (!is.null(opt$context_flags) && file.exists(opt$context_flags)) {
       flagged$frac_host_junction  <- if ("frac_with_host_junction" %in% names(flagged)) {
         flagged$frac_with_host_junction
       } else frac(flagged$reads_with_host_junction)
-      flagged$frac_crossing       <- if ("frac_crossing_boundary" %in% names(flagged)) {
-        flagged$frac_crossing_boundary
-      } else frac(flagged$reads_crossing_boundary)
       flagged$frac_into_host_exon <- frac(flagged$reads_spliced_into_host_exon)
+
+      # The second sort key is now the median 3' overrun, a distance in bases, in
+      # place of the fraction of reads past a boundary margin. The margin was a
+      # guess and the fraction inherited it; the distance does not need one.
+      #
+      # 3' rather than 5': reverse transcription falls short at the 5' end, so 5'
+      # overrun is the noisier of the two and a poorer discriminator.
+      if (!"median_overrun_3p" %in% names(flagged)) {
+        flagged$median_overrun_3p <- NA_real_
+      }
 
       # A floor on read count, so 3-of-3 does not beat 1700-of-2147 on noise. Skipped
       # if it would empty the panel, which it would on a small test run.
@@ -484,7 +485,7 @@ if (!is.null(opt$context_flags) && file.exists(opt$context_flags)) {
       if (any(enough)) flagged <- flagged[enough, , drop = FALSE]
 
       flagged <- flagged[order(-flagged$frac_host_junction,
-                               -flagged$frac_crossing,
+                               -flagged$median_overrun_3p,
                                -flagged$reads_total,
                                flagged$qry_id), , drop = FALSE]
       flagged <- head(flagged, N_INTRONIC)
@@ -1253,14 +1254,18 @@ if (nrow(flagged)) {
       structure_gr = gene_structure(row$ref_gene_id),
       panel_tx     = panel_tx,
       title        = sprintf("%s in %s", row$qry_id, host_lab),
-      # Percentages, because the ranking is on fractions and a bare count invites the
+      # The overrun is a distance and reads as one; the junction figures stay
+      # percentages, because the ranking is on fractions and a bare count invites the
       # same misreading the ranking used to make. The host-exon figure is reported
       # separately: reads splicing into a host exon mean an unannotated exon of the
       # host, which is a finding rather than an artifact.
       subtitle     = sprintf(
-        "intronic, same strand as host (%s) | %d reads: %.0f%% cross a boundary, %.0f%% carry a host junction%s",
+        "sense intronic (%s) | %d reads: median 3' overrun %s bp, %.0f%% carry a host junction%s",
         ifelse(is.na(row$ref_gene_biotype), "unknown biotype", row$ref_gene_biotype),
-        row$reads_total, 100 * row$frac_crossing, 100 * row$frac_host_junction,
+        row$reads_total,
+        ifelse(is.na(row$median_overrun_3p), "n/a",
+               format(round(row$median_overrun_3p), big.mark = ",")),
+        100 * row$frac_host_junction,
         if (is.na(row$reads_spliced_into_host_exon)) "" else
           sprintf(", %.0f%% splice into a host exon", 100 * row$frac_into_host_exon)),
       out_png      = file.path(opt$outdir,
@@ -1272,8 +1277,8 @@ if (nrow(flagged)) {
   write.csv(flagged[, c("qry_id", "ref_gene_id", "ref_gene_name", "ref_gene_biotype",
                         "chrom", "start", "end", "win_s", "win_e", "strand",
                         "class_code", "num_exons", "reads_total",
-                        "reads_crossing_boundary", "reads_with_host_junction",
-                        "reads_spliced_into_host_exon", "frac_crossing",
+                        "median_overrun_3p", "reads_with_host_junction",
+                        "reads_spliced_into_host_exon",
                         "frac_host_junction", "frac_into_host_exon",
                         "figure")],
             file.path(opt$outdir, "intronic_context_candidates.csv"), row.names = FALSE)

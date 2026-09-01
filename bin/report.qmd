@@ -1958,45 +1958,68 @@ if (is.null(ctx_flags)) {
 ### Read-level evidence
 
 ```{r}
-#| label: fig-context-reads
-#| fig-cap: "**Fraction of supporting reads that run past a sense-intronic candidate's boundaries, and fraction carrying one of the host gene's splice junctions, split by routed category.** A discrete transcript sits near zero on both. Values near one mean the reads supporting the call belong to a longer molecule, most likely the host's unspliced precursor. Restricted to sense-intronic candidates, the only class for which these two measures carry meaning."
-#| fig-width: 12
-#| fig-height: 7
+#| label: fig-context-overrun
+#| fig-cap: "**How far the supporting reads run past each end of a sense-intronic candidate.** One point per candidate: the median distance, in bases, that its reads extend beyond its 5′ and 3′ boundary. A discrete transcript sits at zero on both — its reads stop where it stops. A fragment of the host's unspliced precursor has reads continuing into the surrounding intron, and shows as a large overrun. The axis is log-like but includes zero, which is where most candidates should sit."
+#| fig-width: 11
+#| fig-height: 6
 #| eval: !expr has_ctx_flags
 
-# Sense intronic only. These two measures answer one question -- could this model be
-# a fragment of its host's unspliced precursor -- and that question is only open for
-# a model inside a same-strand intron. An antisense model cannot come from the
-# host's precursor whatever its reads do, and for a model sharing splice structure
-# with the host, carrying the host's junctions is what its class code already says.
-# Plotted across all classes, the boxes for those classes invite a reading the
-# measurement does not support.
-reads_df <- ctx_flags %>%
+# The two ends are separated because they are not equivalent: reverse transcription
+# falls short at the 5' end while the poly(A) tail anchors the 3', so they have
+# different noise floors and pooling them hides that.
+overrun_df <- ctx_flags %>%
   filter(SENSE_INTRONIC_ROWS(.), reads_total > 0) %>%
-  select(novel_category, classification,
-         frac_crossing_boundary, frac_with_host_junction) %>%
-  pivot_longer(cols = c(frac_crossing_boundary, frac_with_host_junction),
-               names_to = "measure", values_to = "fraction") %>%
-  mutate(measure = recode(measure,
-    frac_crossing_boundary  = "reads crossing a boundary",
-    frac_with_host_junction = "reads carrying a host junction")) %>%
+  select(novel_category, median_overrun_5p, median_overrun_3p) %>%
+  pivot_longer(cols = c(median_overrun_5p, median_overrun_3p),
+               names_to = "end", values_to = "bases") %>%
+  filter(!is.na(bases)) %>%
+  mutate(end = recode(end,
+    median_overrun_5p = "5' end",
+    median_overrun_3p = "3' end")) %>%
   droplevels()
 
-ggplot(reads_df, aes(x = novel_category, y = fraction, fill = measure)) +
-  geom_boxplot() +
+ggplot(overrun_df, aes(x = novel_category, y = bases, fill = end)) +
+  geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3) +
+  scale_y_continuous(trans = COUNT_TRANS, breaks = COUNT_BREAKS,
+                     labels = scales::label_number(big.mark = ",")) +
   scale_fill_viridis_d(option = "viridis", begin = 0.25, end = 0.75) +
-  theme_width(12) +
-  labs(title = "Read-level evidence against sense-intronic candidates",
-       subtitle = "Higher is worse: the supporting reads do not stop where the transcript does",
-       x = NULL, y = "Fraction of supporting reads", fill = NULL) +
+  theme_width(11) +
+  labs(title = "Read overrun past the boundaries of sense-intronic candidates",
+       subtitle = "Median bases each candidate's reads extend beyond it; zero means the reads stop where it does",
+       x = NULL, y = "Median overrun (bases)", fill = NULL) +
   theme(legend.position = "top")
+```
+
+```{r}
+#| label: fig-context-junction
+#| fig-cap: "**Fraction of supporting reads carrying one of the host gene's splice junctions.** A read carrying a junction the candidate does not have came from the molecule that does — the host's own transcript. A discrete transcript sits near zero; values near one mean the support belongs to the host."
+#| fig-width: 9
+#| fig-height: 5
+#| eval: !expr has_ctx_flags
+
+junction_df <- ctx_flags %>%
+  filter(SENSE_INTRONIC_ROWS(.), reads_total > 0) %>%
+  select(novel_category, frac_with_host_junction) %>%
+  filter(!is.na(frac_with_host_junction)) %>%
+  droplevels()
+
+ggplot(junction_df, aes(x = novel_category, y = frac_with_host_junction,
+                        fill = novel_category)) +
+  geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3, show.legend = FALSE) +
+  scale_fill_viridis_d(option = "viridis", end = 0.85, guide = "none") +
+  theme_width(9) +
+  labs(title = "Supporting reads carrying a host splice junction",
+       subtitle = "Higher means more of the support belongs to the host rather than to the candidate",
+       x = NULL, y = "Fraction of supporting reads")
 ```
 
 ### Which warning signs occur together
 
 The figures above each show one signal at a time. What decides whether a candidate is worth distrusting is whether the signals **agree** — and that is a question about combinations, not about any single distribution.
 
-Each bar below is one exact combination of flags: mono-exonic, supported by reads that run past its boundaries, supported by reads carrying the host's junctions, and lacking full-length support. The transcripts to look at first are in the bar carrying all four at once — an unspliced model whose reads neither stop where it stops nor span it, and which carry junctions belonging to something else. That is the profile of a precursor fragment, and it is one bar you can point at rather than a conjunction assembled from four figures.
+Each bar below is one exact combination of flags: mono-exonic, most reads overrunning the 5′ end, most reads overrunning the 3′ end, reads carrying the host's junctions, and no full-length support. The transcripts to look at first are in the bar carrying all five at once — an unspliced model whose reads run past both of its ends, carry junctions belonging to something else, and never span it. That is the profile of a precursor fragment, and it is one bar you can point at rather than a conjunction assembled from several figures.
+
+The two overrun flags mean *the median read overruns at all* — more than half the supporting reads extend past that end by at least one base. A set has to be a yes or no, and that is the one boolean an overrun distance yields without a cutoff chosen in advance: the split sits at the median of the data. How far they overrun is the figure above; this only asks whether most of them do.
 
 **Restricted to sense-intronic candidates**, as above: two of these flags are host-relationship measures, and a model that is not inside a same-strand intron cannot be a fragment of that host's precursor whatever its reads do. Bars are stacked by the category each model was routed into.
 
@@ -2035,7 +2058,12 @@ if (!is.null(ctx_flags)) {
     dplyr::filter(SENSE_INTRONIC_ROWS(.)) %>%
     dplyr::mutate(
       `mono-exonic`                 = !is.na(exon) & exon == "mono-exonic",
-      `reads cross a boundary`      = reads_crossing_boundary > 0,
+      # "The median read overruns at all" -- more than half the supporting reads
+      # extend past that end by at least one base. A set has to be a yes/no, and
+      # this is the one boolean a distance yields without a chosen cutoff: the
+      # split is at the median of the data, not at a number picked in advance.
+      `most reads overrun 5'`       = !is.na(median_overrun_5p) & median_overrun_5p > 0,
+      `most reads overrun 3'`       = !is.na(median_overrun_3p) & median_overrun_3p > 0,
       `reads carry a host junction` = reads_with_host_junction > 0,
       `no full-length support`      = !(qry_id %in% fl_ids),
       novel_category                = droplevels(factor(novel_category))
@@ -2054,16 +2082,9 @@ has_evidence_sets <- !is.null(evidence_sets)
 #| fig-height: 6
 #| eval: !expr has_evidence_sets
 
-# One figure, stacked by routed category, rather than one figure per category.
-#
-# Every row is sense intronic after the filter above, so classification -- the old
-# fill -- now has a single level and would colour every bar identically. The routed
-# category is what still varies, and stacking on it answers the question the split
-# figures were being read for: of the candidates carrying this combination of
-# flags, which were called lncRNA and which were not.
 plot_upset(
   evidence_sets,
-  sets = c("mono-exonic", "reads cross a boundary",
+  sets = c("mono-exonic", "most reads overrun 5'", "most reads overrun 3'",
            "reads carry a host junction", "no full-length support"),
   fill_col = "novel_category",
   title    = "Structural warning signs among sense-intronic candidates",
@@ -2082,8 +2103,8 @@ plot_upset(
 # reading it here would index a column that does not exist, which is what the
 # "invalid argument type" error was.
 if (!is.null(evidence_sets)) {
-  flags <- c("reads cross a boundary", "reads carry a host junction",
-             "no full-length support")
+  flags <- c("most reads overrun 5'", "most reads overrun 3'",
+             "reads carry a host junction", "no full-length support")
   flags <- flags[flags %in% names(evidence_sets)]
 
   if (length(flags)) {
@@ -2337,19 +2358,26 @@ embed_figures(gc_flagged, "figure", "qry_id", function(r) {
   host <- ifelse(is.na(r$ref_gene_name) | !nzchar(r$ref_gene_name),
                  r$ref_gene_id, r$ref_gene_name)
   pct  <- function(x) if (is.null(x) || !length(x) || is.na(x)) NA_real_ else 100 * x
-  fc   <- pct(r$frac_crossing)
   fj   <- pct(r$frac_host_junction)
   fe   <- pct(r$frac_into_host_exon)
 
-  # Fractions, not counts, and for the same reason the selection ranks on fractions:
-  # a raw count of host-junction reads ranks by expression. Falls back to counts for
-  # a candidates table written before those columns existed.
-  ev <- if (is.na(fc) || is.na(fj)) {
-    sprintf("%d reads: %d cross a boundary, %d carry a host junction",
-            r$reads_total, r$reads_crossing_boundary, r$reads_with_host_junction)
+  # The overrun reads as a distance and the junction figures as fractions, which is
+  # what each one is. The junction fraction is a fraction for the same reason the
+  # selection ranks on one: a raw count of host-junction reads ranks by expression.
+  ov <- if (is.null(r$median_overrun_3p) || !length(r$median_overrun_3p) ||
+            is.na(r$median_overrun_3p)) {
+    "median 3' overrun not recorded"
   } else {
-    sprintf("%d reads: %.0f%% cross a boundary, %.0f%% carry a host junction%s",
-            r$reads_total, fc, fj,
+    sprintf("median 3' overrun %s bp",
+            format(round(r$median_overrun_3p), big.mark = ","))
+  }
+
+  ev <- if (is.na(fj)) {
+    sprintf("%d reads: %s, %d carry a host junction",
+            r$reads_total, ov, r$reads_with_host_junction)
+  } else {
+    sprintf("%d reads: %s, %.0f%% carry a host junction%s",
+            r$reads_total, ov, fj,
             if (is.na(fe)) "" else
               sprintf(", %.0f%% splice into a host exon", fe))
   }

@@ -48,7 +48,7 @@ process VALIDATE_NOVEL_CONTEXT {
 
     stub:
     """
-    printf 'qry_id,class_code,strand,ref_gene_id,ref_gene_biotype,ref_gene_strand,same_strand_as_host,reads_total,reads_same_strand,reads_crossing_boundary,reads_with_host_junction,reads_spliced_into_host_exon,frac_crossing_boundary,frac_with_host_junction\\n' > novel_context_flags.csv
+    printf 'qry_id,class_code,strand,ref_gene_id,ref_gene_biotype,ref_gene_strand,same_strand_as_host,reads_total,reads_same_strand,median_overrun_5p,q90_overrun_5p,median_overrun_3p,q90_overrun_3p,reads_with_host_junction,reads_spliced_into_host_exon,frac_with_host_junction\\n' > novel_context_flags.csv
     printf 'metric,value\\ncandidates_evaluated,0\\n' > novel_context_summary.csv
 
     cat <<-END_VERSIONS > versions.yml

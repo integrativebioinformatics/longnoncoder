@@ -1,24 +1,31 @@
 #!/usr/bin/env Rscript
 
-#' Structural evidence for novel transcripts, from the alignments they were built
-#' from.
+#' Structural evidence for sense-intronic novel transcripts, from the alignments
+#' they were built from.
 #'
-#' Two questions, both answered from structure alone so that neither needs a
-#' threshold tuned to a particular genome:
+#' One question: could this model be a fragment of its host's unspliced precursor
+#' rather than a transcript in its own right?
 #'
-#'   A  Is the novel transcript on the same strand as the gene whose intron it
-#'      lies in? On the opposite strand the host's pre-mRNA cannot explain it, so
-#'      the ambiguity does not arise.
+#' Only sense-intronic candidates are evaluated, because only for them is that
+#' question open. An antisense model cannot come from the host's precursor whatever
+#' its reads do, and for a model sharing splice structure with the host, carrying
+#' the host's junctions is what its class code already says. Measuring the rest and
+#' reporting it invites a reading the measurement does not support.
 #'
-#'   D  Do the reads supporting it stop where it stops, and do they carry the
-#'      host's splice junctions? A discrete transcript has reads ending at its
-#'      boundaries. A fragment of something longer has reads running straight
-#'      through, and reads that carry junctions the candidate does not have came
-#'      from the molecule that does.
+#' Two measurements:
 #'
-#' Nothing here is a verdict. Every output is a count or a flag, reported per
-#' transcript so that disagreement between the signals stays visible; collapsing
-#' them into one score would hide exactly the cases worth looking at.
+#'   Overrun    How far do supporting reads extend past the model's ends? A discrete
+#'              transcript has reads stopping at its boundaries; a fragment of
+#'              something longer has reads running straight through. Reported as the
+#'              distribution of distances, separately for the 5' and 3' end.
+#'
+#'   Junctions  Do supporting reads carry splice junctions belonging to the host
+#'              rather than to the candidate? A read that does came from the
+#'              molecule that has them.
+#'
+#' Nothing here is a verdict. Every output is a measurement reported per transcript
+#' so that disagreement between the signals stays visible; collapsing them into one
+#' score would hide exactly the cases worth looking at.
 
 suppressPackageStartupMessages({
     library(optparse)
@@ -36,9 +43,7 @@ option_list <- list(
                 help = "Reference annotation GTF", metavar = "character"),
     make_option(c("--bams"), type = "character", default = NULL,
                 help = "Comma-separated indexed BAM files", metavar = "character"),
-    make_option(c("--boundary_margin"), type = "integer", default = 25L,
-                help = "Bases a read must extend past a boundary to count as read-through [%default]"),
-    make_option(c("--junction_tolerance"), type = "integer", default = 5L,
+    make_option(c("--junction_tolerance"), type = "integer", default = 10L,
                 help = "Bases of slack when matching a read junction to a host intron [%default]")
 )
 
@@ -52,7 +57,6 @@ bam_files <- trimws(strsplit(opt$bams, ",", fixed = TRUE)[[1]])
 bam_files <- bam_files[nzchar(bam_files)]
 if (!length(bam_files)) stop("No BAM files supplied.", call. = FALSE)
 
-MARGIN    <- opt$boundary_margin
 TOLERANCE <- opt$junction_tolerance
 
 # ---------------------------------------------------------------------------
@@ -67,9 +71,10 @@ meta <- read.csv(opt$metadata, stringsAsFactors = FALSE)
 write_empty <- function() {
     cols <- c("qry_id", "class_code", "strand", "ref_gene_id", "ref_gene_biotype",
               "ref_gene_strand", "same_strand_as_host", "reads_total",
-              "reads_same_strand", "reads_crossing_boundary",
+              "reads_same_strand", "median_overrun_5p", "q90_overrun_5p",
+              "median_overrun_3p", "q90_overrun_3p",
               "reads_with_host_junction", "reads_spliced_into_host_exon",
-              "frac_crossing_boundary", "frac_with_host_junction")
+              "frac_with_host_junction")
     empty <- as.data.frame(setNames(replicate(length(cols), character(0), simplify = FALSE), cols))
     write.csv(empty, "novel_context_flags.csv", row.names = FALSE)
     write.csv(data.frame(metric = character(0), value = character(0)),
@@ -82,12 +87,8 @@ if (!nrow(meta)) {
     quit(save = "no", status = 0)
 }
 
-cand <- GRanges(
-    seqnames = meta$seqnames,
-    ranges   = IRanges(start = meta$start, end = meta$end),
-    strand   = meta$strand
-)
-names(cand) <- meta$qry_id
+# `cand` is built after the sense-intronic filter below, which needs the host
+# strand, which needs the annotation. Nothing between here and there uses it.
 
 # ---------------------------------------------------------------------------
 # Reference structure
@@ -133,19 +134,12 @@ match_seqlevels <- function(gr, target_levels) {
 }
 
 bam_levels <- names(scanBamHeader(bam_files[1])[[1]]$targets)
-cand       <- match_seqlevels(cand, bam_levels)
-
-if (!any(seqlevels(cand) %in% bam_levels)) {
-    stop("No sequence names shared between the candidates and the BAM header. ",
-         "The alignment and the annotation appear to use different references.",
-         call. = FALSE)
-}
 
 # ---------------------------------------------------------------------------
-# Test A -- strand versus host
+# Strand versus host, then restrict to sense intronic
 # ---------------------------------------------------------------------------
 
-cat("Test A: comparing candidate strand with host gene strand...\n")
+cat("Comparing candidate strand with host gene strand...\n")
 
 host_id     <- as.character(meta$ref_gene_id)
 host_id[is.na(host_id) | host_id == "-" | !nzchar(host_id)] <- NA_character_
@@ -160,19 +154,64 @@ host_strand[known] <- as.character(strand(host_gene[host_id[known]]))
 same_strand <- ifelse(is.na(host_strand), NA,
                       host_strand == as.character(meta$strand))
 
+# Sense intronic: inside a reference intron (class code i) and on that gene's own
+# strand. Everything else is dropped rather than measured, for the reason in the
+# header -- the precursor question these tests answer is not open for it.
+#
+# Derived from class_code and the strand comparison rather than from the
+# classification wording, so a change to the label does not silently change which
+# transcripts are evaluated.
+sense_intronic <- !is.na(meta$class_code) & meta$class_code == "i" &
+                  !is.na(same_strand) & same_strand
+
+cat(sprintf("%d of %d novel transcripts are sense intronic; the rest are not evaluated\n",
+            sum(sense_intronic), nrow(meta)))
+
+meta        <- meta[sense_intronic, , drop = FALSE]
+host_id     <- host_id[sense_intronic]
+host_strand <- host_strand[sense_intronic]
+same_strand <- same_strand[sense_intronic]
+
+if (!nrow(meta)) {
+    cat("No sense-intronic candidates to evaluate.\n")
+    write_empty()
+    quit(save = "no", status = 0)
+}
+
+cand <- GRanges(
+    seqnames = meta$seqnames,
+    ranges   = IRanges(start = meta$start, end = meta$end),
+    strand   = meta$strand
+)
+names(cand) <- meta$qry_id
+cand <- match_seqlevels(cand, bam_levels)
+
+if (!any(seqlevels(cand) %in% bam_levels)) {
+    stop("No sequence names shared between the candidates and the BAM header. ",
+         "The alignment and the annotation appear to use different references.",
+         call. = FALSE)
+}
+
 # ---------------------------------------------------------------------------
-# Test D -- boundary read-through and host junctions
+# Boundary overrun and host junctions
 # ---------------------------------------------------------------------------
 
-cat("Test D: querying alignments in", length(cand), "candidate regions across",
+cat("Querying alignments in", length(cand), "sense-intronic regions across",
     length(bam_files), "BAM file(s)...\n")
 
 n <- length(cand)
 reads_total        <- integer(n)
 reads_same_strand  <- integer(n)
-reads_crossing     <- integer(n)
 reads_host_junc    <- integer(n)
 reads_into_exon    <- integer(n)
+
+# Overruns are accumulated per read rather than summed, because a median cannot be
+# computed from a running total. One entry per (read, candidate) overlap; on the
+# sense-intronic subset that is a small fraction of what the full candidate set
+# would have produced.
+ov_ci <- integer(0)
+ov_5p <- integer(0)
+ov_3p <- integer(0)
 
 # Host introns and exons restricted to the candidates' hosts, in BAM naming.
 host_introns_flat <- unlist(host_introns, use.names = TRUE)
@@ -208,12 +247,23 @@ for (bam in bam_files) {
     on_strand <- as.character(strand(gr))[ri] == as.character(strand(cand))[ci]
     reads_same_strand <- reads_same_strand + tabulate(ci[on_strand], nbins = n)
 
-    # Boundary read-through: the read extends materially past either end of the
-    # candidate. MARGIN absorbs the few bases of soft-clip and alignment wobble
-    # that would otherwise make almost every read look like read-through.
-    crosses <- start(gr)[ri] < (start(cand)[ci] - MARGIN) |
-               end(gr)[ri]   > (end(cand)[ci]   + MARGIN)
-    reads_crossing <- reads_crossing + tabulate(ci[crosses], nbins = n)
+    # How far each read runs past each end of the candidate, in bases.
+    #
+    # Clamped at zero: a read that stops inside the candidate has not overrun it,
+    # and a negative distance would pull a median below zero and read as though the
+    # boundary had been respected by more than it was.
+    #
+    # Split by transcript orientation rather than by genomic left/right, because 5'
+    # and 3' overrun mean different things. Reverse transcription falls short at the
+    # 5' end and the poly(A) tail anchors the 3', so the two ends have different
+    # noise floors and pooling them hides that.
+    left_ov  <- pmax(0L, start(cand)[ci] - start(gr)[ri])
+    right_ov <- pmax(0L, end(gr)[ri]     - end(cand)[ci])
+    on_plus  <- as.character(strand(cand))[ci] != "-"
+
+    ov_ci <- c(ov_ci, ci)
+    ov_5p <- c(ov_5p, ifelse(on_plus, left_ov,  right_ov))
+    ov_3p <- c(ov_3p, ifelse(on_plus, right_ov, left_ov))
 
     # Junction tests. junctions() returns the N gaps of each read; a read with no
     # gaps contributes nothing to either test.
@@ -254,6 +304,31 @@ for (bam in bam_files) {
 
 safe_frac <- function(num, den) ifelse(den > 0, num / den, NA_real_)
 
+#' Summarise one overrun vector per candidate.
+#'
+#' The median says where the bulk of the reads stop. It is zero whenever most reads
+#' respect the boundary, which is the answer for a discrete transcript -- so the 90th
+#' percentile is reported beside it. A candidate where a third of the reads run
+#' through by a kilobase has a median of zero and a very large q90, and the median
+#' alone would hide it.
+#'
+#' NA where a candidate recovered no reads, which is a different statement from an
+#' overrun of zero.
+overrun_stats <- function(v) {
+    if (!length(ov_ci)) {
+        return(list(median = rep(NA_real_, n), q90 = rep(NA_real_, n)))
+    }
+    f <- factor(ov_ci, levels = seq_len(n))
+    list(
+        median = as.numeric(tapply(v, f, stats::median)),
+        q90    = as.numeric(tapply(v, f, function(x)
+                     stats::quantile(x, 0.9, names = FALSE, type = 7)))
+    )
+}
+
+ov5 <- overrun_stats(ov_5p)
+ov3 <- overrun_stats(ov_3p)
+
 flags <- data.frame(
     qry_id                       = meta$qry_id,
     class_code                   = meta$class_code,
@@ -264,45 +339,53 @@ flags <- data.frame(
     same_strand_as_host          = same_strand,
     reads_total                  = reads_total,
     reads_same_strand            = reads_same_strand,
-    reads_crossing_boundary      = reads_crossing,
+    median_overrun_5p            = ov5$median,
+    q90_overrun_5p               = ov5$q90,
+    median_overrun_3p            = ov3$median,
+    q90_overrun_3p               = ov3$q90,
     reads_with_host_junction     = reads_host_junc,
     reads_spliced_into_host_exon = reads_into_exon,
-    frac_crossing_boundary       = safe_frac(reads_crossing,  reads_total),
     frac_with_host_junction      = safe_frac(reads_host_junc, reads_total),
     stringsAsFactors             = FALSE
 )
 
 write.csv(flags, "novel_context_flags.csv", row.names = FALSE)
 
-# Summary for the report. Intronic same-strand candidates are the population the
-# whole test exists for, so they are counted separately from the rest.
-intronic_same <- flags$class_code == "i" & !is.na(flags$same_strand_as_host) &
-                 flags$same_strand_as_host
+# Summary for the report. Every row here is sense intronic by construction, so the
+# old same-strand and intronic breakdowns would all equal the total; the counts that
+# remain are the ones that still vary.
+#
+# The overrun quartiles describe the population rather than thresholding it: a run
+# where the median 3' overrun is a few bases across the board is a different result
+# from one where a quarter of candidates overrun by hundreds.
+with_reads <- flags$reads_total > 0
+
+q <- function(v, p) {
+    v <- v[with_reads & !is.na(v)]
+    if (!length(v)) return(NA_real_)
+    round(stats::quantile(v, p, names = FALSE, type = 7), 1)
+}
 
 summary_df <- data.frame(
     metric = c(
-        "candidates_evaluated",
-        "with_host_gene",
-        "same_strand_as_host",
-        "opposite_strand_to_host",
-        "intronic_same_strand",
-        "any_read_crossing_boundary",
+        "sense_intronic_evaluated",
+        "no_reads_recovered",
         "any_read_with_host_junction",
         "any_read_spliced_into_host_exon",
-        "intronic_same_strand_with_host_junction",
-        "no_reads_recovered"
+        "median_overrun_5p_q50",
+        "median_overrun_5p_q75",
+        "median_overrun_3p_q50",
+        "median_overrun_3p_q75"
     ),
     value = c(
         nrow(flags),
-        sum(!is.na(flags$same_strand_as_host)),
-        sum(flags$same_strand_as_host %in% TRUE),
-        sum(flags$same_strand_as_host %in% FALSE),
-        sum(intronic_same),
-        sum(flags$reads_crossing_boundary > 0),
+        sum(!with_reads),
         sum(flags$reads_with_host_junction > 0),
         sum(flags$reads_spliced_into_host_exon > 0),
-        sum(intronic_same & flags$reads_with_host_junction > 0),
-        sum(flags$reads_total == 0)
+        q(flags$median_overrun_5p, 0.50),
+        q(flags$median_overrun_5p, 0.75),
+        q(flags$median_overrun_3p, 0.50),
+        q(flags$median_overrun_3p, 0.75)
     ),
     stringsAsFactors = FALSE
 )

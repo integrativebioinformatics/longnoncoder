@@ -442,13 +442,28 @@ only on intronic candidates, where it is accurate.
 
 ### Reading `novel_context_flags.csv`
 
+Only **sense-intronic** candidates appear in this file. The question these columns
+answer — could this model be a fragment of its host's unspliced precursor — is only
+open for a model lying inside an intron of a gene on its own strand. An antisense
+model cannot come from the host's precursor whatever its reads do, and for a model
+sharing splice structure with the host, carrying the host's junctions is what its
+class code already says.
+
 | Column | Meaning |
 |--------------------------|----------------------------------------------|
-| `same_strand_as_host` | `TRUE` where the transcript shares its host gene's strand. Empty for intergenic transcripts, which have no host — this is deliberately distinct from `FALSE`. |
-| `reads_crossing_boundary` | Supporting reads extending past either end of the transcript. A discrete transcript has few; a fragment of a longer molecule has many. |
+| `same_strand_as_host` | `TRUE` throughout, since only sense-intronic candidates are evaluated. Retained so the file is self-describing. |
+| `median_overrun_5p` / `median_overrun_3p` | Median distance, in bases, that supporting reads extend past the transcript's 5′ and 3′ end. A discrete transcript sits near zero on both. Zero where most reads stop within the model. `NA` where no reads were recovered. |
+| `q90_overrun_5p` / `q90_overrun_3p` | The 90th percentile of the same distances. Reported beside the median because a candidate where a third of the reads run through by a kilobase has a median of zero — the median alone would hide it. |
 | `reads_with_host_junction` | Supporting reads carrying a splice junction belonging to the host gene. Evidence that the read came from the host, not from the candidate. |
 | `reads_spliced_into_host_exon` | Supporting reads spliced from the candidate into one of the host's exons. This is a **finding**, not an artifact: the candidate is most likely an unannotated exon of the host. |
-| `frac_*` | The corresponding count over `reads_total`. `NA` where no reads were recovered. |
+| `frac_with_host_junction` | The count over `reads_total`. `NA` where no reads were recovered. |
+
+Boundary overrun is reported as a **distance**, not as a count of reads past a
+cutoff. There is no principled cutoff to use: the tolerances published for SQANTI3
+(50 bp) and gffcompare (`-e`, 100 bp) compare one transcript *model* against
+another, where this compares a read against the model that was assembled *from*
+that read. Those are different quantities, and the second has no literature
+constant behind it.
 
 No transcript is removed on the basis of these columns. They are reported so that
 a count is never quoted without the evidence behind it.

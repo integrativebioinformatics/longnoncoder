@@ -68,14 +68,16 @@ output:
       pattern: "versions.yml"
 
 args:
-  - --boundary_margin:
-      description: |
-        Bases a read must extend past a transcript boundary before it counts as
-        read-through. Absorbs soft-clipping and alignment wobble, which would
-        otherwise make nearly every read look like read-through. Default 25.
   - --junction_tolerance:
       description: |
-        Slack when matching a read's junction to a host intron. Default 5.
+        Slack when matching a read's junction to a host intron, in bases. Default
+        10, which is the window within which minimap2's splice-site placement is
+        conventionally assessed, so it characterises the aligner's own precision
+        rather than a preference about what counts as a match.
+
+        This is the only tolerance the module takes. Boundary read-through is
+        reported as a distance per transcript rather than as a count of reads past
+        a cutoff, so no margin has to be chosen.
 
 authors:
   - "@borgessbarbara"
