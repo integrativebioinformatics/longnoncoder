@@ -647,9 +647,9 @@ if (!is.null(vsum)) {
   cat(knitr::kable(
     data.frame(
       Feature      = vsum$feature_type,
-      `Curated set`     = format(vsum$retained, big.mark = ","),
-      Total        = format(vsum$total, big.mark = ","),
-      `Recall %` = sprintf("%.1f%%", 100 * vsum$fraction_retained),
+      `Curated set`= format(vsum$retained, big.mark = ","),
+      Raw          = format(vsum$total, big.mark = ","),
+      `Recovery %` = sprintf("%.1f%%", 100 * vsum$fraction_retained),
       check.names  = FALSE
     ), format = "markdown"), sep = "\n")
 }
