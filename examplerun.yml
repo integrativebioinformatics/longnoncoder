@@ -151,12 +151,7 @@ ndr: null            # e.g. 0.2
 # determines what the pipeline's main output contains.
 #
 #   cpc2       default. No organism needed.
-#   rnamining  requires `organism` below. Currently under review -- see the warning
-#              the pipeline prints when you select it. On this pipeline's test data
-#              it called 86 of 100 GENCODE protein-coding transcripts non-coding,
-#              against 1 for CPC2. Kept selectable so earlier runs can be
-#              reproduced and so the cause can be investigated, not because the two
-#              are interchangeable.
+#   rnamining  requires `organism` below. 
 coding_potential_pred: "cpc2"
 
 # Scientific name of the organism, e.g. "Mus_musculus". Only used by RNAmining,
