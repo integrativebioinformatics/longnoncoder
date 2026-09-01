@@ -53,15 +53,7 @@ if (!length(lens)) {
 cat("Computing coverage for", basename(opt$bam), "over", length(lens), "contigs\n")
 
 # One contig at a time, via the index.
-#
-# The obvious call is coverage(bam) on the whole BamFile, and the earlier version
-# did exactly that on the reasoning that the *result* is a run-length encoded
-# RleList, so memory should track coverage changes rather than read count. That
-# reasoning was wrong about the wrong thing: the result is indeed compact, but
-# getting there materialises every alignment in the file first. On a genome-wide
-# ONT BAM that is tens of gigabytes of GAlignments before a single Rle exists,
-# and it OOM-killed the task.
-#
+
 # Reading through the index one contig at a time bounds peak memory to the largest
 # chromosome's alignments instead of the whole file, which for GRCh38 is chr1 --
 # roughly an eighth of the total. The per-contig Rle is appended to the result and
@@ -79,21 +71,6 @@ cov <- lapply(names(lens), function(chr) {
 })
 names(cov) <- names(lens)
 
-# compress = FALSE is required, not a preference.
-#
-# A CompressedRleList concatenates every element's runs into one vector addressed
-# by a 32-bit index, so the CUMULATIVE length of the list -- here the sum of all
-# contig lengths, i.e. the genome size -- must stay under 2^31 (~2.147 Gb). GRCh38
-# is ~3.1 Gb, so compressing a genome-wide track fails outright on any mammalian
-# assembly:
-#
-#   input of RleList() is too big for 'compress=TRUE' (the cumulated length of
-#   the list elements in the resulting CompressedRleList object would exceed 2^31)
-#
-# A SimpleRleList keeps each contig's Rle as its own object, so only a single
-# contig has to fit the 32-bit index -- and no chromosome in any assembly comes
-# close. The Rles are already run-length encoded either way, so this costs a small
-# amount of per-element overhead and nothing in the data itself.
 cov <- IRanges::RleList(cov, compress = FALSE)
 
 out_bw <- file.path(opt$outdir, paste0(prefix, ".bw"))
