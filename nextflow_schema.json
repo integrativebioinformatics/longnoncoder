@@ -127,11 +127,15 @@
         }
     ],
     "properties": {
-        "skip_qc": {
-            "type": "boolean"
+        "skip_nanocomp": {
+            "type": "string",
+            "pattern": "^\\s*(raw|rest|restrander|chopper|minimap2|all)(\\s*[,\\s]\\s*(raw|rest|restrander|chopper|minimap2|all))*\\s*$",
+            "description": "NanoComp reports to skip: raw, restrander, chopper, minimap2, or all. Comma-separated for more than one, e.g. 'raw,chopper'. Unset runs every report.",
+            "help_text": "Selects reports only, never the tools they describe: chopper still filters and Restrander still orients with their reports turned off. The restrander report exists only for ONT_cDNA libraries the pipeline has to orient itself."
         },
-        "skip_filtering": {
-            "type": "boolean"
+        "skip_chopper": {
+            "type": "boolean",
+            "description": "Skip filtering and trimming with chopper. Its NanoComp report goes with it; the other reports still run."
         },
         "minqual": {
             "type": "integer"
@@ -151,8 +155,13 @@
         "tailcrop": {
             "type": "number"
         },
-        "skip_alignment": {
-            "type": "boolean"
+        "skip_minimap2": {
+            "type": "boolean",
+            "description": "Skip alignment to the reference genome, and with it every stage that consumes alignments: Bambu, classification and the report."
+        },
+        "skip_bambu": {
+            "type": "boolean",
+            "description": "Skip transcriptome assembly with Bambu, and with it every stage that consumes its transcriptome: classification, metadata refinement and the report."
         },
         "reference": {
             "type": "string",
@@ -210,15 +219,13 @@
         "cigar_bam": {
             "type": "boolean"
         },
-        "skip_alignment_qc": {
-            "type": "boolean"
-        },
         "annotation": {
             "type": "string",
             "description": "GTF file for reference genome"
         },
         "skip_class": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Skip transcriptome characterisation: classification, metadata refinement and the report. Bambu still runs."
         },
         "coding_potential_pred": {
             "type": "string",

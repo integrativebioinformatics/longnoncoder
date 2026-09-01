@@ -43,8 +43,15 @@ workflow PULPOSEQ {
     ch_versions             = channel.empty()
     ch_multiqc_files        = channel.empty()
     ch_gtf_new_transcripts  = channel.empty()
-    def run_alignment       = !params.skip_alignment
-    def run_classification  = run_alignment && !params.skip_class
+
+    // The three structural skips are nested, because each stage consumes the last
+    // one's output: nothing downstream of minimap2 can run without alignments, and
+    // nothing downstream of Bambu can run without its transcriptome. Skipping a
+    // stage therefore skips everything after it -- there is no way to ask for the
+    // classification of a transcriptome that was never assembled.
+    def run_alignment       = !params.skip_minimap2
+    def run_bambu           = run_alignment && !params.skip_bambu
+    def run_classification  = run_bambu && !params.skip_class
 
     // What the user asserted about the reads on disk. ONT_DRS is native RNA and
     // PacBio is oriented upstream by lima, so both are stranded by construction;
@@ -70,6 +77,7 @@ workflow PULPOSEQ {
         declared_stranded
     )
     ch_reads_for_alignment = RESTRANDING.out.reads
+    ch_multiqc_files = ch_multiqc_files.mix(RESTRANDING.out.multiqc)
     ch_versions = ch_versions.mix(RESTRANDING.out.versions)
 
     //
@@ -79,15 +87,17 @@ workflow PULPOSEQ {
     // for filtering, so NanoComp still describes the input rather than the oriented
     // subset.
     //
-    if (!params.skip_qc) {
-        QC_FILT (
-            ch_samplesheet,
-            RESTRANDING.out.reads
-        )
-        ch_reads_for_alignment = QC_FILT.out.filt_reads
-        ch_multiqc_files = ch_multiqc_files.mix(QC_FILT.out.multiqc)
-        ch_versions = ch_versions.mix(QC_FILT.out.versions)
-    }
+    // Called unconditionally: reporting and filtering are gated separately inside,
+    // by --skip_nanocomp and --skip_chopper, so that turning the reports off does
+    // not also change which reads reach alignment.
+    //
+    QC_FILT (
+        ch_samplesheet,
+        RESTRANDING.out.reads
+    )
+    ch_reads_for_alignment = QC_FILT.out.filt_reads
+    ch_multiqc_files = ch_multiqc_files.mix(QC_FILT.out.multiqc)
+    ch_versions = ch_versions.mix(QC_FILT.out.versions)
 
     //
     // Run alignment workflow
@@ -95,9 +105,8 @@ workflow PULPOSEQ {
     if (run_alignment) {
         ALIGNMENT(ch_reads_for_alignment)
 
-        if (!params.skip_alignment_qc) {
-            ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT.out.multiqc)
-        }
+        // Empty when --skip_nanocomp drops the minimap2 report, so no gate here
+        ch_multiqc_files = ch_multiqc_files.mix(ALIGNMENT.out.multiqc)
         ch_versions = ch_versions.mix(ALIGNMENT.out.versions)
 
         //
@@ -111,7 +120,12 @@ workflow PULPOSEQ {
             file("${projectDir}/bin/bam_coverage.R", checkIfExists: true)
         )
         ch_versions = ch_versions.mix(BAM_COVERAGE.out.versions)
+    }
 
+    //
+    // Transcriptome assembly with Bambu
+    //
+    if (run_bambu) {
         TRANSCRIPT_RECONSTRUCTION (
             ALIGNMENT.out.bam,
             params.reference,

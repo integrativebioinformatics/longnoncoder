@@ -14,12 +14,19 @@ outdir: "/your/path/to/results"
 # ------------------------------------------------------------------------------
 #  Steps to skip
 # ------------------------------------------------------------------------------
-# Set to true to skip the corresponding stage, false to run it
-skip_qc: false            # raw-read QC, restranding and filtering
-skip_filtering: false     # chopper only; raw QC still runs
-skip_alignment: false
-skip_alignment_qc: false
+# Set to true to skip the corresponding stage, false to run it. Each of the three
+# stage skips also skips everything downstream of it, since every later stage
+# consumes the output of the one before.
+skip_chopper: false       # filtering and trimming; every NanoComp report still runs
+skip_minimap2: false      # alignment, and with it bambu, classification and the report
+skip_bambu: false         # transcriptome assembly, and with it classification and the report
 skip_class: false         # coding-potential prediction and novel transcript classification
+
+# NanoComp reports to skip, comma-separated: raw, restrander, chopper, minimap2, or
+# all. Leave unset (null) to run every report. This selects reports only -- chopper
+# still filters and Restrander still orients with their reports turned off.
+# Examples: 'minimap2'  |  'raw,chopper'  |  'rest,chopper'  |  'all'
+skip_nanocomp: null
 
 # ------------------------------------------------------------------------------
 #  Sequencing library

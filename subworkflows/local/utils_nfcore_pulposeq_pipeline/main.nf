@@ -141,22 +141,90 @@ workflow PIPELINE_COMPLETION {
 */
 
 //
+// Stages whose NanoComp report --skip_nanocomp turns off.
+//
+// One parameter rather than one boolean per stage: the four reports are the same
+// tool run at four points of the same pipeline, and what a run actually decides is
+// where read-level QC is worth its runtime. Returns the set of stage names to skip,
+// so call sites read as `if (!('raw' in nanocompSkips()))`.
+//
+// 'all' expands to every stage. Tokens may be separated by commas or whitespace,
+// and 'rest' is accepted for 'restrander' because it is how the stage is usually
+// spoken about and reads evenly next to 'raw' and 'chopper'.
+//
+def nanocompSkips() {
+    def stages = ['raw', 'restrander', 'chopper', 'minimap2']
+
+    def requested = nanocompSkipTokens()
+        .collect { token -> token == 'rest' ? 'restrander' : token }
+        .unique()
+
+    def unknown = requested - (stages + 'all')
+    if (unknown) {
+        error(
+            "--skip_nanocomp does not recognise ${unknown.collect { token -> "'${token}'" }.join(', ')}. " +
+            "Valid values are ${stages.join(', ')} and all, alone or comma-separated " +
+            "(for example --skip_nanocomp 'raw,chopper'). Leave it unset to run every report."
+        )
+    }
+
+    return (requested.contains('all') ? stages : requested) as Set
+}
+
+//
+// The raw tokens as the user wrote them, before 'all' is expanded. Only useful for
+// telling "they asked for this stage by name" from "they asked for everything".
+//
+def nanocompSkipTokens() {
+    return params.skip_nanocomp
+        ?.toString()
+        ?.toLowerCase()
+        ?.tokenize(', \t')
+        ?.findAll { token -> token } ?: []
+}
+
+//
+// Whether Restrander runs: ONT cDNA that the user has not declared oriented.
+//
+def restrandingActive() {
+    return params.library == 'ONT_cDNA' &&
+           params.stranded_library?.toString()?.toLowerCase() != 'true'
+}
+
+//
 // Check and validate pipeline parameters
 //
 def validateInputParameters() {
+    // NanoComp report selection. Parsed here as well as at the call sites so a typo
+    // fails at startup rather than hours in, where the only symptom would be a
+    // report quietly missing from the MultiQC page.
+    nanocompSkips()
+
+    if (nanocompSkipTokens().any { token -> token in ['rest', 'restrander'] } && !restrandingActive()) {
+        def why = params.library == 'ONT_cDNA'
+            ? "--stranded_library is true, so these reads are already oriented"
+            : "--library ${params.library} is always oriented"
+
+        log.warn(
+            "--skip_nanocomp names the restrander report, but restranding is not running: ${why}. " +
+            "That report only exists for ONT_cDNA reads the pipeline has to orient itself, so the " +
+            "token has no effect."
+        )
+    }
+
     // Alignment requires reference genome and annotation
-    if (!params.skip_alignment) {
+    if (!params.skip_minimap2) {
         if (!params.reference) {
-            error("--reference must be provided when alignment is not skipped (skip_alignment = false)")
+            error("--reference must be provided when alignment is not skipped (skip_minimap2 = false)")
         }
         if (!params.annotation) {
-            error("--annotation must be provided when alignment is not skipped (skip_alignment = false)")
+            error("--annotation must be provided when alignment is not skipped (skip_minimap2 = false)")
         }
 
         // Library type drives the minimap2 preset and Bambu strandedness
         def valid_libraries = ['ONT_cDNA', 'ONT_DRS', 'PacBio']
         if (!params.library) {
-            error("--library must be provided when alignment is not skipped (skip_alignment = false). Valid values: ${valid_libraries.join(', ')}")
+            error("--library must be provided when alignment is not skipped (skip_minimap2 = false). Valid values: ${valid_libraries.join(', ')}")
         }
         if (!(params.library in valid_libraries)) {
             error("--library '${params.library}' is not valid. Valid values: ${valid_libraries.join(', ')}")
@@ -222,8 +290,7 @@ def validateInputParameters() {
         // transcripts, depletes novel isoforms of known genes into the antisense
         // class, and bleeds reads between overlapping sense/antisense pairs. Such
         // reads are either oriented before they arrive or oriented here.
-        def restrand_active = params.library == 'ONT_cDNA' &&
-                              params.stranded_library?.toString()?.toLowerCase() != 'true'
+        def restrand_active = restrandingActive()
 
         if (restrand_active) {
             // The kit is deliberately not defaulted: the presets differ in their

@@ -16,11 +16,11 @@ outdir: "/full/path/to/pulposeq/test_data/results"
 # ------------------------------------------------------------------------------
 #  Steps to skip
 # ------------------------------------------------------------------------------
-skip_qc: false
-skip_filtering: false
-skip_alignment: false
-skip_alignment_qc: false
+skip_chopper: false
+skip_minimap2: false
+skip_bambu: false
 skip_class: false
+skip_nanocomp: null
 
 # ------------------------------------------------------------------------------
 #  Sequencing library

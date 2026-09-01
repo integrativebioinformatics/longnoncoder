@@ -104,8 +104,8 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 |----------------|--------------------------------------------------------|
 | `input` | Full path to the `samplesheet.csv` file |
 | `outdir` | Full path to the output directory where you want the results to be saved |
-| `skip_qc` | Skip entire QC process |
-| `skip_filtering` | Skip filtering with `chopper`, just perform `NanoComp` reporting |
+| `skip_nanocomp` | `NanoComp` reports to skip: `raw`, `restrander`, `chopper`, `minimap2` or `all`, comma-separated (see [below](#choosing-which-nanocomp-reports-to-run)) |
+| `skip_chopper` | Skip filtering and trimming with `chopper`; the reads reach alignment as they came out of restranding |
 | `minqual` | Minimum read average Phred-score quality cut-off |
 | `minlen` | Minimum read length (bp) |
 | `maxlen` | Maximum read length (bp), optional — leave unset for no upper limit |
@@ -113,8 +113,8 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `mingc` | Minimum GC content (%) |
 | `headcrop` | Cut `x` number of bases from the beginning of the reads |
 | `tailcrop` | Cut `y` number of bases from the end of the reads |
-| `skip_alignment` | Skip mapping/alignment to genome reference (runs MultiQC, then finishes pipeline execution) |
-| `skip_alignment_qc` | Skip mapping/alignment QC (might reduce resource usage and speed up execution when running large datasets) |
+| `skip_minimap2` | Skip mapping/alignment to genome reference, and with it every later stage (runs MultiQC, then finishes pipeline execution) |
+| `skip_bambu` | Skip transcriptome assembly with `bambu`, and with it classification, metadata refinement and the report |
 | `reference` | Full path to a reference genome `FASTA` file from Ensembl |
 | `annotation` | Full path to a reference annotation `GTF` file from Ensembl |
 | `library` | Sequencing library type: `ONT_cDNA`, `ONT_DRS` or `PacBio` |
@@ -123,9 +123,47 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `restrand_kit` | Sequencing kit whose primers Restrander should look for — **required** for unoriented ONT cDNA |
 | `restrand_config` | Optional custom Restrander configuration JSON; overrides `restrand_kit` |
 | `restrand_min_frac` | Minimum oriented fraction, per sample; below it the run stops (default `0.80`, minimum `0.5`) |
-| `skip_class` | Skip transcriptome characterization (runs MultiQC, then finishes pipeline execution) |
+| `skip_class` | Skip transcriptome characterization; `bambu` still runs (runs MultiQC, then finishes pipeline execution) |
 | `coding_potential_pred` | Coding-potential predictor: `cpc2` (default) or `rnamining` |
 | `organism` | Organism scientific name (e.g. `"Homo_sapiens"`). Required by `rnamining`, ignored by `cpc2` |
+
+### Choosing which NanoComp reports to run
+
+NanoComp runs at up to four points, and `skip_nanocomp` names the ones to drop.
+One parameter rather than a flag per report: they are the same tool answering the
+same question at four moments of the same run, and what a run actually decides is
+where read-level QC is worth its runtime.
+
+| Value | Report skipped | Runs on |
+|---|---|---|
+| unset (default) | none — all four run | |
+| `raw` | `NANOCOMP_RAW` | the reads as supplied |
+| `restrander` | `NANOCOMP_REST` | the oriented reads (only exists when restranding runs) |
+| `chopper` | `NANOCOMP_CHOPPER` | the filtered reads |
+| `minimap2` | `NANOCOMP_MINIMAP2` | the alignments |
+| `all` | all four | |
+
+Values combine, comma-separated — `'raw,chopper'`, `'rest,minimap2'`,
+`'raw,rest,chopper'`. `rest` is accepted as a synonym for `restrander`.
+
+```bash
+nextflow run integrativebioinformatics/pulposeq -profile docker --input samplesheet.csv --outdir results --skip_nanocomp 'raw,chopper'
+```
+
+Two things it deliberately does not do:
+
+- **It never turns off the tool being reported on.** `--skip_nanocomp chopper` still
+  filters; `--skip_nanocomp restrander` still orients. To skip the filtering itself,
+  use `skip_chopper`, and note that this takes its report with it — there is nothing
+  left to report on. Restranding has no skip at all (see
+  [Restranding ONT cDNA libraries](#restranding-ont-cdna-libraries)).
+- **It is not a resource dial in disguise.** `minimap2` is the report most worth
+  dropping on large runs, since it is the one that reads whole BAMs — see
+  [Measured resource requirements](#measured-resource-requirements) for the numbers.
+
+The `restrander` report exists only for ONT cDNA the pipeline has to orient itself.
+Naming it for a library that is already oriented is not an error — the run proceeds
+and logs a warning saying the token had nothing to act on.
 
 ### Coding potential
 
@@ -227,7 +265,7 @@ The result is that mono-exonic novel transcripts disappear almost entirely, and 
 
 Restranding is not optional for unoriented ONT cDNA. If the reads were already oriented outside the pipeline — with Pychopper, or with Restrander run before demultiplexing — declare that with `stranded_library: true` and the pipeline will trust it and skip this step.
 
-`--skip_qc` cannot be combined with unoriented ONT cDNA, since Restrander runs inside the QC subworkflow; the pipeline rejects that combination at startup rather than sending unoriented reads to an alignment that assumes otherwise.
+No skip reaches it. Restrander is its own subworkflow, ahead of both QC and filtering, so `--skip_chopper` and `--skip_nanocomp` leave it untouched: the first changes which reads are filtered, the second only which reports are drawn. `--skip_nanocomp restrander` drops the NanoComp report on the oriented reads and nothing else.
 
 #### Choosing a kit
 
@@ -527,7 +565,7 @@ Peak resident memory observed in real runs. Use these to judge whether a dataset
 | `CHOPPER` | 7.5 GB | ~8 GB | **54.7 GB** |
 | `MINIMAP2_ALIGN` | 16.3 GB (8 cpu) | 31.1 GB (20 cpu) | 56.1 GB (32 cpu) |
 | `NANOCOMP` | 1.8 GB | 1.2 GB | 33.4 GB |
-| `NANOCOMP_MAPPING` | 1.5 GB | 3.5 GB | 48.4 GB |
+| `NANOCOMP_MINIMAP2` | 1.5 GB | 3.5 GB | 48.4 GB |
 | `BAMBU` | 13.6 GB | 63.6 GB | **639.8 GB** |
 | metadata refinement | 0.9 GB | ~4 GB | 4.1 GB |
 | `RENDER_REPORT` | 1.0 GB | 1.3 GB | — |

@@ -2,7 +2,9 @@
 // MODULE: Restrander, from the local modules
 //
 
-include { RESTRANDER } from '../../modules/local/restrander/main'
+include { RESTRANDER                } from '../../modules/local/restrander/main'
+include { NANOCOMP as NANOCOMP_REST } from '../../modules/nf-core/nanocomp/main'
+include { nanocompSkips             } from './utils_nfcore_pulposeq_pipeline'
 
 /*
 ========================================================================================
@@ -38,8 +40,9 @@ def orientedFraction(stats_file) {
 //
 // It is not quality control and it is not filtering: it is the step that makes read
 // strand equal RNA strand, which everything downstream is built on. Keeping it
-// separate is what allows --skip_qc and --skip_filtering to remain freely usable
-// while leaving no route to an unoriented alignment.
+// separate is what allows --skip_chopper and --skip_nanocomp to remain freely usable
+// while leaving no route to an unoriented alignment. Neither turns Restrander off:
+// --skip_nanocomp restrander drops the report on its output, not the orientation.
 //
 // Ordering matters and is expressed by where this sits in the caller: Restrander
 // locates primers and polyA/polyT tails at the read ends, exactly the positions
@@ -51,9 +54,13 @@ workflow RESTRANDING {
     declared_stranded    // what the user asserted about the reads on disk
 
     main:
-    ch_versions = channel.empty()
-    ch_stats    = channel.empty()
-    ch_reads    = reads
+    ch_versions      = channel.empty()
+    ch_stats         = channel.empty()
+    ch_multiqc       = channel.empty()
+    ch_combined_rest = channel.empty()
+    ch_reads         = reads
+
+    def nanocomp_skips = nanocompSkips()
 
     if (params.library == 'ONT_cDNA' && !declared_stranded) {
 
@@ -107,6 +114,25 @@ workflow RESTRANDING {
                 rows.collect { row -> [ row[0] + [restrand_frac: row[2]], row[1] ] }
             }
 
+        // Read report on the oriented reads. Fed from the checked channel rather
+        // than RESTRANDER.out.reads directly, so a run that fails the orientation
+        // threshold stops without spending a NanoComp on reads it is about to
+        // reject. It sits between the raw and the Chopper reports: what changed
+        // here is which strand a read is on, not how many reads or how long they
+        // are, so a difference against the raw report is reads Restrander dropped.
+        if (!('restrander' in nanocomp_skips)) {
+
+            ch_reads
+                .collect { item -> item[1] }
+                .map { filelist -> [[id: "All"], filelist] }
+                .set { ch_combined_rest }
+
+            NANOCOMP_REST(ch_combined_rest)
+
+            ch_multiqc  = ch_multiqc.mix(NANOCOMP_REST.out.stats_txt.collect { item -> item[1] }.ifEmpty([]))
+            ch_versions = ch_versions.mix(NANOCOMP_REST.out.versions)
+        }
+
     } else {
         ch_reads = reads.map { meta, fastq -> [ meta + [restrand_frac: null], fastq ] }
     }
@@ -114,5 +140,6 @@ workflow RESTRANDING {
     emit:
     reads    = ch_reads
     stats    = ch_stats
+    multiqc  = ch_multiqc
     versions = ch_versions
 }
