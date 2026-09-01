@@ -511,8 +511,6 @@ bare_id <- function(x) sub("\\.[0-9]+$", "", as.character(x))
 
 ref_exons_by_gene   <- list()
 ref_introns_by_gene <- list()
-ref_span_s          <- numeric(0)
-ref_span_e          <- numeric(0)
 
 wanted_genes <- unique(c(
   if (nrow(cand))    unlist(strsplit(cand$panel_genes, ";")) else character(0),
@@ -535,13 +533,6 @@ if (length(wanted_genes) && !is.null(opt$annotation) && file.exists(opt$annotati
     g_r <- unlist(range(by_g), use.names = TRUE)
     g_r <- g_r[!duplicated(names(g_r))]
     ref_introns_by_gene <- as.list(GenomicRanges::psetdiff(g_r, ex_r[names(g_r)]))
-
-    # The gene's annotated extent, which decides which OTHER genes' transcripts
-    # belong in its panel. The drawing window is the gene padded by 5%, and that
-    # padding is enough to clip a neighbour: at AK5 it catches the start of ZZZ3,
-    # whose 18 isoforms then each claimed a row at the edge of the figure.
-    ref_span_s <- setNames(BiocGenerics::start(g_r), names(g_r))
-    ref_span_e <- setNames(BiocGenerics::end(g_r),   names(g_r))
   }
 }
 
@@ -637,12 +628,12 @@ windows <- c(
 # undetected form of something already annotated. That question cannot be put
 # without the annotation on the page.
 #
-# Every annotated transcript overlapping a drawn window is added, except those
-# already in the validated set, which are drawn from their own record. They keep
-# their real biotype colour, so the palette still says what they are, and carry
-# "not detected" in the label so they are never read as observed.
-MAX_ANNOTATED <- 40L
-
+# Annotated transcripts overlapping a drawn window are read in here, excluding any
+# already in the validated set, which are drawn from their own record. Which of them
+# a given panel actually draws is decided later, per panel, by whether a class code
+# points at them. They keep their real biotype colour, so the palette still says
+# what they are, and carry "not detected" in the label so they are never read as
+# observed.
 ref_draw_gr <- NULL
 if (length(windows) && !is.null(opt$annotation) && file.exists(opt$annotation)) {
   ref_all <- rtracklayer::import(opt$annotation,
@@ -701,24 +692,30 @@ if (length(windows) && !is.null(opt$annotation) && file.exists(opt$annotation)) 
 
 # Which transcripts each panel is meant to contain -- this set, not the window alone,
 # is what decides a panel's contents. Restricting it stops a neighbouring gene's
-# isoforms from crowding
-# out the ones the figure is about: a plain overlap query on one 84 kb window pulled in
-# five genes and 31 transcripts to draw a caption that promised eight.
+# isoforms from crowding out the ones the figure is about: a plain overlap query on
+# one 84 kb window pulled in five genes and 31 transcripts to draw a caption that
+# promised eight.
 draw_ids <- character(0)
-# What belongs in a panel is decided by the GENE, not by the window. The window is
-# the gene padded by 5%, and that padding reaches into whatever sits next door.
+
+# What belongs in a panel is decided by the GENE and by the class codes, not by the
+# window. The window is the gene padded by 5%, and that padding reaches into
+# whatever sits next door.
 #
 # Three things qualify:
 #
-#   own    every transcript of the panel's genes, detected or not
-#   mine   novel models classified against one of those genes. Bambu gives each
-#          intronic and antisense model its own gene id, so restricting to gene id
-#          alone hides the pile -- at AK5, four single-exon antisense models sit
-#          over one transcript, each in its own Bambu gene
-#   near   other genes' annotated transcripts lying inside the reference gene's
-#          own span. This is what puts AK5-AS1 on the page, an annotated antisense
-#          gene inside an AK5 intron, without admitting a neighbour the padding
-#          merely clips
+#   detected   every DETECTED transcript of the panel's genes
+#   mine       novel models classified against one of those genes. Bambu gives each
+#              intronic and antisense model its own gene id, so restricting to gene
+#              id alone hides the pile -- at AK5, four single-exon antisense models
+#              sit over one transcript, each in its own Bambu gene
+#   referenced annotated transcripts, of any gene, that one of this panel's novel
+#              models was classified against. Those are what a class code points
+#              at, so a reader can check the code against the picture
+#
+# Nothing else undetected is drawn. Admitting a neighbour's transcripts because
+# they fall inside the reference gene's span does not scale: at a 2 kb TEC locus
+# overlapped by a 40-isoform lincRNA, all 40 qualified and the panel drew 2
+# detected models beneath 40 undetected ones.
 #
 # Kept per panel rather than pooled, because a pooled set leaks between panels that
 # happen to overlap.
@@ -735,32 +732,25 @@ if (nrow(cand)) {
     mine <- tx$transcript_status %in% "novel" &
               (tx$ref_gene_id %in% row_genes | own)
 
-    # An undetected isoform of the panel's own gene earns a row only if gffcompare
-    # classified one of these novel models against it. Those are the transcripts a
-    # class code actually refers to -- AK5-202 for the four antisense models here.
-    # The rest add a row each while saying nothing the gene track above, which is
-    # already the gene's full annotated footprint, does not show.
+    # An undetected annotated transcript earns a row only when gffcompare
+    # classified one of this panel's novel models against it. Those are the
+    # transcripts a class code actually refers to, so a reader can check the code
+    # against the picture; everything else undetected adds a row while saying
+    # nothing the gene track above -- already the gene's full annotated footprint
+    # -- does not show.
+    #
+    # The rule applies to every gene, not only the panel's own. Admitting a
+    # neighbour's transcripts because they fall inside the reference gene's span
+    # does not scale: at a 2 kb TEC locus overlapped by a 40-isoform lincRNA, all
+    # 40 qualified and the panel drew 2 detected models under 40 undetected ones.
     ref_txids <- unique(tx$ref_transcript_id[in_win & mine])
     ref_txids <- bare_id(ref_txids[!is.na(ref_txids) & nzchar(ref_txids)])
 
-    keep_own <- own & (!tx$transcript_status %in% "annotated" |
-                       bare_id(tx$transcript_id) %in% ref_txids)
+    is_ann <- tx$transcript_status %in% "annotated"
+    keep   <- in_win & ((own & !is_ann) | mine |
+                        (is_ann & bare_id(tx$transcript_id) %in% ref_txids))
 
-    ids <- tx$transcript_id[in_win & (keep_own | mine)]
-
-    key <- bare_id(cand$gene_id[i])
-    if (key %in% names(ref_span_s)) {
-      near <- which(in_win & !own & tx$transcript_status %in% "annotated" &
-                    tx$end >= ref_span_s[[key]] & tx$start <= ref_span_e[[key]])
-      if (length(near)) {
-        # Ordered by position so the choice is deterministic rather than dependent
-        # on the order the annotation file happens to list them in.
-        near <- near[order(tx$start[near], tx$end[near], tx$transcript_id[near])]
-        ids  <- c(ids, tx$transcript_id[head(near, MAX_ANNOTATED)])
-      }
-    }
-
-    panel_ids[[i]] <- unique(ids[!is.na(ids)])
+    panel_ids[[i]] <- unique(tx$transcript_id[keep])
     draw_ids <- c(draw_ids, panel_ids[[i]])
   }
 }
@@ -781,30 +771,16 @@ if (nrow(flagged)) {
     mine <- tx$transcript_status %in% "novel" &
               (tx$ref_gene_id %in% flagged$ref_gene_id[i] | host)
 
-    # Same rule as the stratified panels: an undetected host isoform is drawn only
-    # where a novel model here was classified against it.
+    # Same rule as the stratified panels: an undetected annotated transcript is
+    # drawn only where a novel model in this panel was classified against it.
     ref_txids <- unique(tx$ref_transcript_id[in_win & mine])
     ref_txids <- bare_id(ref_txids[!is.na(ref_txids) & nzchar(ref_txids)])
 
-    keep_host <- host & (!tx$transcript_status %in% "annotated" |
-                         bare_id(tx$transcript_id) %in% ref_txids)
+    is_ann <- tx$transcript_status %in% "annotated"
+    keep   <- in_win & ((host & !is_ann) | mine |
+                        (is_ann & bare_id(tx$transcript_id) %in% ref_txids))
 
-    ids <- tx$transcript_id[in_win & (keep_host | mine)]
-
-    # Annotated transcripts inside the host's span matter more here than anywhere: a
-    # candidate sharing an intron with an annotated gene may BE that gene rather than
-    # a new one, and the panel exists to let a reader tell.
-    key <- bare_id(flagged$ref_gene_id[i])
-    if (key %in% names(ref_span_s)) {
-      near <- which(in_win & !host & tx$transcript_status %in% "annotated" &
-                    tx$end >= ref_span_s[[key]] & tx$start <= ref_span_e[[key]])
-      if (length(near)) {
-        near <- near[order(tx$start[near], tx$end[near], tx$transcript_id[near])]
-        ids  <- c(ids, tx$transcript_id[head(near, MAX_ANNOTATED)])
-      }
-    }
-
-    flagged_ids[[i]] <- unique(ids[!is.na(ids)])
+    flagged_ids[[i]] <- unique(tx$transcript_id[keep])
     draw_ids <- c(draw_ids, flagged_ids[[i]])
   }
 }
@@ -1180,13 +1156,9 @@ if (nrow(cand)) {
   for (i in seq_len(nrow(cand))) {
     row <- cand[i, ]
 
-    # The panel's own genes plus any novel model in the window. draw_ids already
-    # holds exactly that set, so a known neighbouring gene cannot crowd in -- one
-    # 84 kb window once pulled five genes and 31 transcripts into a panel whose
-    # caption promised eight -- while sibling novel models at the same locus stay.
     # The set chosen for this panel specifically. draw_ids is the pooled union used
-    # to size the shared TxDb, and filtering on it would let an overlapping panel's
-    # transcripts in.
+    # to size the shared TxDb; filtering on that instead would let an overlapping
+    # panel's transcripts in.
     panel_tx <- tx[tx$transcript_id %in% panel_ids[[i]], , drop = FALSE]
 
     # Counted from what is actually drawn, not from the genes the panel was built
