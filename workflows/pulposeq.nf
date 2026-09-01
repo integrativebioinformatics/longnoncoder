@@ -19,7 +19,7 @@ include { RENDER_REPORT                     } from '../modules/local/report/main
 include { RESTRANDING                       } from '../subworkflows/local/restranding'
 include { QC_FILT                           } from '../subworkflows/local/qc'
 include { ALIGNMENT                         } from '../subworkflows/local/alignment'
-include { TRANSCRIPT_RECONSTRUCTION         } from '../subworkflows/local/transcript_reconstruction'
+include { ASSEMBLY                          } from '../subworkflows/local/assembly'
 include { CLASSIFICATION                    } from '../subworkflows/local/classification'
 include { paramsSummaryMap                  } from 'plugin/nf-schema'
 include { paramsSummaryMultiqc              } from '../subworkflows/nf-core/utils_nfcore_pipeline'
@@ -126,16 +126,16 @@ workflow PULPOSEQ {
     // Transcriptome assembly with Bambu
     //
     if (run_bambu) {
-        TRANSCRIPT_RECONSTRUCTION (
+        ASSEMBLY (
             ALIGNMENT.out.bam,
             params.reference,
             params.annotation
         )
 
-        TRANSCRIPT_RECONSTRUCTION.out.gtf_new_transcripts
+        ASSEMBLY.out.gtf_new_transcripts
             .set { ch_gtf_new_transcripts }
 
-        ch_versions = ch_versions.mix(TRANSCRIPT_RECONSTRUCTION.out.versions)
+        ch_versions = ch_versions.mix(ASSEMBLY.out.versions)
     }
 
     if (run_classification) {
@@ -147,11 +147,11 @@ workflow PULPOSEQ {
         ch_versions = ch_versions.mix(CLASSIFICATION.out.versions)
 
         SUBSET_BAMBU_COUNTS (
-            TRANSCRIPT_RECONSTRUCTION.out.gene_counts,
-            TRANSCRIPT_RECONSTRUCTION.out.transcript_counts,
-            TRANSCRIPT_RECONSTRUCTION.out.CPM,
-            TRANSCRIPT_RECONSTRUCTION.out.full_length,
-            TRANSCRIPT_RECONSTRUCTION.out.unique_counts
+            ASSEMBLY.out.gene_counts,
+            ASSEMBLY.out.transcript_counts,
+            ASSEMBLY.out.CPM,
+            ASSEMBLY.out.full_length,
+            ASSEMBLY.out.unique_counts
         )
 
         NOVEL_TRANSCRIPTS (
@@ -194,7 +194,7 @@ workflow PULPOSEQ {
         KNOWN_TRANSCRIPTS (
             BAMBU_VALIDATE.out.counts_transcript_validated,
             BAMBU_VALIDATE.out.counts_gene_validated,
-            TRANSCRIPT_RECONSTRUCTION.out.gtf_all_transcripts,
+            ASSEMBLY.out.gtf_all_transcripts,
             params.annotation,
             file("${projectDir}/bin/known_transcripts.R", checkIfExists: true),
             file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
@@ -202,7 +202,7 @@ workflow PULPOSEQ {
         ch_versions = ch_versions.mix(KNOWN_TRANSCRIPTS.out.versions)
 
         SUBSET_BAMBU_GTF (
-            TRANSCRIPT_RECONSTRUCTION.out.gtf_all_transcripts,
+            ASSEMBLY.out.gtf_all_transcripts,
             BAMBU_VALIDATE.out.counts_transcript_validated,
             BAMBU_VALIDATE.out.full_length_counts_transcript_validated,
             BAMBU_VALIDATE.out.unique_counts_transcript_validated
@@ -243,8 +243,8 @@ workflow PULPOSEQ {
         // Regenerate the Bambu PCA and heatmaps from the validated transcriptome
         //
         POST_REFINEMENT (
-            TRANSCRIPT_RECONSTRUCTION.out.rds_transcript,
-            TRANSCRIPT_RECONSTRUCTION.out.rds_gene,
+            ASSEMBLY.out.rds_transcript,
+            ASSEMBLY.out.rds_gene,
             BAMBU_VALIDATE.out.counts_transcript_validated,
             BAMBU_VALIDATE.out.counts_gene_validated,
             file("${projectDir}/bin/post_refinement.R", checkIfExists: true)
@@ -271,15 +271,15 @@ workflow PULPOSEQ {
             GENOMIC_CONTEXT.out.figures.ifEmpty([]),
             GENOMIC_CONTEXT.out.intronic_candidates,
             GENOMIC_CONTEXT.out.intronic_figures.ifEmpty([]),
-            TRANSCRIPT_RECONSTRUCTION.out.pca,
-            TRANSCRIPT_RECONSTRUCTION.out.pca_grouped,
-            TRANSCRIPT_RECONSTRUCTION.out.h_gene,
-            TRANSCRIPT_RECONSTRUCTION.out.h_transcript,
+            ASSEMBLY.out.pca,
+            ASSEMBLY.out.pca_grouped,
+            ASSEMBLY.out.h_gene,
+            ASSEMBLY.out.h_transcript,
             POST_REFINEMENT.out.pca,
             POST_REFINEMENT.out.pca_grouped,
             POST_REFINEMENT.out.h_gene,
             POST_REFINEMENT.out.h_transcript,
-            TRANSCRIPT_RECONSTRUCTION.out.bambu_metrics,     // ← new
+            ASSEMBLY.out.bambu_metrics,     // ← new
             POST_REFINEMENT.out.validation_summary,          // ← new
             file("${projectDir}/bin/report.qmd", checkIfExists: true)
         )

@@ -1,6 +1,6 @@
 include { BAMBU } from '../../modules/local/bambu/main'
 
-workflow TRANSCRIPT_RECONSTRUCTION {
+workflow ASSEMBLY {
     take:
     bams
     reference
