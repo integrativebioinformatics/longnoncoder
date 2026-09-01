@@ -167,25 +167,14 @@ and logs a warning saying the token had nothing to act on.
 
 ### Coding potential
 
-Novel transcripts are sorted into `novel_lncRNA` and `novel_protein_coding` by a
+Novel transcripts are evaluated by a
 coding-potential call, so the predictor decides what the pipeline's main output
 contains.
 
 **`cpc2` is the default and needs no organism.**
 
 `rnamining` remains selectable and requires `organism`, which picks a per-organism
-model; the run stops rather than passing an empty one. It is kept so that earlier
-runs can be reproduced and the problem below can be investigated — not because the
-two are interchangeable.
-
-On this pipeline's own test data RNAmining called **86 of 100 GENCODE
-protein-coding transcripts non-coding**, against 1 for CPC2. Comparing the two over
-the same 1,570 novel transcripts, CPC2 reversed 80 of the 88 RNAmining had called
-coding, and 275 of the 1,482 it had called non-coding. An independent check agrees
-with CPC2: among the transcripts RNAmining called coding the median longest reading
-frame is 54 nt — a 17-residue peptide — while many it called non-coding carry full
-ORFs, one of them 3,594 nt covering 94% of its transcript. Selecting `rnamining`
-logs a warning to this effect.
+model; the run stops rather than passing an empty one. 
 
 Whichever runs, its output is published to `coding_potential/`, and every novel
 record carries a `coding_predictor` column naming the tool and a `coding_prob`

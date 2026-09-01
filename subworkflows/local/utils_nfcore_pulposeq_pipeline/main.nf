@@ -249,14 +249,6 @@ def validateInputParameters() {
         if (params.coding_potential_pred == 'cpc2' && params.organism) {
             log.warn("--organism is only used by RNAmining and will be ignored with --coding_potential_pred cpc2.")
         }
-        if (params.coding_potential_pred == 'rnamining') {
-            log.warn(
-                "RNAmining is under review: on this pipeline's test data it called 86 of 100 " +
-                "GENCODE protein-coding transcripts non-coding, and invalidated 80 of the 88 it " +
-                "had called coding. Prefer --coding_potential_pred cpc2 unless you are " +
-                "deliberately reproducing earlier results."
-            )
-        }
 
         // splice:hq is `splice` with -C5 -O6,24 -B4: it trusts the read, treating a
         // discrepancy as real biology rather than basecalling error. -k14 exists for
