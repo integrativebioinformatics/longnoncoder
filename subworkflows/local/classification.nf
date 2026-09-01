@@ -67,11 +67,7 @@ workflow CLASSIFICATION {
     // novel_transcripts.R reads either, keying on the header rather than on column
     // position.
     //
-    // CPC2 is the default. On this pipeline's own test data RNAmining called 86 of 100
-    // GENCODE protein-coding transcripts non-coding, against 1 for CPC2, and reversing
-    // the comparison it invalidated 80 of the 88 it had called coding. RNAmining is kept
-    // selectable rather than removed so that behaviour can be re-checked once the cause
-    // is understood -- it is a per-organism model and the fault may not be in the tool.
+    // CPC2 is the default. 
     //
     if (params.coding_potential_pred == 'rnamining') {
         RNAMINING(
