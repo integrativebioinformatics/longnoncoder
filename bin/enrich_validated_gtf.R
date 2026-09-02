@@ -218,17 +218,55 @@ add_gene_features <- function(gr) {
 
     combined <- c(spans, gr)
 
-    # Canonical GTF ordering: loci by position, and within a locus gene, then
-    # transcript, then exons. Without this every gene row would sit in one block at
-    # the head of the file -- still valid GTF, but it breaks the contiguity that
-    # readers streaming a locus at a time rely on.
+    # Canonical GTF ordering:
+    #
+    #   gene
+    #     transcript A
+    #       exons and CDS of A
+    #     transcript B
+    #       exons and CDS of B
+    #
+    # Sorting on type before anything transcript-specific does NOT give this. It
+    # gives the gene row, then every transcript of the gene, then every exon of
+    # every transcript -- valid GTF, but a reader cannot walk one isoform without
+    # scanning the whole locus, and the exons of A sit nowhere near A.
+    #
+    # bambu.R's reorder_gtf() solves the same problem with
+    # order(transcript_id, type == "transcript", decreasing = TRUE), which groups
+    # features under their transcript. That works on Bambu's output because it has
+    # no gene rows; here it would strand them, since a gene row has no
+    # transcript_id to sort on. Loci are keyed on gene_id instead, which every row
+    # carries, and transcripts run alphabetically within their gene.
+    #
+    # The full type list matters for annotations_final.gtf, which carries the
+    # reference's CDS, UTR and codon rows. A type missing from this vector matches
+    # NA, and NA sorts last, so those rows would be exiled to the end of each
+    # transcript instead of sitting with the exons they belong to.
+    GTF_TYPE_ORDER <- c("gene", "transcript", "exon", "CDS",
+                        "five_prime_utr", "three_prime_utr", "UTR",
+                        "start_codon", "stop_codon", "Selenocysteine")
+
+    # gene_id is the anchor, because it is the one identifier every row carries.
+    # transcript_id cannot do this job: gene rows have none, so sorting on it strands
+    # them at the end of the file, away from the gene they describe.
     key_gene   <- as.character(mcols(combined)$gene_id)
     gene_start <- start(spans)[match(key_gene, mcols(spans)$gene_id)]
-    type_rank  <- match(as.character(mcols(combined)$type),
-                        c("gene", "transcript", "exon"))
+
+    type_rank  <- match(as.character(mcols(combined)$type), GTF_TYPE_ORDER)
+    # Anything unlisted keeps a stable place after the known types rather than
+    # being scattered by NA.
+    type_rank[is.na(type_rank)] <- length(GTF_TYPE_ORDER) + 1L
+
+    # The empty string is what leads each locus with its gene row: it sorts before
+    # any real identifier, and it keeps NA out of order(), which given several keys
+    # can move any element carrying a missing value to the end whatever the earlier
+    # keys say.
+    key_tx <- as.character(mcols(combined)$transcript_id)
+    key_tx[is.na(key_tx)] <- ""
 
     combined <- combined[order(as.character(seqnames(combined)),
-                               gene_start, key_gene, type_rank, start(combined))]
+                               gene_start, key_gene,
+                               key_tx, type_rank, start(combined))]
 
     cat(sprintf("  added %d gene features\n", length(spans)))
     combined
@@ -269,5 +307,88 @@ cat("Enriching validated GTFs...\n")
 enrich(opt$annotations_gtf)
 enrich(opt$fulllength_gtf)
 enrich(opt$unique_gtf)
+
+# ---------------------------------------------------------------------------
+# annotations_final.gtf -- the plotting annotation
+# ---------------------------------------------------------------------------
+#
+# The same transcripts as the enriched validated GTF, but the KNOWN ones are taken
+# from the reference annotation with every feature type intact, rather than from
+# Bambu.
+#
+# Bambu emits transcript and exon rows only. A GTF built from those says where a
+# transcript is but not which part of it codes, and plotgardener's plotTranscripts
+# derives its thick-versus-thin rendering from the TxDb's CDS: with no CDS records
+# every model, coding or not, draws as one uniform box. Reading the known
+# transcripts from the reference restores CDS, UTR and codon features, so a
+# protein-coding isoform renders with its coding region distinguishable from its
+# untranslated ends.
+#
+# Novel transcripts keep their Bambu structure, because there is nothing else to
+# use: Bambu does not call ORFs, so a novel model has no CDS to draw. They render as
+# uniform boxes, which is the honest depiction -- the coding-potential prediction is
+# a statement about the sequence, not a claim about where a start codon sits.
+build_final_gtf <- function() {
+    if (is.null(opt$annotation) || !file.exists(opt$annotation)) {
+        cat("No reference annotation available; skipping annotations_final.gtf\n")
+        return(invisible(NULL))
+    }
+    if (is.null(opt$annotations_gtf) || !file.exists(basename(opt$annotations_gtf))) {
+        cat("No enriched validated GTF available; skipping annotations_final.gtf\n")
+        return(invisible(NULL))
+    }
+
+    # The enriched copy written above, not the input, so the novel rows already
+    # carry the pipeline's attributes.
+    validated <- import(basename(opt$annotations_gtf))
+    status    <- as.character(mcols(validated)$transcript_status)
+
+    novel_gr <- validated[!is.na(status) & status == "novel"]
+    known_id <- unique(as.character(
+        mcols(validated)$transcript_id[!is.na(status) & status == "known"]))
+    known_id <- known_id[!is.na(known_id)]
+
+    cat(sprintf("Building annotations_final.gtf: %d known transcripts from the reference, %d novel from Bambu\n",
+                length(known_id), length(unique(mcols(novel_gr)$transcript_id))))
+
+    # Every feature type, which is the point of reading the reference at all.
+    ref_all <- import(opt$annotation)
+    ref_tx  <- as.character(mcols(ref_all)$transcript_id)
+
+    # Matched on the bare identifier: Ensembl carries the version in a separate
+    # attribute and GENCODE inline, and the validated GTF can name either form.
+    keep     <- !is.na(ref_tx) & strip_version(ref_tx) %in% strip_version(known_id)
+    ref_keep <- ref_all[keep]
+
+    if (!length(ref_keep)) {
+        warning("No reference records matched the validated known transcripts; ",
+                "annotations_final.gtf will carry novel transcripts only.")
+    } else {
+        ref_keep <- annotate_gtf(ref_keep, attrs$key, as.list(attrs[attr_cols]))
+    }
+
+    # The two sources carry different attribute columns, so both are widened to the
+    # union before binding: c() on GRanges requires identical mcols.
+    harmonise <- function(gr, cols) {
+        for (nm in cols) {
+            if (!nm %in% colnames(mcols(gr))) mcols(gr)[[nm]] <- NA_character_
+        }
+        mcols(gr) <- mcols(gr)[, cols, drop = FALSE]
+        gr
+    }
+
+    cols  <- union(colnames(mcols(ref_keep)), colnames(mcols(novel_gr)))
+    final <- c(harmonise(ref_keep, cols), harmonise(novel_gr, cols))
+
+    final <- add_gene_features(final)
+    export(final, "annotations_final.gtf")
+
+    cat(sprintf("  wrote annotations_final.gtf (%d records; feature types: %s)\n",
+                length(final),
+                paste(sort(unique(as.character(mcols(final)$type))), collapse = ", ")))
+    invisible(NULL)
+}
+
+build_final_gtf()
 
 cat("Validated GTF enrichment completed successfully!\n")

@@ -187,7 +187,18 @@ if (length(sample_names) != length(bw_files)) {
 # --- Read the annotation once -------------------------------------------------
 
 cat("Reading validated annotation:", opt$gtf, "\n")
-gtf <- rtracklayer::import(opt$gtf, feature.type = c("transcript", "exon"))
+# CDS is read as well as exon, and that is what makes the isoform track legible.
+#
+# plotTranscripts renders a coding region thicker than its untranslated ends, and it
+# takes that from the TxDb's CDS. Given exon rows alone it has nothing to work from
+# and every model -- protein-coding or not -- draws as one uniform box. The known
+# transcripts in --gtf carry the reference's CDS for exactly this reason.
+#
+# Novel models have no CDS and cannot: Bambu does not call ORFs. They draw as
+# uniform boxes, which is the honest depiction, since the coding-potential
+# prediction is a statement about the sequence and not a claim about where a start
+# codon sits.
+gtf <- rtracklayer::import(opt$gtf, feature.type = c("transcript", "exon", "CDS"))
 md  <- S4Vectors::mcols(gtf)
 
 col_or_na <- function(name) {
@@ -637,8 +648,10 @@ windows <- c(
 # observed.
 ref_draw_gr <- NULL
 if (length(windows) && !is.null(opt$annotation) && file.exists(opt$annotation)) {
+  # CDS here too, so an undetected annotated transcript draws with the same
+  # thick-versus-thin structure as a detected one rather than as a flat bar.
   ref_all <- rtracklayer::import(opt$annotation,
-                                 feature.type = c("transcript", "exon"))
+                                 feature.type = c("transcript", "exon", "CDS"))
   ref_all <- IRanges::subsetByOverlaps(ref_all, windows)
 
   # Compared on the bare id: the validated GTF and the annotation can disagree on
@@ -793,10 +806,19 @@ draw_ids <- unique(draw_ids[!is.na(draw_ids)])
 minimal_gtf <- function(gr) {
   out <- GenomicRanges::granges(gr)
   m   <- S4Vectors::mcols(gr)
-  S4Vectors::mcols(out) <- S4Vectors::DataFrame(
+
+  # phase rides along wherever the source has it. It is the reading frame of a CDS
+  # row, and dropping it would export every CDS with a "." there. The drawing does
+  # not use it -- plotTranscripts needs the ranges, not the frame -- but a GTF whose
+  # CDS records have no phase is malformed, and makeTxDbFromGFF is entitled to say
+  # so. Cheaper to keep than to find out which Bioconductor release starts caring.
+  cols <- S4Vectors::DataFrame(
     type          = as.character(m$type),
     gene_id       = as.character(m$gene_id),
     transcript_id = as.character(m$transcript_id))
+  if ("phase" %in% colnames(m)) cols$phase <- m$phase
+
+  S4Vectors::mcols(out) <- cols
   out
 }
 

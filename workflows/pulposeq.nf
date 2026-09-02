@@ -230,8 +230,11 @@ workflow PULPOSEQ {
         // is the visual control -- a candidate flagged as host pre-mRNA should
         // look like it when drawn, and if it does not, the flag is wrong.
         //
+        // The final annotation, not the Bambu-derived one. Its known transcripts
+        // come from the reference with CDS and UTR features intact, which is what
+        // lets plotTranscripts draw a coding region thicker than its UTRs.
         GENOMIC_CONTEXT (
-            ENRICH_VALIDATED_GTF.out.annotations_validated_gtf,
+            ENRICH_VALIDATED_GTF.out.final_gtf,
             BAM_COVERAGE.out.bigwig.map { _meta, bw -> bw }.collect(),
             VALIDATE_NOVEL_CONTEXT.out.flags,
             params.annotation,

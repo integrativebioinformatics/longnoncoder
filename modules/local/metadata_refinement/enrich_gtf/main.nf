@@ -23,6 +23,9 @@ process ENRICH_VALIDATED_GTF {
     path "BambuOutput_annotations_validated.gtf"    , emit: annotations_validated_gtf
     path "BambuOutput_fullLength_validated.gtf"     , emit: fullLength_validated_gtf
     path "BambuOutput_uniquelyMapped_validated.gtf" , emit: uniquelyMapped_validated_gtf
+    // Known transcripts re-read from the reference with CDS and UTR intact, plus
+    // the novel models. This is what the genomic context figures are drawn from.
+    path "annotations_final.gtf"                    , emit: final_gtf
     path "versions.yml"                             , emit: versions
 
     when:
@@ -54,6 +57,7 @@ process ENRICH_VALIDATED_GTF {
     touch BambuOutput_annotations_validated.gtf
     touch BambuOutput_fullLength_validated.gtf
     touch BambuOutput_uniquelyMapped_validated.gtf
+    touch annotations_final.gtf
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
