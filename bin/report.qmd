@@ -645,14 +645,21 @@ cat(sprintf("**Novel discovery rate (NDR):** %s%s\n\n",
               " — selected automatically by Bambu" else " — set explicitly"))
 
 if (!is.null(vsum)) {
-  cat(knitr::kable(
-    data.frame(
-      Feature      = vsum$feature_type,
-      `Curated set`= format(vsum$retained, big.mark = ","),
-      Raw          = format(vsum$total, big.mark = ","),
-      `Recovery %` = sprintf("%.1f%%", 100 * vsum$fraction_retained),
-      check.names  = FALSE
-    ), format = "markdown"), sep = "\n")
+  vtab <- data.frame(
+    Feature      = vsum$feature_type,
+    `Curated set`= format(vsum$retained, big.mark = ","),
+    Expressed    = format(vsum$total, big.mark = ","),
+    `Recovery %` = sprintf("%.1f%%", 100 * vsum$fraction_retained),
+    check.names  = FALSE
+  )
+  if (!is.null(vsum$total_quantified)) {
+    vtab$Quantified <- format(vsum$total_quantified, big.mark = ",")
+  }
+  cat(knitr::kable(vtab, format = "markdown"), sep = "\n")
+  cat(paste("\n\nRecovery is measured against the expressed features: those with at least",
+            "one count in at least one sample. Features quantified against the extended",
+            "annotation but supported by no reads are outside the curation and are not",
+            "counted as losses.\n"))
 }
 cat("\n:::\n")
 ```

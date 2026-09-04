@@ -55,7 +55,7 @@ process POST_REFINEMENT {
     touch heatmap_transcript_validated.png
     touch se_multiSample_validated.rds
     touch seGene_multiSample_validated.rds
-    printf 'feature_type,retained,total,fraction_retained\\ntranscript,1,2,0.5\\ngene,1,2,0.5\\n' > validation_summary.csv
+    printf 'feature_type,retained,total,total_quantified,fraction_retained\\ntranscript,1,2,4,0.5\\ngene,1,2,4,0.5\\n' > validation_summary.csv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

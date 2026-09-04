@@ -84,7 +84,7 @@ subset_se <- function(object, ids, label) {
                  length(ids), label, label))
   }
 
-  cat(sprintf("Retained %d of %d %ss after validation filtering.\n",
+  cat(sprintf("Retained %d of %d quantified %ss after validation filtering.\n",
               n_keep, nrow(object), label))
 
   missing <- setdiff(ids, rownames(object))
@@ -99,13 +99,51 @@ subset_se <- function(object, ids, label) {
 se_filtered     <- subset_se(se, valid_tx_ids, "transcript")
 seGene_filtered <- subset_se(seGene, valid_gene_ids, "gene")
 
+# --- Identify the expressed features ----------------------------------------
+# Bambu quantifies against the extended annotation, so the raw objects carry a
+# row for every reference feature, including those with no reads in any sample.
+# Those rows are dropped by the zero-count filter in subset_bambu_counts.sh, so
+# measuring the yield against them would count the reference itself as a loss.
+# The denominator below is the same set that filter keeps: features with at
+# least one count in at least one sample.
+expressed_rows <- function(object, label) {
+  assay_names <- SummarizedExperiment::assayNames(object)
+  if (length(assay_names) == 0) {
+    stop(sprintf("The %s-level RDS object carries no assay to test for counts.", label))
+  }
+  counts_assay <- if ("counts" %in% assay_names) "counts" else assay_names[1]
+
+  totals <- rowSums(SummarizedExperiment::assay(object, counts_assay), na.rm = TRUE)
+  keep   <- totals > 0
+
+  cat(sprintf("%d of %d %ss carry at least one %s count in at least one sample.\n",
+              sum(keep), length(keep), label, counts_assay))
+  keep
+}
+
+tx_expressed   <- expressed_rows(se, "transcript")
+gene_expressed <- expressed_rows(seGene, "gene")
+
 # --- Record the validation yield as a result --------------------------------
 # A headline number for the run, so it is written as data rather than left to be
-# scraped back out of the console log.
+# scraped back out of the console log. Both the numerator and the denominator
+# are restricted to the expressed features.
+retained_expressed <- function(object, ids, expressed, label) {
+  keep <- rownames(object) %in% ids & expressed
+  silent <- sum(rownames(object) %in% ids & !expressed)
+  if (silent > 0) {
+    warning(sprintf(paste("%d validated %s IDs have no counts in any sample and were",
+                          "excluded from the validation summary."), silent, label))
+  }
+  sum(keep)
+}
+
 validation_summary <- data.frame(
-  feature_type = c("transcript", "gene"),
-  retained     = c(nrow(se_filtered), nrow(seGene_filtered)),
-  total        = c(nrow(se), nrow(seGene)),
+  feature_type    = c("transcript", "gene"),
+  retained        = c(retained_expressed(se, valid_tx_ids, tx_expressed, "transcript"),
+                      retained_expressed(seGene, valid_gene_ids, gene_expressed, "gene")),
+  total           = c(sum(tx_expressed), sum(gene_expressed)),
+  total_quantified = c(nrow(se), nrow(seGene)),
   stringsAsFactors = FALSE
 )
 validation_summary$fraction_retained <-
