@@ -231,24 +231,26 @@ if (!is.null(opt$counts)) {
         stop("No numeric sample columns found in ", opt$counts, call. = FALSE)
     }
 
-    # Both name sets descend from the same alignment files, so the basename
-    # without its extension is the expected match; the normalised comparison
-    # catches a difference in punctuation. Anything still unmatched stops the
-    # run, because guessing would measure one sample against another sample's
-    # counts and nothing in the output would show it.
-    normalise   <- function(x) gsub("[^a-z0-9]+", "", tolower(x))
-    col_for_bam <- match(bam_sample_names, sample_cols)
-    if (anyNA(col_for_bam)) {
-        gap <- is.na(col_for_bam)
-        col_for_bam[gap] <- match(normalise(bam_sample_names[gap]), normalise(sample_cols))
-    }
+    # Both name sets descend from the same alignment files, but not in the same
+    # form: Bambu names its columns after the file it read, extension included
+    # (H69_ONT.bam), where the BAM basename is compared here without one. Compare
+    # on a key that drops the extension and the punctuation from both sides.
+    # Anything still unmatched stops the run, because guessing would measure one
+    # sample against another sample's counts and nothing in the output would show
+    # it.
+    sample_key <- function(x)
+        gsub("[^a-z0-9]+", "", tolower(sub("\\.bam(\\.gz)?$", "", x, ignore.case = TRUE)))
+
+    col_for_bam <- match(sample_key(bam_sample_names), sample_key(sample_cols))
     if (anyNA(col_for_bam)) {
         # A suffix one side carries and the other does not, such as ".sorted".
-        # Accepted only where exactly one column is a prefix of the BAM name, so
-        # a set of samples sharing a stem is never resolved by guesswork.
-        norm_cols <- normalise(sample_cols)
+        # Accepted only where exactly one column matches on a prefix in either
+        # direction, so a set of samples sharing a stem is never resolved by
+        # guesswork.
+        col_keys <- sample_key(sample_cols)
         for (k in which(is.na(col_for_bam))) {
-            hit <- which(startsWith(normalise(bam_sample_names[k]), norm_cols))
+            bk  <- sample_key(bam_sample_names[k])
+            hit <- which(startsWith(bk, col_keys) | startsWith(col_keys, bk))
             if (length(hit) == 1L) col_for_bam[k] <- hit
         }
     }
