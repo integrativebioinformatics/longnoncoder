@@ -1858,6 +1858,8 @@ Strand relative to the reference gene is carried by the classification itself. F
 
 The read-level test asks whether the reads supporting a candidate stop where the candidate stops. Reads running past its boundaries, or carrying splice junctions that belong to the host rather than to the candidate, came from a longer molecule — most often the host's own **unspliced precursor**, the primary transcript before its introns are removed. A sense-intronic candidate is sequence-identical to part of that precursor, so position alone cannot separate the two; an antisense candidate cannot be explained that way at all. Hosts are frequently lncRNA genes rather than protein-coding ones — a lncRNA gene is transcribed by Pol II and spliced just as a protein-coding gene is — so the host biotype is reported alongside every candidate.
 
+Each candidate is measured **only in the samples where it was quantified**. Every sample carries reads over the same locus whether or not the model was called there, and those reads belong to the host; counting them would measure the host and report the result as the candidate's. A model supported in one sample and absent from the others is measured in that one sample, and the number of samples behind each figure is reported with it.
+
 ```{r}
 #| label: context-prep
 #| echo: false
@@ -2380,12 +2382,27 @@ embed_figures(gc_flagged, "figure", "qry_id", function(r) {
             format(round(r$median_overrun_3p), big.mark = ","))
   }
 
+  # Reads are counted only in the samples that quantified the candidate, so the
+  # caption says how many those were.
+  scope <- if (is.null(r$samples_quantified) || !length(r$samples_quantified) ||
+               is.na(r$samples_quantified)) "" else {
+    # Named where there are few enough to read; the panel marks them in bold
+    # either way. Coverage is drawn for every sample regardless.
+    who <- if (is.null(r$quantified_samples) || !length(r$quantified_samples) ||
+               is.na(r$quantified_samples) || !nzchar(r$quantified_samples)) "" else {
+      nm <- trimws(strsplit(r$quantified_samples, ";", fixed = TRUE)[[1]])
+      if (length(nm) && length(nm) <= 4) sprintf(" (%s)", paste(nm, collapse = ", ")) else ""
+    }
+    sprintf(" in the %d of %d samples that quantified it%s",
+            r$samples_quantified, r$samples_total, who)
+  }
+
   ev <- if (is.na(fj)) {
-    sprintf("%d reads: %s, %d carry a host junction",
-            r$reads_total, ov, r$reads_with_host_junction)
+    sprintf("%d reads%s: %s, %d carry a host junction",
+            r$reads_total, scope, ov, r$reads_with_host_junction)
   } else {
-    sprintf("%d reads: %s, %.0f%% carry a host junction%s",
-            r$reads_total, ov, fj,
+    sprintf("%d reads%s: %s, %.0f%% carry a host junction%s",
+            r$reads_total, scope, ov, fj,
             if (is.na(fe)) "" else
               sprintf(", %.0f%% splice into a host exon", fe))
   }

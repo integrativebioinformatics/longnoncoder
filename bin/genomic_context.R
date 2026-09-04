@@ -490,6 +490,17 @@ if (!is.null(opt$context_flags) && file.exists(opt$context_flags)) {
         flagged$median_overrun_3p <- NA_real_
       }
 
+      # Read counts are taken over the samples that quantified the candidate, so
+      # the panel says which samples they came from. Absent in an older flags
+      # table, in which case the subtitle simply omits the scope.
+      if (!all(c("samples_quantified", "samples_total") %in% names(flagged))) {
+        flagged$samples_quantified <- NA_integer_
+        flagged$samples_total      <- NA_integer_
+      }
+      if (!"quantified_samples" %in% names(flagged)) {
+        flagged$quantified_samples <- NA_character_
+      }
+
       # A floor on read count, so 3-of-3 does not beat 1700-of-2147 on noise. Skipped
       # if it would empty the panel, which it would on a small test run.
       enough <- flagged$reads_total >= MIN_READS_FOR_FRAC
@@ -964,8 +975,14 @@ draw_ideogram <- function(chrom, win_s, win_e, chrom_len,
 #' @param structure_gr GRanges drawn as the single "gene" row above the isoforms
 #' @param panel_tx     rows of `tx` this panel will draw; sizes the track and supplies
 #'                     the biotype each model is coloured by
+#' @param quantified   sample names that quantified the candidate this panel is about,
+#'                     or NULL. Every sample's coverage is drawn either way -- seeing
+#'                     the locus in the samples that did not call the model is the
+#'                     point of the figure -- but the ones behind the read-level
+#'                     numbers in the subtitle are named in bold.
 draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
-                       title, subtitle, out_png, structure_label = "gene") {
+                       title, subtitle, out_png, structure_label = "gene",
+                       quantified = NULL) {
 
   # A shared y range across samples, so track heights compare directly instead of
   # each being rescaled to its own maximum.
@@ -1117,6 +1134,17 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
   }
 
   y <- y + tx_h + gap
+
+  # Matched on the normalised name, because one side of the pair is a bigWig
+  # basename and the other a BAM basename. Both descend from the same sample, but
+  # only after the pipeline has renamed the file twice.
+  norm <- function(x) gsub("[^a-z0-9]+", "", tolower(x))
+  is_quant <- if (is.null(quantified) || !length(quantified)) {
+    rep(NA, length(bw_files))
+  } else {
+    norm(sample_names) %in% norm(quantified)
+  }
+
   for (i in seq_along(bw_files)) {
     # Scale and sample name in a band above the trace rather than inside it.
     # plotSignal's own scale = TRUE / label = draw both over the plotting area, where a
@@ -1130,8 +1158,14 @@ draw_panel <- function(chrom, win_s, win_e, structure_gr, panel_tx,
                                                       trim = TRUE)),
              x = margin, y = y, just = c("left", "top"),
              fontsize = 7, fontcolor = "grey35", default.units = "inches")
+    # Bold and black where the sample quantified the candidate, grey where it did
+    # not. The trace itself is drawn identically in both, so the comparison the
+    # figure exists to support is unaffected.
     plotText(label = sample_names[i], x = margin + track_w, y = y,
-             just = c("right", "top"), fontsize = 8, default.units = "inches")
+             just = c("right", "top"), fontsize = 8,
+             fontface  = if (isTRUE(is_quant[i])) "bold" else "plain",
+             fontcolor = if (isFALSE(is_quant[i])) "grey55" else "#1A1A1A",
+             default.units = "inches")
     plotSignal(
       params = pars, data = bw_files[i],
       y = y + sig_lab_h, height = sig_h,
@@ -1282,9 +1316,12 @@ if (nrow(flagged)) {
       # separately: reads splicing into a host exon mean an unannotated exon of the
       # host, which is a finding rather than an artifact.
       subtitle     = sprintf(
-        "sense intronic (%s) | %d reads: median 3' overrun %s bp, %.0f%% carry a host junction%s",
+        "sense intronic (%s) | %d reads%s: median 3' overrun %s bp, %.0f%% carry a host junction%s",
         ifelse(is.na(row$ref_gene_biotype), "unknown biotype", row$ref_gene_biotype),
         row$reads_total,
+        if (is.na(row$samples_quantified)) "" else
+          sprintf(" in the %d of %d samples that quantified it (named in bold)",
+                  row$samples_quantified, row$samples_total),
         ifelse(is.na(row$median_overrun_3p), "n/a",
                format(round(row$median_overrun_3p), big.mark = ",")),
         100 * row$frac_host_junction,
@@ -1292,13 +1329,18 @@ if (nrow(flagged)) {
           sprintf(", %.0f%% splice into a host exon", 100 * row$frac_into_host_exon)),
       out_png      = file.path(opt$outdir,
                                sprintf("intronic_context_%s.png", row$qry_id)),
-      structure_label = "host"
+      structure_label = "host",
+      quantified   = if (is.na(row$quantified_samples) ||
+                         !nzchar(row$quantified_samples)) NULL else
+                       trimws(strsplit(row$quantified_samples, ";", fixed = TRUE)[[1]])
     )
   }
 
   write.csv(flagged[, c("qry_id", "ref_gene_id", "ref_gene_name", "ref_gene_biotype",
                         "chrom", "start", "end", "win_s", "win_e", "strand",
-                        "class_code", "num_exons", "reads_total",
+                        "class_code", "num_exons",
+                        "samples_quantified", "samples_total",
+                        "quantified_samples", "reads_total",
                         "median_overrun_3p", "reads_with_host_junction",
                         "reads_spliced_into_host_exon",
                         "frac_host_junction", "frac_into_host_exon",

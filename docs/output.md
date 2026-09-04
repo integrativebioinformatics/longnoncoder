@@ -345,7 +345,7 @@ With `rnamining`:
 | `novel_transcripts.gtf` | GTF file containing only the validated set of novel isoform candidates. |
 | `novel_non_coding_metadata.csv` | Metadata table for models predicted non-coding that share splice structure with a reference gene which is not an lncRNA. |
 | `novel_non_coding.gtf` | GTF file for the same set, with `transcript_biotype "novel_non_coding"`. |
-| `novel_context_flags.csv` | Structural evidence per novel transcript: the reference gene, its biotype and strand, `same_strand_as_host`, and the read counts behind the boundary and junction tests. |
+| `novel_context_flags.csv` | Structural evidence per novel transcript: the reference gene, its biotype and strand, `same_strand_as_host`, how many samples quantified the transcript, and the read counts behind the boundary and junction tests. |
 | `novel_context_summary.csv` | Aggregate counts from the same tests, as rendered in the report. |
 
 ### Which class codes become candidates
@@ -449,9 +449,22 @@ model cannot come from the host's precursor whatever its reads do, and for a mod
 sharing splice structure with the host, carrying the host's junctions is what its
 class code already says.
 
+Reads are counted **only in the samples where the candidate was quantified**. Every
+sample carries reads over the same locus whether or not the model was called there,
+and in a sample that did not call it those reads are the host's; pooling them in
+would measure the host and report the number as the candidate's. A model supported
+in one sample and absent from the rest is measured in that one sample.
+
+The genomic context panels still draw **every** sample's coverage over the locus.
+Seeing what the locus looks like in the samples that did not call the model is the
+point of the figure; the samples the numbers came from are named in bold.
+
 | Column | Meaning |
 |--------------------------|----------------------------------------------|
 | `same_strand_as_host` | `TRUE` throughout, since only sense-intronic candidates are evaluated. Retained so the file is self-describing. |
+| `samples_quantified` / `samples_total` | How many samples carry a non-zero count for this transcript, and how many were sequenced. Every read count in the row is over those samples. |
+| `quantified_samples` | Which samples those are, semicolon-separated. The genomic context panel names them in bold beside their coverage tracks. |
+| `reads_total` | Supporting reads over the candidate, in the quantified samples. Zero where the candidate was quantified in no sample. |
 | `median_overrun_5p` / `median_overrun_3p` | Median distance, in bases, that supporting reads extend past the transcript's 5′ and 3′ end. A discrete transcript sits near zero on both. Zero where most reads stop within the model. `NA` where no reads were recovered. |
 | `q90_overrun_5p` / `q90_overrun_3p` | The 90th percentile of the same distances. Reported beside the median because a candidate where a third of the reads run through by a kilobase has a median of zero — the median alone would hide it. |
 | `reads_with_host_junction` | Supporting reads carrying a splice junction belonging to the host gene. Evidence that the read came from the host, not from the candidate. |

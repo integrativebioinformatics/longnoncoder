@@ -176,6 +176,7 @@ workflow PULPOSEQ {
         VALIDATE_NOVEL_CONTEXT (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             params.annotation,
+            SUBSET_BAMBU_COUNTS.out.counts_transcript_subset,
             ALIGNMENT.out.bam.map { _meta, bam -> bam }.collect(),
             ALIGNMENT.out.index.map { _meta, bai -> bai }.collect(),
             file("${projectDir}/bin/validate_novel_context.R", checkIfExists: true)

@@ -9,6 +9,10 @@ process VALIDATE_NOVEL_CONTEXT {
     input:
     path metadata
     path annotation
+    // Per-sample transcript counts. Each candidate is measured only in the
+    // samples that quantified it, so the reads of a sample where the model was
+    // not called cannot be counted against it.
+    path counts
     path bams  , stageAs: 'alignments/*'
     path bais  , stageAs: 'alignments/*'
     path r_script
@@ -32,6 +36,7 @@ process VALIDATE_NOVEL_CONTEXT {
     Rscript $r_script \\
         --metadata ${metadata} \\
         --annotation ${annotation} \\
+        --counts ${counts} \\
         --bams "\$bam_list" \\
         $args
 
@@ -48,7 +53,7 @@ process VALIDATE_NOVEL_CONTEXT {
 
     stub:
     """
-    printf 'qry_id,class_code,strand,ref_gene_id,ref_gene_biotype,ref_gene_strand,same_strand_as_host,reads_total,reads_same_strand,median_overrun_5p,q90_overrun_5p,median_overrun_3p,q90_overrun_3p,reads_with_host_junction,reads_spliced_into_host_exon,frac_with_host_junction\\n' > novel_context_flags.csv
+    printf 'qry_id,class_code,strand,ref_gene_id,ref_gene_biotype,ref_gene_strand,same_strand_as_host,samples_quantified,samples_total,quantified_samples,reads_total,reads_same_strand,median_overrun_5p,q90_overrun_5p,median_overrun_3p,q90_overrun_3p,reads_with_host_junction,reads_spliced_into_host_exon,frac_with_host_junction\\n' > novel_context_flags.csv
     printf 'metric,value\\ncandidates_evaluated,0\\n' > novel_context_summary.csv
 
     cat <<-END_VERSIONS > versions.yml

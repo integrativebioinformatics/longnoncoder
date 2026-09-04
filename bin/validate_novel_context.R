@@ -23,6 +23,12 @@
 #'              rather than to the candidate? A read that does came from the
 #'              molecule that has them.
 #'
+#' Both measurements are taken only in the samples where the candidate was actually
+#' quantified. A sample in which the transcript received no counts still contains
+#' reads over the same locus -- the host's own -- and pooling those in would measure
+#' the host and attribute the result to the candidate. A model that stands alone in
+#' one sample and is absent from the rest is a real outcome, not a flagged one.
+#'
 #' Nothing here is a verdict. Every output is a measurement reported per transcript
 #' so that disagreement between the signals stays visible; collapsing them into one
 #' score would hide exactly the cases worth looking at.
@@ -43,6 +49,11 @@ option_list <- list(
                 help = "Reference annotation GTF", metavar = "character"),
     make_option(c("--bams"), type = "character", default = NULL,
                 help = "Comma-separated indexed BAM files", metavar = "character"),
+    make_option(c("--counts"), type = "character", default = NULL,
+                help = paste("Transcript counts matrix (TXNAME, GENEID, one column per sample).",
+                             "Each candidate is measured only in the samples where it carries a",
+                             "count. Omitted, every BAM is measured for every candidate."),
+                metavar = "character"),
     make_option(c("--junction_tolerance"), type = "integer", default = 10L,
                 help = "Bases of slack when matching a read junction to a host intron [%default]")
 )
@@ -70,7 +81,9 @@ meta <- read.csv(opt$metadata, stringsAsFactors = FALSE)
 # annotation. Write the empty outputs and stop rather than failing the run.
 write_empty <- function() {
     cols <- c("qry_id", "class_code", "strand", "ref_gene_id", "ref_gene_biotype",
-              "ref_gene_strand", "same_strand_as_host", "reads_total",
+              "ref_gene_strand", "same_strand_as_host",
+              "samples_quantified", "samples_total", "quantified_samples",
+              "reads_total",
               "reads_same_strand", "median_overrun_5p", "q90_overrun_5p",
               "median_overrun_3p", "q90_overrun_3p",
               "reads_with_host_junction", "reads_spliced_into_host_exon",
@@ -193,6 +206,91 @@ if (!any(seqlevels(cand) %in% bam_levels)) {
 }
 
 # ---------------------------------------------------------------------------
+# Which samples quantified each candidate
+# ---------------------------------------------------------------------------
+
+# Candidate x sample. TRUE where the transcript carries a count in that sample,
+# and so where its reads there are the reads it was built from. Without a counts
+# matrix every sample is measured, which is the behaviour of a standalone run.
+bam_sample_names <- sub("\\.bam$", "", basename(bam_files), ignore.case = TRUE)
+
+quantified <- matrix(TRUE, nrow = length(cand), ncol = length(bam_files),
+                     dimnames = list(meta$qry_id, bam_sample_names))
+
+if (!is.null(opt$counts)) {
+    cat("Reading per-sample counts...\n")
+    counts <- read.table(opt$counts, header = TRUE, sep = "\t",
+                         stringsAsFactors = FALSE, check.names = FALSE,
+                         comment.char = "")
+
+    # The first column is the transcript id and GENEID is a character column, so
+    # the sample columns are the numeric ones.
+    is_sample   <- vapply(counts, is.numeric, logical(1))
+    sample_cols <- names(counts)[is_sample]
+    if (!length(sample_cols)) {
+        stop("No numeric sample columns found in ", opt$counts, call. = FALSE)
+    }
+
+    # Both name sets descend from the same alignment files, so the basename
+    # without its extension is the expected match; the normalised comparison
+    # catches a difference in punctuation. Anything still unmatched stops the
+    # run, because guessing would measure one sample against another sample's
+    # counts and nothing in the output would show it.
+    normalise   <- function(x) gsub("[^a-z0-9]+", "", tolower(x))
+    col_for_bam <- match(bam_sample_names, sample_cols)
+    if (anyNA(col_for_bam)) {
+        gap <- is.na(col_for_bam)
+        col_for_bam[gap] <- match(normalise(bam_sample_names[gap]), normalise(sample_cols))
+    }
+    if (anyNA(col_for_bam)) {
+        # A suffix one side carries and the other does not, such as ".sorted".
+        # Accepted only where exactly one column is a prefix of the BAM name, so
+        # a set of samples sharing a stem is never resolved by guesswork.
+        norm_cols <- normalise(sample_cols)
+        for (k in which(is.na(col_for_bam))) {
+            hit <- which(startsWith(normalise(bam_sample_names[k]), norm_cols))
+            if (length(hit) == 1L) col_for_bam[k] <- hit
+        }
+    }
+    if (anyNA(col_for_bam) || anyDuplicated(col_for_bam)) {
+        stop("Could not map every BAM file to its own column in the counts matrix.\n",
+             "BAM names:\n  ", paste(bam_sample_names, collapse = ", "),
+             "\nCounts columns:\n  ", paste(sample_cols, collapse = ", "),
+             "\nEach BAM must match exactly one column, and no two BAMs the same one.",
+             call. = FALSE)
+    }
+
+    row_for_cand <- match(meta$qry_id, as.character(counts[[1]]))
+    absent       <- is.na(row_for_cand)
+    if (any(absent)) {
+        # A candidate with no row in the matrix was dropped as all-zero upstream,
+        # so it is quantified in no sample and nothing is measured for it.
+        warning(sprintf("%d sense-intronic candidates have no row in the counts matrix.",
+                        sum(absent)))
+    }
+
+    quantified[] <- FALSE
+    if (any(!absent)) {
+        # Rows for the candidates, columns in BAM order. A count of zero, or a
+        # missing entry, means the sample did not quantify the transcript.
+        qmat <- as.matrix(counts[row_for_cand[!absent], sample_cols[col_for_bam],
+                                 drop = FALSE])
+        quantified[!absent, ] <- !is.na(qmat) & qmat > 0
+    }
+}
+
+samples_quantified <- as.integer(rowSums(quantified))
+
+# Which ones, not only how many: the genomic context panel marks these samples on
+# their coverage tracks, so a reader can see the reads the numbers came from.
+# Semicolon-separated, since a sample name may itself contain a comma.
+quantified_samples <- apply(quantified, 1, function(z)
+    paste(bam_sample_names[z], collapse = ";"))
+
+cat(sprintf("Candidates are quantified in a median of %g of %d samples.\n",
+            stats::median(samples_quantified), length(bam_files)))
+
+# ---------------------------------------------------------------------------
 # Boundary overrun and host junctions
 # ---------------------------------------------------------------------------
 
@@ -219,10 +317,19 @@ host_exons_flat   <- unlist(host_exons,   use.names = TRUE)
 if (length(host_introns_flat)) host_introns_flat <- match_seqlevels(host_introns_flat, bam_levels)
 if (length(host_exons_flat))   host_exons_flat   <- match_seqlevels(host_exons_flat,   bam_levels)
 
-for (bam in bam_files) {
-    cat("  ", basename(bam), "\n")
+for (b in seq_along(bam_files)) {
+    bam <- bam_files[b]
 
-    param <- ScanBamParam(which = cand, what = "qname",
+    # Only the candidates this sample quantified. The regions the sample did not
+    # quantify are not queried at all, so its reads over them cannot enter any
+    # count here.
+    keep_idx <- which(quantified[, b])
+    cat("  ", basename(bam), sprintf("(%d of %d candidates quantified)\n",
+                                     length(keep_idx), n))
+    if (!length(keep_idx)) next
+    cand_s <- cand[keep_idx]
+
+    param <- ScanBamParam(which = cand_s, what = "qname",
                           flag = scanBamFlag(isSecondaryAlignment = FALSE,
                                              isSupplementaryAlignment = FALSE))
     ga <- readGAlignments(bam, param = param, use.names = TRUE)
@@ -236,11 +343,13 @@ for (bam in bam_files) {
     ga <- ga[!duplicated(paste(names(ga), start(ga), cigar(ga), sep = ":"))]
     gr <- granges(ga)
 
-    hits <- findOverlaps(gr, cand, ignore.strand = TRUE)
+    hits <- findOverlaps(gr, cand_s, ignore.strand = TRUE)
     if (!length(hits)) next
 
     ri <- queryHits(hits)
-    ci <- subjectHits(hits)
+    # Back to the index in the full candidate set, so every accumulator below
+    # stays addressed the same way whichever samples this pass covered.
+    ci <- keep_idx[subjectHits(hits)]
 
     reads_total <- reads_total + tabulate(ci, nbins = n)
 
@@ -337,6 +446,9 @@ flags <- data.frame(
     ref_gene_biotype            = meta$ref_gene_biotype,
     ref_gene_strand             = host_strand,
     same_strand_as_host          = same_strand,
+    samples_quantified           = samples_quantified,
+    samples_total                = length(bam_files),
+    quantified_samples           = unname(quantified_samples),
     reads_total                  = reads_total,
     reads_same_strand            = reads_same_strand,
     median_overrun_5p            = ov5$median,
@@ -358,6 +470,9 @@ write.csv(flags, "novel_context_flags.csv", row.names = FALSE)
 # The overrun quartiles describe the population rather than thresholding it: a run
 # where the median 3' overrun is a few bases across the board is a different result
 # from one where a quarter of candidates overrun by hundreds.
+#
+# Read counts are over the quantified samples only, so a candidate with no reads
+# recovered either had none in those samples or was quantified in none of them.
 with_reads <- flags$reads_total > 0
 
 q <- function(v, p) {
@@ -369,6 +484,8 @@ q <- function(v, p) {
 summary_df <- data.frame(
     metric = c(
         "sense_intronic_evaluated",
+        "samples",
+        "quantified_in_one_sample_only",
         "no_reads_recovered",
         "any_read_with_host_junction",
         "any_read_spliced_into_host_exon",
@@ -379,6 +496,8 @@ summary_df <- data.frame(
     ),
     value = c(
         nrow(flags),
+        length(bam_files),
+        sum(flags$samples_quantified == 1),
         sum(!with_reads),
         sum(flags$reads_with_host_junction > 0),
         sum(flags$reads_spliced_into_host_exon > 0),
