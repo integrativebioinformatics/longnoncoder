@@ -6,7 +6,7 @@
 
 include { MULTIQC                           } from '../modules/nf-core/multiqc/main'
 include { NOVEL_TRANSCRIPTS                 } from '../modules/local/metadata_refinement/novel_transcripts/main'
-include { FILTER_BAMBU_COUNTS               } from '../modules/local/metadata_refinement/filter_counts/main'
+include { FILTER_BAMBU_COUNTS               } from '../modules/local/metadata_refinement/filter_bambu_counts/main'
 include { VALIDATE_BAMBU_GTF                } from '../modules/local/metadata_refinement/validate_bambu_gtf/main'
 include { VALIDATE_BAMBU_COUNTS             } from '../modules/local/metadata_refinement/validate_bambu_counts/main'
 include { REF_TRANSCRIPTS                   } from '../modules/local/metadata_refinement/ref_transcripts/main'
