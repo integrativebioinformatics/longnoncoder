@@ -1,5 +1,5 @@
 process RNAMINING {
-    tag 'Predicting_Coding_Potential'
+    tag 'Coding potential prediction'
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
