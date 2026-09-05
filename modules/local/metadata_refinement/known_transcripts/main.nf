@@ -1,5 +1,4 @@
 process KNOWN_TRANSCRIPTS {
-    tag "Processing_Known_Transcripts"
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
