@@ -1,4 +1,4 @@
-name: "bambu_validate"
+name: "validate_bambu_counts"
 description: Validate Bambu transcript and gene count matrices against novel transcript metadata, retaining only features with IDs present in the classification results.
 keywords:
   - validation

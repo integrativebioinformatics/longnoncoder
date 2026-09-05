@@ -1,4 +1,4 @@
-name: "subset_bambu_counts"
+name: "filter_bambu_counts"
 description: Filter zero-count rows from Bambu gene and transcript count matrices, retaining only features with at least one non-zero sample value.
 keywords:
   - counts
@@ -39,26 +39,26 @@ input:
       pattern: "*.txt"
 
 output:
-  - counts_gene_subset:
+  - counts_gene_filter:
       type: file
       description: Gene-level counts with zero-count rows removed.
-      pattern: "BambuOutput_counts_gene_subset.txt"
-  - counts_transcript_subset:
+      pattern: "BambuOutput_counts_gene_filter.txt"
+  - counts_transcript_filter:
       type: file
       description: Transcript-level counts with zero-count rows removed.
-      pattern: "BambuOutput_counts_transcript_subset.txt"
-  - cpm_transcript_subset:
+      pattern: "BambuOutput_counts_transcript_filter.txt"
+  - cpm_transcript_filter:
       type: file
       description: Transcript-level CPM with zero-count rows removed.
-      pattern: "BambuOutput_CPM_transcript_subset.txt"
-  - full_length_counts_transcript_subset:
+      pattern: "BambuOutput_CPM_transcript_filter.txt"
+  - full_length_counts_transcript_filter:
       type: file
       description: Full-length transcript counts with zero-count rows removed.
-      pattern: "BambuOutput_fullLengthCounts_transcript_subset.txt"
-  - unique_counts_transcript_subset:
+      pattern: "BambuOutput_fullLengthCounts_transcript_filter.txt"
+  - unique_counts_transcript_filter:
       type: file
       description: Unique transcript counts with zero-count rows removed.
-      pattern: "BambuOutput_uniqueCounts_transcript_subset.txt"
+      pattern: "BambuOutput_uniqueCounts_transcript_filter.txt"
   - versions:
       type: file
       description: File containing software versions.

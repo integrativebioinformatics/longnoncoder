@@ -1,4 +1,4 @@
-process ENRICH_VALIDATED_GTF {
+process ANNOTATION {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?

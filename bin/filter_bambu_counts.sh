@@ -2,7 +2,7 @@
 # Filter out zero-count rows from Bambu count/CPM files.
 # Removes any gene or transcript where all sample columns are 0.
 #
-# Usage: subset_bambu_counts.sh --counts_gene <file> --counts_transcript <file> \
+# Usage: filter_bambu_counts.sh --counts_gene <file> --counts_transcript <file> \
 #          --cpm_transcript <file> --full_length <file> --unique <file>
 
 set -euo pipefail

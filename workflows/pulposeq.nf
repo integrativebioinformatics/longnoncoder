@@ -6,15 +6,15 @@
 
 include { MULTIQC                           } from '../modules/nf-core/multiqc/main'
 include { NOVEL_TRANSCRIPTS                 } from '../modules/local/metadata_refinement/novel_transcripts/main'
-include { SUBSET_BAMBU_COUNTS               } from '../modules/local/metadata_refinement/subset_counts/main'
-include { SUBSET_BAMBU_GTF                  } from '../modules/local/metadata_refinement/subset_bambu_gtf/main'
-include { BAMBU_VALIDATE                    } from '../modules/local/metadata_refinement/validate_counts/main'
-include { KNOWN_TRANSCRIPTS                 } from '../modules/local/metadata_refinement/known_transcripts/main'
+include { FILTER_BAMBU_COUNTS               } from '../modules/local/metadata_refinement/filter_counts/main'
+include { VALIDATE_BAMBU_GTF                } from '../modules/local/metadata_refinement/validate_bambu_gtf/main'
+include { VALIDATE_BAMBU_COUNTS             } from '../modules/local/metadata_refinement/validate_bambu_counts/main'
+include { REF_TRANSCRIPTS                   } from '../modules/local/metadata_refinement/ref_transcripts/main'
 include { INTRONIC_SENSE_MAPPING            } from '../modules/local/metadata_refinement/intronic_sense_mapping/main'
-include { ENRICH_VALIDATED_GTF              } from '../modules/local/metadata_refinement/enrich_gtf/main'
+include { ANNOTATION                        } from '../modules/local/metadata_refinement/annotation/main'
 include { BAM_COVERAGE                      } from '../modules/local/bam_coverage/main'
 include { GENOMIC_CONTEXT                   } from '../modules/local/genomic_context/main'
-include { POST_REFINEMENT                   } from '../modules/local/post_refinement/main'
+include { VALIDATE_BAMBU_OUTPUTS            } from '../modules/local/validade_bambu_out/main'
 include { RENDER_REPORT                     } from '../modules/local/report/main'
 include { RESTRANDING                       } from '../subworkflows/local/restranding'
 include { QC_FILT                           } from '../subworkflows/local/qc'
@@ -146,7 +146,7 @@ workflow PULPOSEQ {
         )
         ch_versions = ch_versions.mix(CLASSIFICATION.out.versions)
 
-        SUBSET_BAMBU_COUNTS (
+        FILTER_BAMBU_COUNTS (
             ASSEMBLY.out.gene_counts,
             ASSEMBLY.out.transcript_counts,
             ASSEMBLY.out.CPM,
@@ -159,8 +159,8 @@ workflow PULPOSEQ {
             CLASSIFICATION.out.annotated_gtf,
             CLASSIFICATION.out.tmap,
             CLASSIFICATION.out.predictions,
-            SUBSET_BAMBU_COUNTS.out.counts_transcript_subset,
-            SUBSET_BAMBU_COUNTS.out.counts_gene_subset,
+            FILTER_BAMBU_COUNTS.out.counts_transcript_subset,
+            FILTER_BAMBU_COUNTS.out.counts_gene_subset,
             params.annotation,
             file("${projectDir}/bin/novel_transcripts.R", checkIfExists: true),
             file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
@@ -176,54 +176,54 @@ workflow PULPOSEQ {
         INTRONIC_SENSE_MAPPING (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             params.annotation,
-            SUBSET_BAMBU_COUNTS.out.counts_transcript_subset,
+            FILTER_BAMBU_COUNTS.out.counts_transcript_subset,
             ALIGNMENT.out.bam.map { _meta, bam -> bam }.collect(),
             ALIGNMENT.out.index.map { _meta, bai -> bai }.collect(),
             file("${projectDir}/bin/intronic_sense_mapping.R", checkIfExists: true)
         )
         ch_versions = ch_versions.mix(INTRONIC_SENSE_MAPPING.out.versions)
 
-        BAMBU_VALIDATE (
+        VALIDATE_BAMBU_COUNTS (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
-            SUBSET_BAMBU_COUNTS.out.counts_gene_subset,
-            SUBSET_BAMBU_COUNTS.out.counts_transcript_subset,
-            SUBSET_BAMBU_COUNTS.out.cpm_transcript_subset,
-            SUBSET_BAMBU_COUNTS.out.full_length_counts_transcript_subset,
-            SUBSET_BAMBU_COUNTS.out.unique_counts_transcript_subset
+            FILTER_BAMBU_COUNTS.out.counts_gene_subset,
+            FILTER_BAMBU_COUNTS.out.counts_transcript_subset,
+            FILTER_BAMBU_COUNTS.out.cpm_transcript_subset,
+            FILTER_BAMBU_COUNTS.out.full_length_counts_transcript_subset,
+            FILTER_BAMBU_COUNTS.out.unique_counts_transcript_subset
         )
 
-        KNOWN_TRANSCRIPTS (
-            BAMBU_VALIDATE.out.counts_transcript_validated,
-            BAMBU_VALIDATE.out.counts_gene_validated,
+        REF_TRANSCRIPTS (
+            VALIDATE_BAMBU_COUNTS.out.counts_transcript_validated,
+            VALIDATE_BAMBU_COUNTS.out.counts_gene_validated,
             ASSEMBLY.out.gtf_all_transcripts,
             params.annotation,
-            file("${projectDir}/bin/known_transcripts.R", checkIfExists: true),
+            file("${projectDir}/bin/ref_transcripts.R", checkIfExists: true),
             file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
         )
-        ch_versions = ch_versions.mix(KNOWN_TRANSCRIPTS.out.versions)
+        ch_versions = ch_versions.mix(REF_TRANSCRIPTS.out.versions)
 
-        SUBSET_BAMBU_GTF (
+        VALIDATE_BAMBU_GTF (
             ASSEMBLY.out.gtf_all_transcripts,
-            BAMBU_VALIDATE.out.counts_transcript_validated,
-            BAMBU_VALIDATE.out.full_length_counts_transcript_validated,
-            BAMBU_VALIDATE.out.unique_counts_transcript_validated
+            VALIDATE_BAMBU_COUNTS.out.counts_transcript_validated,
+            VALIDATE_BAMBU_COUNTS.out.full_length_counts_transcript_validated,
+            VALIDATE_BAMBU_COUNTS.out.unique_counts_transcript_validated
         )
-        ch_versions = ch_versions.mix(SUBSET_BAMBU_GTF.out.versions)
+        ch_versions = ch_versions.mix(VALIDATE_BAMBU_GTF.out.versions)
 
         //
         // Attach biotype and classification attributes to the validated GTFs
         //
-        ENRICH_VALIDATED_GTF (
-            SUBSET_BAMBU_GTF.out.annotations_validated_gtf,
-            SUBSET_BAMBU_GTF.out.fullLength_validated_gtf,
-            SUBSET_BAMBU_GTF.out.uniquelyMapped_validated_gtf,
-            KNOWN_TRANSCRIPTS.out.transcriptome_metadata,
+        ANNOTATION (
+            VALIDATE_BAMBU_GTF.out.annotations_validated_gtf,
+            VALIDATE_BAMBU_GTF.out.fullLength_validated_gtf,
+            VALIDATE_BAMBU_GTF.out.uniquelyMapped_validated_gtf,
+            REF_TRANSCRIPTS.out.transcriptome_metadata,
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             params.annotation,
-            file("${projectDir}/bin/enrich_validated_gtf.R", checkIfExists: true),
+            file("${projectDir}/bin/annotation.R", checkIfExists: true),
             file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
         )
-        ch_versions = ch_versions.mix(ENRICH_VALIDATED_GTF.out.versions)
+        ch_versions = ch_versions.mix(ANNOTATION.out.versions)
 
         //
         // Genomic context figures: known genes carrying novel isoforms, plus a
@@ -235,7 +235,7 @@ workflow PULPOSEQ {
         // come from the reference with CDS and UTR features intact, which is what
         // lets plotTranscripts draw a coding region thicker than its UTRs.
         GENOMIC_CONTEXT (
-            ENRICH_VALIDATED_GTF.out.final_gtf,
+            ANNOTATION.out.final_gtf,
             BAM_COVERAGE.out.bigwig.map { _meta, bw -> bw }.collect(),
             INTRONIC_SENSE_MAPPING.out.flags,
             params.annotation,
@@ -246,25 +246,25 @@ workflow PULPOSEQ {
         //
         // Regenerate the Bambu PCA and heatmaps from the validated transcriptome
         //
-        POST_REFINEMENT (
+        VALIDATE_BAMBU_OUTPUTS (
             ASSEMBLY.out.rds_transcript,
             ASSEMBLY.out.rds_gene,
-            BAMBU_VALIDATE.out.counts_transcript_validated,
-            BAMBU_VALIDATE.out.counts_gene_validated,
-            file("${projectDir}/bin/post_refinement.R", checkIfExists: true)
+            VALIDATE_BAMBU_COUNTS.out.counts_transcript_validated,
+            VALIDATE_BAMBU_COUNTS.out.counts_gene_validated,
+            file("${projectDir}/bin/validate_bambu_out.R", checkIfExists: true)
         )
-        ch_versions = ch_versions.mix(POST_REFINEMENT.out.versions)
+        ch_versions = ch_versions.mix(VALIDATE_BAMBU_OUTPUTS.out.versions)
 
         RENDER_REPORT (
-            BAMBU_VALIDATE.out.counts_gene_validated,
-            BAMBU_VALIDATE.out.counts_transcript_validated,
-            BAMBU_VALIDATE.out.full_length_counts_transcript_validated,
-            BAMBU_VALIDATE.out.unique_counts_transcript_validated,
-            KNOWN_TRANSCRIPTS.out.transcriptome_metadata,
-            KNOWN_TRANSCRIPTS.out.protein_coding_metadata,
-            KNOWN_TRANSCRIPTS.out.lncrna_metadata,
-            KNOWN_TRANSCRIPTS.out.protein_coding_exonlength,
-            KNOWN_TRANSCRIPTS.out.lncrna_exonlength,
+            VALIDATE_BAMBU_COUNTS.out.counts_gene_validated,
+            VALIDATE_BAMBU_COUNTS.out.counts_transcript_validated,
+            VALIDATE_BAMBU_COUNTS.out.full_length_counts_transcript_validated,
+            VALIDATE_BAMBU_COUNTS.out.unique_counts_transcript_validated,
+            REF_TRANSCRIPTS.out.transcriptome_metadata,
+            REF_TRANSCRIPTS.out.protein_coding_metadata,
+            REF_TRANSCRIPTS.out.lncrna_metadata,
+            REF_TRANSCRIPTS.out.protein_coding_exonlength,
+            REF_TRANSCRIPTS.out.lncrna_exonlength,
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
             NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
@@ -279,12 +279,12 @@ workflow PULPOSEQ {
             ASSEMBLY.out.pca_grouped,
             ASSEMBLY.out.h_gene,
             ASSEMBLY.out.h_transcript,
-            POST_REFINEMENT.out.pca,
-            POST_REFINEMENT.out.pca_grouped,
-            POST_REFINEMENT.out.h_gene,
-            POST_REFINEMENT.out.h_transcript,
+            VALIDATE_BAMBU_OUTPUTS.out.pca,
+            VALIDATE_BAMBU_OUTPUTS.out.pca_grouped,
+            VALIDATE_BAMBU_OUTPUTS.out.h_gene,
+            VALIDATE_BAMBU_OUTPUTS.out.h_transcript,
             ASSEMBLY.out.bambu_metrics,     // ← new
-            POST_REFINEMENT.out.validation_summary,          // ← new
+            VALIDATE_BAMBU_OUTPUTS.out.validation_summary,          // ← new
             file("${projectDir}/bin/report.qmd", checkIfExists: true)
         )
         ch_versions = ch_versions.mix(RENDER_REPORT.out.versions)

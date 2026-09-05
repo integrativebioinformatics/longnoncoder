@@ -1,4 +1,4 @@
-process SUBSET_BAMBU_COUNTS {
+process VALIDATE_BAMBU_GTF {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
@@ -6,19 +6,16 @@ process SUBSET_BAMBU_COUNTS {
         'docker.io/itsiaguara/pulposeq:test' }"
 
     input:
-    path counts_gene
+    path gtf_file
     path counts_transcript
-    path cpm_transcript
     path full_length_counts_transcript
     path unique_counts_transcript
 
     output:
-    path "BambuOutput_counts_gene_subset.txt"                 , emit: counts_gene_subset
-    path "BambuOutput_counts_transcript_subset.txt"           , emit: counts_transcript_subset
-    path "BambuOutput_CPM_transcript_subset.txt"              , emit: cpm_transcript_subset
-    path "BambuOutput_fullLengthCounts_transcript_subset.txt" , emit: full_length_counts_transcript_subset
-    path "BambuOutput_uniqueCounts_transcript_subset.txt"     , emit: unique_counts_transcript_subset
-    path "versions.yml"                                         , emit: versions
+    path "BambuOutput_annotations_validated.gtf"    , emit: annotations_validated_gtf
+    path "BambuOutput_fullLength_validated.gtf"     , emit: fullLength_validated_gtf
+    path "BambuOutput_uniquelyMapped_validated.gtf" , emit: uniquelyMapped_validated_gtf
+    path "versions.yml"                             , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -26,10 +23,10 @@ process SUBSET_BAMBU_COUNTS {
     script:
     def args = task.ext.args ?: ''
     """
-    subset_bambu_counts.sh \\
-        --counts_gene ${counts_gene} \\
-        --counts_transcript ${counts_transcript} \\
-        --cpm_transcript ${cpm_transcript} \\
+    validate_bambu_gtf.sh \\
+        --gtf ${gtf_file} \\
+        --awk_script "\$(which subset_gtf.awk)" \\
+        --counts ${counts_transcript} \\
         --full_length ${full_length_counts_transcript} \\
         --unique ${unique_counts_transcript} \\
         $args
@@ -43,11 +40,9 @@ process SUBSET_BAMBU_COUNTS {
 
     stub:
     """
-    touch BambuOutput_counts_gene_subset.txt
-    touch BambuOutput_counts_transcript_subset.txt
-    touch BambuOutput_CPM_transcript_subset.txt
-    touch BambuOutput_fullLengthCounts_transcript_subset.txt
-    touch BambuOutput_uniqueCounts_transcript_subset.txt
+    touch BambuOutput_annotations_validated.gtf
+    touch BambuOutput_fullLength_validated.gtf
+    touch BambuOutput_uniquelyMapped_validated.gtf
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

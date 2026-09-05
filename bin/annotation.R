@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 # Attach biotype and classification attributes to the validated GTFs produced by
-# subset_bambu_gtf.sh.
+# filter_bambu_gtf.sh.
 #
 # That script filters the Bambu extended annotation down to the transcripts that
 # survived count validation, using awk. It is deliberately left untouched: Bambu's

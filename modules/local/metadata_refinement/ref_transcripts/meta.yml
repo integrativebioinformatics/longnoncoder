@@ -39,7 +39,7 @@ input:
   - r_script:
       type: file
       description: Executable R script for known transcripts annotation.
-      pattern: "*.R"
+      pattern: "ref_transcripts.R"
   - gtf_utils:
       type: file
       description: Shared R helpers for reading metadata from the reference annotation.

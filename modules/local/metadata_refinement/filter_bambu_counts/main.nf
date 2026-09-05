@@ -1,4 +1,4 @@
-process BAMBU_VALIDATE {
+process FILTER_BAMBU_COUNTS {
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
@@ -6,7 +6,6 @@ process BAMBU_VALIDATE {
         'docker.io/itsiaguara/pulposeq:test' }"
 
     input:
-    path metadata_csv
     path counts_gene
     path counts_transcript
     path cpm_transcript
@@ -14,12 +13,12 @@ process BAMBU_VALIDATE {
     path unique_counts_transcript
 
     output:
-    path "BambuOutput_counts_gene_validated.txt"                 , emit: counts_gene_validated
-    path "BambuOutput_counts_transcript_validated.txt"           , emit: counts_transcript_validated
-    path "BambuOutput_CPM_transcript_validated.txt"              , emit: cpm_transcript_validated
-    path "BambuOutput_fullLengthCounts_transcript_validated.txt" , emit: full_length_counts_transcript_validated
-    path "BambuOutput_uniqueCounts_transcript_validated.txt"     , emit: unique_counts_transcript_validated
-    path "versions.yml"                                          , emit: versions
+    path "BambuOutput_counts_gene_filter.txt"                 , emit: counts_gene_filter
+    path "BambuOutput_counts_transcript_filter.txt"           , emit: counts_transcript_filter
+    path "BambuOutput_CPM_transcript_filter.txt"              , emit: cpm_transcript_filter
+    path "BambuOutput_fullLengthCounts_transcript_filter.txt" , emit: full_length_counts_transcript_filter
+    path "BambuOutput_uniqueCounts_transcript_filter.txt"     , emit: unique_counts_transcript_filter
+    path "versions.yml"                                         , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
@@ -27,8 +26,7 @@ process BAMBU_VALIDATE {
     script:
     def args = task.ext.args ?: ''
     """
-    validate_bambu_counts.sh \\
-        --metadata ${metadata_csv} \\
+    filter_bambu_counts.sh \\
         --counts_gene ${counts_gene} \\
         --counts_transcript ${counts_transcript} \\
         --cpm_transcript ${cpm_transcript} \\
@@ -38,22 +36,22 @@ process BAMBU_VALIDATE {
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        mawk: \$(awk --version | head -n1 | sed 's/GNU Awk //; s/,.*//')
+        mawk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
         bash: \$(bash --version | head -n1 | sed 's/GNU bash, version //; s/ .*//')
     END_VERSIONS
     """
 
     stub:
     """
-    touch BambuOutput_counts_gene_validated.txt
-    touch BambuOutput_counts_transcript_validated.txt
-    touch BambuOutput_CPM_transcript_validated.txt
-    touch BambuOutput_fullLengthCounts_transcript_validated.txt
-    touch BambuOutput_uniqueCounts_transcript_validated.txt
+    touch BambuOutput_counts_gene_filter.txt
+    touch BambuOutput_counts_transcript_filter.txt
+    touch BambuOutput_CPM_transcript_filter.txt
+    touch BambuOutput_fullLengthCounts_transcript_filter.txt
+    touch BambuOutput_uniqueCounts_transcript_filter.txt
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
-        mawk: \$(awk --version | head -n1 | sed 's/GNU Awk //; s/,.*//')
+        mawk: \$(awk --version | head -n1 | sed 's/mawk //; s/,.*//')
         bash: \$(bash --version | head -n1 | sed 's/GNU bash, version //; s/ .*//')
     END_VERSIONS
     """

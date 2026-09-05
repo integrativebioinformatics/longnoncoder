@@ -1,5 +1,5 @@
-name: "subset_bambu_gtf"
-description: Subset the Bambu extended annotations GTF to retain only transcripts present in validated count matrices.
+name: "validate_bambu_gtf"
+description: Validate the Bambu extended annotations GTF to ensure it only contains transcripts present in validated count matrices.
 keywords:
   - gtf
   - subset

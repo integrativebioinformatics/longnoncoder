@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Subset GTF file based on validated transcript IDs from count files
+# Validate GTF file based on validated transcript IDs from count files
 #
-# Usage: subset_bambu_gtf.sh --gtf <file> --awk_script <file> \
+# Usage: validate_bambu_gtf.sh --gtf <file> --awk_script <file> \
 #          --counts <file> --full_length <file> --unique <file>
 
 set -euo pipefail
