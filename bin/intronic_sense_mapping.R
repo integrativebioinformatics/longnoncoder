@@ -463,7 +463,7 @@ flags <- data.frame(
     stringsAsFactors             = FALSE
 )
 
-write.csv(flags, "novel_context_flags.csv", row.names = FALSE)
+write.csv(flags, "intronic_sense_flags.csv", row.names = FALSE)
 
 # Summary for the report. Every row here is sense intronic by construction, so the
 # old same-strand and intronic breakdowns would all equal the total; the counts that
@@ -511,7 +511,7 @@ summary_df <- data.frame(
     stringsAsFactors = FALSE
 )
 
-write.csv(summary_df, "novel_context_summary.csv", row.names = FALSE)
+write.csv(summary_df, "intronic_sense_summary.csv", row.names = FALSE)
 
 cat("\nDone.\n")
 print(summary_df, row.names = FALSE)
