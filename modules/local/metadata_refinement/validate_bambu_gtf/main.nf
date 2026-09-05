@@ -25,7 +25,7 @@ process VALIDATE_BAMBU_GTF {
     """
     validate_bambu_gtf.sh \\
         --gtf ${gtf_file} \\
-        --awk_script "\$(which subset_gtf.awk)" \\
+        --awk_script "\$(which validate_bambu_gtf.awk)" \\
         --counts ${counts_transcript} \\
         --full_length ${full_length_counts_transcript} \\
         --unique ${unique_counts_transcript} \\
