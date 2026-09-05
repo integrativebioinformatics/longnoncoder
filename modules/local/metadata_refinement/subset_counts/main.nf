@@ -1,5 +1,4 @@
 process SUBSET_BAMBU_COUNTS {
-    tag "Subsetting_Counts"
     label 'process_low'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
