@@ -10,7 +10,7 @@ include { SUBSET_BAMBU_COUNTS               } from '../modules/local/metadata_re
 include { SUBSET_BAMBU_GTF                  } from '../modules/local/metadata_refinement/subset_bambu_gtf/main'
 include { BAMBU_VALIDATE                    } from '../modules/local/metadata_refinement/validate_counts/main'
 include { KNOWN_TRANSCRIPTS                 } from '../modules/local/metadata_refinement/known_transcripts/main'
-include { VALIDATE_NOVEL_CONTEXT            } from '../modules/local/metadata_refinement/validate_context/main'
+include { INTRONIC_SENSE_MAPPING            } from '../modules/local/metadata_refinement/intronic_sense_mapping/main'
 include { ENRICH_VALIDATED_GTF              } from '../modules/local/metadata_refinement/enrich_gtf/main'
 include { BAM_COVERAGE                      } from '../modules/local/bam_coverage/main'
 include { GENOMIC_CONTEXT                   } from '../modules/local/genomic_context/main'
@@ -173,15 +173,15 @@ workflow PULPOSEQ {
         // boundaries or run through carrying the host's junctions. Annotates
         // only -- nothing is filtered on the result.
         //
-        VALIDATE_NOVEL_CONTEXT (
+        INTRONIC_SENSE_MAPPING (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             params.annotation,
             SUBSET_BAMBU_COUNTS.out.counts_transcript_subset,
             ALIGNMENT.out.bam.map { _meta, bam -> bam }.collect(),
             ALIGNMENT.out.index.map { _meta, bai -> bai }.collect(),
-            file("${projectDir}/bin/validate_novel_context.R", checkIfExists: true)
+            file("${projectDir}/bin/intronic_sense_mapping.R", checkIfExists: true)
         )
-        ch_versions = ch_versions.mix(VALIDATE_NOVEL_CONTEXT.out.versions)
+        ch_versions = ch_versions.mix(INTRONIC_SENSE_MAPPING.out.versions)
 
         BAMBU_VALIDATE (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
@@ -237,7 +237,7 @@ workflow PULPOSEQ {
         GENOMIC_CONTEXT (
             ENRICH_VALIDATED_GTF.out.final_gtf,
             BAM_COVERAGE.out.bigwig.map { _meta, bw -> bw }.collect(),
-            VALIDATE_NOVEL_CONTEXT.out.flags,
+            INTRONIC_SENSE_MAPPING.out.flags,
             params.annotation,
             file("${projectDir}/bin/genomic_context.R", checkIfExists: true)
         )
@@ -269,8 +269,8 @@ workflow PULPOSEQ {
             NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
             NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
             NOVEL_TRANSCRIPTS.out.novel_non_coding_metadata,
-            VALIDATE_NOVEL_CONTEXT.out.flags,
-            VALIDATE_NOVEL_CONTEXT.out.summary,
+            INTRONIC_SENSE_MAPPING.out.flags,
+            INTRONIC_SENSE_MAPPING.out.summary,
             GENOMIC_CONTEXT.out.candidates,
             GENOMIC_CONTEXT.out.figures.ifEmpty([]),
             GENOMIC_CONTEXT.out.intronic_candidates,

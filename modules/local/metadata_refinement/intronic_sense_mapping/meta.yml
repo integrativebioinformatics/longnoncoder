@@ -1,6 +1,6 @@
-name: validate_novel_context
+name: intronic_sense_mapping
 description: |
-  Structural evidence for novel transcripts, read from the alignments they were
+  Structural evidence for intronic sense transcripts, read from the alignments they were
   assembled from.
 
   Answers two questions that need no organism-specific threshold:
@@ -19,7 +19,7 @@ description: |
 keywords:
   - lncRNA
   - novel transcripts
-  - intron retention
+  - intronic sense
   - pre-mRNA
   - internal priming
   - validation
@@ -48,20 +48,20 @@ input:
       pattern: "*.bai"
   - r_script:
       type: file
-      description: bin/validate_novel_context.R
+      description: bin/intronic_sense_mapping.R
       pattern: "*.R"
 
 output:
   - flags:
       type: file
       description: |
-        One row per novel transcript: host gene and its biotype and strand,
+        One row per intronic sense transcript: host gene and its biotype and strand,
         same_strand_as_host, and the read counts behind test D.
-      pattern: "novel_context_flags.csv"
+      pattern: "intronic_sense_flags.csv"
   - summary:
       type: file
       description: Aggregate counts for the report
-      pattern: "novel_context_summary.csv"
+      pattern: "intronic_sense_summary.csv"
   - versions:
       type: file
       description: Software versions

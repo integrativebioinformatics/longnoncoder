@@ -1,6 +1,6 @@
-process VALIDATE_NOVEL_CONTEXT {
-    tag "Validate Novel Transcript Context"
-    label 'process_validate_context'
+process INTRONIC_SENSE_MAPPING {
+    tag "Intronic Sense Mapping"
+    label 'process_intronic_sense_mapping'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/pulposeq:test':
@@ -18,8 +18,8 @@ process VALIDATE_NOVEL_CONTEXT {
     path r_script
 
     output:
-    path "novel_context_flags.csv"   , emit: flags
-    path "novel_context_summary.csv" , emit: summary
+    path "intronic_sense_flags.csv"   , emit: flags
+    path "intronic_sense_summary.csv" , emit: summary
     path "versions.yml"              , emit: versions
 
     when:
@@ -53,8 +53,8 @@ process VALIDATE_NOVEL_CONTEXT {
 
     stub:
     """
-    printf 'qry_id,class_code,strand,ref_gene_id,ref_gene_biotype,ref_gene_strand,same_strand_as_host,samples_quantified,samples_total,quantified_samples,reads_total,reads_same_strand,median_overrun_5p,q90_overrun_5p,median_overrun_3p,q90_overrun_3p,reads_with_host_junction,reads_spliced_into_host_exon,frac_with_host_junction\\n' > novel_context_flags.csv
-    printf 'metric,value\\ncandidates_evaluated,0\\n' > novel_context_summary.csv
+    printf 'qry_id,class_code,strand,ref_gene_id,ref_gene_biotype,ref_gene_strand,same_strand_as_host,samples_quantified,samples_total,quantified_samples,reads_total,reads_same_strand,median_overrun_5p,q90_overrun_5p,median_overrun_3p,q90_overrun_3p,reads_with_host_junction,reads_spliced_into_host_exon,frac_with_host_junction\\n' > intronic_sense_flags.csv
+    printf 'metric,value\\ncandidates_evaluated,0\\n' > intronic_sense_summary.csv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
