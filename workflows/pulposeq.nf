@@ -159,8 +159,8 @@ workflow PULPOSEQ {
             CLASSIFICATION.out.annotated_gtf,
             CLASSIFICATION.out.tmap,
             CLASSIFICATION.out.predictions,
-            FILTER_BAMBU_COUNTS.out.counts_transcript_subset,
-            FILTER_BAMBU_COUNTS.out.counts_gene_subset,
+            FILTER_BAMBU_COUNTS.out.counts_transcript_filter,
+            FILTER_BAMBU_COUNTS.out.counts_gene_filter,
             params.annotation,
             file("${projectDir}/bin/novel_transcripts.R", checkIfExists: true),
             file("${projectDir}/bin/gtf_annotation_utils.R", checkIfExists: true)
@@ -176,7 +176,7 @@ workflow PULPOSEQ {
         INTRONIC_SENSE_MAPPING (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             params.annotation,
-            FILTER_BAMBU_COUNTS.out.counts_transcript_subset,
+            FILTER_BAMBU_COUNTS.out.counts_transcript_filter,
             ALIGNMENT.out.bam.map { _meta, bam -> bam }.collect(),
             ALIGNMENT.out.index.map { _meta, bai -> bai }.collect(),
             file("${projectDir}/bin/intronic_sense_mapping.R", checkIfExists: true)
@@ -185,11 +185,11 @@ workflow PULPOSEQ {
 
         VALIDATE_BAMBU_COUNTS (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
-            FILTER_BAMBU_COUNTS.out.counts_gene_subset,
-            FILTER_BAMBU_COUNTS.out.counts_transcript_subset,
-            FILTER_BAMBU_COUNTS.out.cpm_transcript_subset,
-            FILTER_BAMBU_COUNTS.out.full_length_counts_transcript_subset,
-            FILTER_BAMBU_COUNTS.out.unique_counts_transcript_subset
+            FILTER_BAMBU_COUNTS.out.counts_gene_filter,
+            FILTER_BAMBU_COUNTS.out.counts_transcript_filter,
+            FILTER_BAMBU_COUNTS.out.cpm_transcript_filter,
+            FILTER_BAMBU_COUNTS.out.full_length_counts_transcript_filter,
+            FILTER_BAMBU_COUNTS.out.unique_counts_transcript_filter
         )
 
         REF_TRANSCRIPTS (

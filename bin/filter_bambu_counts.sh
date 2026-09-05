@@ -95,7 +95,7 @@ for input_file in "${INPUT_FILES[@]}"; do
 
     # Generate output filename
     base_name=$(basename "$input_file" .txt)
-    output_file="${base_name}_subset.txt"
+    output_file="${base_name}_filter.txt"
 
     # Determine file type and process accordingly
     if [[ "$input_file" == *"counts_gene"* ]]; then
@@ -105,12 +105,12 @@ for input_file in "${INPUT_FILES[@]}"; do
     fi
 
     if [ -s "$output_file" ]; then
-        echo "✓ subset file '$(basename "$output_file")' created successfully."
+        echo "✓ filter file '$(basename "$output_file")' created successfully."
     else
         if [ -f "$output_file" ]; then
-            echo "⚠ subset file '$(basename "$output_file")' created, but it might be empty or only contain the header."
+            echo "⚠ filter file '$(basename "$output_file")' created, but it might be empty or only contain the header."
         else
-            echo "✗ Error: Failed to create subset file '$(basename "$output_file")'."
+            echo "✗ Error: Failed to create filter file '$(basename "$output_file")'."
             exit 1
         fi
     fi
@@ -129,7 +129,7 @@ echo ""
 echo "Generated files:"
 for input_file in "${INPUT_FILES[@]}"; do
     base_name=$(basename "$input_file" .txt)
-    output_file="${base_name}_subset.txt"
+    output_file="${base_name}_filter.txt"
     if [ -f "$output_file" ]; then
         echo "  - $(basename "$output_file")"
     fi

@@ -18,7 +18,7 @@ process FILTER_BAMBU_COUNTS {
     path "BambuOutput_CPM_transcript_filter.txt"              , emit: cpm_transcript_filter
     path "BambuOutput_fullLengthCounts_transcript_filter.txt" , emit: full_length_counts_transcript_filter
     path "BambuOutput_uniqueCounts_transcript_filter.txt"     , emit: unique_counts_transcript_filter
-    path "versions.yml"                                         , emit: versions
+    path "versions.yml"                                       , emit: versions
 
     when:
     task.ext.when == null || task.ext.when

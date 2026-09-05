@@ -159,7 +159,7 @@ attr_cols <- setdiff(names(attrs), "key")
 
 #' Synthesise one `gene` feature per gene_id, spanning all of its records.
 #'
-#' Bambu emits only transcript and exon rows, and subset_bambu_gtf.sh drops any
+#' Bambu emits only transcript and exon rows, and validate_bambu_gtf.sh drops any
 #' line without a transcript_id, so the validated GTFs reach here with no gene
 #' features at all. Everything in this pipeline derives gene extent from the
 #' transcript rows and does not need them, but tools fed the published GTF do:

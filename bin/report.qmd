@@ -472,7 +472,7 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 
 [^1]: Chen, Ying, et al. "Context-aware transcript quantification from long-read RNA-seq data with Bambu." Nature methods 20.8 (2023): 1187-1195. https://doi.org/10.1038/s41592-023-01908-w
 
-1.  Any gene or transcript that had zero counts across all samples were subset out(check the subset quantification files in the results folder `bambu_subset/`).
+1.  Any gene or transcript that had zero counts across all samples were subset out(check the subset quantification files in the results folder `bambu_filter/`).
 2.  Novel transcript isoforms were compared to the reference annotation by **GffCompare** [^2] and submitted to coding-potential prediction with **CPC2** [^3], or with **RNAmining** [^4] where that predictor was selected. Each was then routed into one of three categories from its class code, its prediction and the biotype of the reference gene it was matched against.
 3.  The structure of the isoforms is characterized, and metadata regarding isoform-level structure is retrieved directly from the reference annotation and assembly GTF files with **rtracklayer**[^5].
 4.  Finally, annotations, count matrices and characterization metadata are standardized into comprehensive metadatasets that are easily accessible for downstream analyses, and the overall statistics of the assembly are summarized in the following sections of this report.
