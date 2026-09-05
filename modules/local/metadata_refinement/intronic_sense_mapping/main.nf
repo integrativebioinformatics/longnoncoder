@@ -1,5 +1,4 @@
 process INTRONIC_SENSE_MAPPING {
-    tag "Intronic Sense Mapping"
     label 'process_intronic_sense_mapping'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
