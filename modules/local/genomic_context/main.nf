@@ -1,5 +1,4 @@
 process GENOMIC_CONTEXT {
-    tag "Genomic_Context"
     label 'process_genomic_context'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
