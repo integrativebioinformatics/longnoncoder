@@ -14,7 +14,7 @@ include { INTRONIC_SENSE_MAPPING            } from '../modules/local/metadata_re
 include { ANNOTATION                        } from '../modules/local/metadata_refinement/annotation/main'
 include { BAM_COVERAGE                      } from '../modules/local/bam_coverage/main'
 include { GENOMIC_CONTEXT                   } from '../modules/local/genomic_context/main'
-include { VALIDATE_BAMBU_OUTPUTS            } from '../modules/local/validade_bambu_out/main'
+include { VALIDATE_BAMBU_OUTPUTS            } from '../modules/local/validate_bambu_out/main'
 include { RENDER_REPORT                     } from '../modules/local/report/main'
 include { RESTRANDING                       } from '../subworkflows/local/restranding'
 include { QC_FILT                           } from '../subworkflows/local/qc'
