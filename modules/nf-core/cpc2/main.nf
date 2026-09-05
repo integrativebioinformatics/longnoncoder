@@ -1,5 +1,5 @@
 process CPC2 {
-    tag "$meta.id"
+    tag "Coding potential prediction"
     label 'process_single'
     conda "${moduleDir}/environment.yml"
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
