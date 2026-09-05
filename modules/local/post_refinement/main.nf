@@ -1,5 +1,5 @@
 process POST_REFINEMENT {
-    tag "Regenerating_Validated_Plots"
+    tag "Validate BambuOutputs"
     label 'process_post_refinement'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
