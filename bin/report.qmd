@@ -485,7 +485,7 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 
 [^5]: Lawrence, Michael, Robert Gentleman, and Vincent Carey. "rtracklayer: an R package for interfacing with genome browsers." Bioinformatics 25.14 (2009): 1841-1842. https://doi.org/10.1093/bioinformatics/btp328
 
-Final validated results are organized into the folders `bambu_validated`, `novel_trancripts` and `annotated_transcripts` in the output directory.
+Final validated results are organized into the folders `bambu_validated`, `novel_trancripts` and `ref_transcripts` in the output directory.
 
 ::: callout-note
 ## Filtering criteria
