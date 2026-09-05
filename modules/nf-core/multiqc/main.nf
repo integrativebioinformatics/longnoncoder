@@ -1,5 +1,4 @@
 process MULTIQC {
-    tag "${meta.id}"
     label 'process_reports'
 
     conda "${moduleDir}/environment.yml"
