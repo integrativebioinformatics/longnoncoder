@@ -73,7 +73,6 @@ process BAMBU {
     """
 
     stub:
-    // REMOVED the unused 'def args' line from here
     """
     touch heatmap_gene.png
     touch heatmap_transcript.png

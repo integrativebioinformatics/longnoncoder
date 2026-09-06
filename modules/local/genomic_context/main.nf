@@ -8,15 +8,16 @@ process GENOMIC_CONTEXT {
     input:
     path gtf_file      // validated, enriched transcriptome GTF
     path bigwigs       // every sample's coverage track, collected
-    path context_flags // per-transcript strand and read-through flags
+    path counts        // validated transcript counts, one column per sample
+    path fl_counts     // validated full-length transcript counts
     path annotation    // reference annotation, for annotated gene and intron structure
     path r_script
 
     output:
     path "genomic_context_*.png"          , emit: figures, optional: true
     path "genomic_context_candidates.csv" , emit: candidates
-    // The flagged set: intronic candidates on the host's strand, windowed on the
-    // whole host intron so the coverage either side of the candidate is visible.
+    // Sense-intronic candidates, windowed on the whole host intron so the coverage
+    // either side of the candidate is visible.
     path "intronic_context_*.png"          , emit: intronic_figures, optional: true
     path "intronic_context_candidates.csv" , emit: intronic_candidates
     // The plotted regions as a small GTF. Built to feed makeTxDbFromGFF, but useful
@@ -37,7 +38,8 @@ process GENOMIC_CONTEXT {
         --gtf ${gtf_file} \\
         --bigwigs ${bw_list} \\
         --names ${name_list} \\
-        --context_flags ${context_flags} \\
+        --counts ${counts} \\
+        --fl_counts ${fl_counts} \\
         --annotation ${annotation} \\
         --outdir . \\
         $args
@@ -60,8 +62,8 @@ process GENOMIC_CONTEXT {
     printf 'ENSG00000000000,STUBGENE,STUBGENE,chr1,1000,9000,950,9050,4,3,1,1,protein_coding;novel_lncRNA,genomic_context_STUBGENE.png\\n' >> genomic_context_candidates.csv
 
     touch intronic_context_STUBTX.png
-    printf 'qry_id,ref_gene_id,ref_gene_name,ref_gene_biotype,chrom,start,end,win_s,win_e,strand,class_code,num_exons,reads_total,median_overrun_3p,reads_with_host_junction,figure\\n' > intronic_context_candidates.csv
-    printf 'BambuTxSTUB,ENSG00000000000,STUBGENE,protein_coding,chr1,3000,3800,2000,5000,+,i,1,42,31,18,intronic_context_STUBTX.png\\n' >> intronic_context_candidates.csv
+    printf 'qry_id,ref_gene_id,ref_gene_name,ref_gene_biotype,chrom,start,end,win_s,win_e,strand,class_code,num_exons,samples_quantified,samples_total,quantified_samples,counts_total,full_length_support,figure\\n' > intronic_context_candidates.csv
+    printf 'BambuTxSTUB,ENSG00000000000,STUBGENE,protein_coding,chr1,3000,3800,2000,5000,+,i,1,2,3,s1;s2,42,FALSE,intronic_context_STUBTX.png\\n' >> intronic_context_candidates.csv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

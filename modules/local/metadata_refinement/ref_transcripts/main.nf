@@ -52,7 +52,6 @@ process REF_TRANSCRIPTS {
     """
 
     stub:
-    // REMOVED the unused 'def args' line from here
     """
     touch annotated_transcriptome_metadata.csv
     touch annotated_lncRNAs_metadata.csv

@@ -1,7 +1,7 @@
-name: "known_transcripts"
+name: "ref_transcripts"
 description: Annotate and classify known (reference-matching) transcripts from Bambu output using metadata read directly from the supplied reference annotation GTF, producing separate lncRNA and protein-coding GTFs and metadata tables.
 keywords:
-  - known-transcripts
+  - reference-transcripts
   - lncRNA
   - protein-coding
   - annotation

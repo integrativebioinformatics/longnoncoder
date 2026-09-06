@@ -22,10 +22,21 @@ We can describe each step of the workflow as follows:
 9.  Convert novel transcripts `GTF` file to `FASTA` ([GffRead](https://github.com/gpertea/gffread "gpertea/gffread"))
 10. Predict transcripts as protein-coding or non-coding ([CPC2](https://github.com/gao-lab/CPC2_standalone "gao-lab/CPC2_standalone") by default, or [RNAmining](https://gitlab.com/integrativebioinformatics/RNAmining "integrativebioinformatics/RNAmining"))
 11. Gather all data from previous steps and generate informative and re-usable metadata `.csv` and `GTF` files for both novel and annotated transcripts, with biotypes read directly from the supplied reference annotation ([tidyverse](https://tidyverse.org/), [rtracklayer](https://bioconductor.org/packages/release/bioc/html/rtracklayer.html), and [GenomicRanges](https://bioconductor.org/packages/release/bioc/html/GenomicRanges.html))
-12. Test novel calls against the alignments — strand relative to the reference gene, reads running past transcript boundaries, and reads carrying the reference gene's splice junctions — recording the evidence per candidate rather than filtering on it ([Rsamtools](https://bioconductor.org/packages/release/bioc/html/Rsamtools.html) and [GenomicAlignments](https://bioconductor.org/packages/release/bioc/html/GenomicAlignments.html))
-13. Draw genomic context figures for selected loci and flagged candidates, over the coverage tracks ([plotgardener](https://bioconductor.org/packages/release/bioc/html/plotgardener.html))
-14. Provide a report and data visualization for the full transcriptome, with emphasis on lncRNAs ([Quarto](https://quarto.org/), [tidyverse](https://tidyverse.org/), [cowplot](https://cran.r-project.org/web/packages/cowplot/index.html), [scales](https://cran.r-project.org/web/packages/scales/index.html), etc)
-15. Gather all possible QC information from the previous steps ([MultiQC](https://github.com/MultiQC/MultiQC "MultiQC"))
+12. Restrict the count matrices and `GTF` files to the curated set, and attach biotype and classification attributes to the validated annotations
+13. Regenerate Bambu's PCA and expression heatmaps from the curated transcriptome, so the sample-level view can be read beside the one built from the raw assembly
+14. Draw genomic context figures over the coverage tracks — known genes carrying novel isoforms, and the sense-intronic candidates, which lie inside a host intron on the host's own strand and cannot be resolved from the assembly alone ([plotgardener](https://bioconductor.org/packages/release/bioc/html/plotgardener.html))
+15. Provide a report and data visualization for the full transcriptome, with emphasis on lncRNAs ([Quarto](https://quarto.org/), [tidyverse](https://tidyverse.org/), [cowplot](https://cran.r-project.org/web/packages/cowplot/index.html), [scales](https://cran.r-project.org/web/packages/scales/index.html), etc)
+16. Gather all possible QC information from the previous steps ([MultiQC](https://github.com/MultiQC/MultiQC "MultiQC"))
+
+**What you get**
+
+| Path | |
+|---|---|
+| `transcriptome_report/report.html` | The self-contained report, every figure embedded |
+| `bambu_validated/` | Curated count matrices, annotations and the curation yield |
+| `novel_transcripts/`, `ref_transcripts/` | Metadata `.csv` and `GTF` per category |
+| `genomic_context/` | Coverage and transcript models drawn at selected loci |
+| `coverage/*.bw` | Per-sample coverage as bigWig — two to three orders of magnitude smaller than the alignments, so this is the form of the data meant to leave the cluster. Load them in IGV to explore any region beyond the windows the pipeline chose to draw |
 
 ## Usage
 

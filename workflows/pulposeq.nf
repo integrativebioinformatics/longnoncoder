@@ -10,7 +10,6 @@ include { FILTER_BAMBU_COUNTS               } from '../modules/local/metadata_re
 include { VALIDATE_BAMBU_GTF                } from '../modules/local/metadata_refinement/validate_bambu_gtf/main'
 include { VALIDATE_BAMBU_COUNTS             } from '../modules/local/metadata_refinement/validate_bambu_counts/main'
 include { REF_TRANSCRIPTS                   } from '../modules/local/metadata_refinement/ref_transcripts/main'
-include { INTRONIC_SENSE_MAPPING            } from '../modules/local/metadata_refinement/intronic_sense_mapping/main'
 include { ANNOTATION                        } from '../modules/local/metadata_refinement/annotation/main'
 include { BAM_COVERAGE                      } from '../modules/local/bam_coverage/main'
 include { GENOMIC_CONTEXT                   } from '../modules/local/genomic_context/main'
@@ -167,22 +166,6 @@ workflow PULPOSEQ {
         )
         ch_versions = ch_versions.mix(NOVEL_TRANSCRIPTS.out.versions)
 
-        //
-        // Structural evidence for the novel calls: strand relative to the host
-        // gene, and whether the supporting reads stop at the transcript's
-        // boundaries or run through carrying the host's junctions. Annotates
-        // only -- nothing is filtered on the result.
-        //
-        INTRONIC_SENSE_MAPPING (
-            NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
-            params.annotation,
-            FILTER_BAMBU_COUNTS.out.counts_transcript_filter,
-            ALIGNMENT.out.bam.map { _meta, bam -> bam }.collect(),
-            ALIGNMENT.out.index.map { _meta, bai -> bai }.collect(),
-            file("${projectDir}/bin/intronic_sense_mapping.R", checkIfExists: true)
-        )
-        ch_versions = ch_versions.mix(INTRONIC_SENSE_MAPPING.out.versions)
-
         VALIDATE_BAMBU_COUNTS (
             NOVEL_TRANSCRIPTS.out.novel_combined_metadata,
             FILTER_BAMBU_COUNTS.out.counts_gene_filter,
@@ -226,10 +209,10 @@ workflow PULPOSEQ {
         ch_versions = ch_versions.mix(ANNOTATION.out.versions)
 
         //
-        // Genomic context figures: known genes carrying novel isoforms, plus a
-        // deliberately chosen set of flagged intronic candidates. The second set
-        // is the visual control -- a candidate flagged as host pre-mRNA should
-        // look like it when drawn, and if it does not, the flag is wrong.
+        // Genomic context figures: known genes carrying novel isoforms, plus the
+        // sense-intronic candidates. A model inside a host intron on the host's own
+        // strand is sequence-identical to part of that host's unspliced precursor,
+        // so it is drawn on the whole intron and read by eye rather than scored.
         //
         // The final annotation, not the Bambu-derived one. Its known transcripts
         // come from the reference with CDS and UTR features intact, which is what
@@ -237,7 +220,8 @@ workflow PULPOSEQ {
         GENOMIC_CONTEXT (
             ANNOTATION.out.final_gtf,
             BAM_COVERAGE.out.bigwig.map { _meta, bw -> bw }.collect(),
-            INTRONIC_SENSE_MAPPING.out.flags,
+            VALIDATE_BAMBU_COUNTS.out.counts_transcript_validated,
+            VALIDATE_BAMBU_COUNTS.out.full_length_counts_transcript_validated,
             params.annotation,
             file("${projectDir}/bin/genomic_context.R", checkIfExists: true)
         )
@@ -269,8 +253,6 @@ workflow PULPOSEQ {
             NOVEL_TRANSCRIPTS.out.novel_lncrna_exon_lengths,
             NOVEL_TRANSCRIPTS.out.novel_mrna_exon_lengths,
             NOVEL_TRANSCRIPTS.out.novel_non_coding_metadata,
-            INTRONIC_SENSE_MAPPING.out.flags,
-            INTRONIC_SENSE_MAPPING.out.summary,
             GENOMIC_CONTEXT.out.candidates,
             GENOMIC_CONTEXT.out.figures.ifEmpty([]),
             GENOMIC_CONTEXT.out.intronic_candidates,
@@ -283,8 +265,8 @@ workflow PULPOSEQ {
             VALIDATE_BAMBU_OUTPUTS.out.pca_grouped,
             VALIDATE_BAMBU_OUTPUTS.out.h_gene,
             VALIDATE_BAMBU_OUTPUTS.out.h_transcript,
-            ASSEMBLY.out.bambu_metrics,     // ← new
-            VALIDATE_BAMBU_OUTPUTS.out.validation_summary,          // ← new
+            ASSEMBLY.out.bambu_metrics,
+            VALIDATE_BAMBU_OUTPUTS.out.validation_summary,
             file("${projectDir}/bin/report.qmd", checkIfExists: true)
         )
         ch_versions = ch_versions.mix(RENDER_REPORT.out.versions)

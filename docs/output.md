@@ -24,6 +24,19 @@ This document describes the file-level reference for outputs produced by each pi
 
 ![pulposeq-report](../figures/pulposeq-report-interface.gif)
 
+## `restrander/` (read orientation)
+
+Only produced for ONT cDNA libraries the pipeline has to orient itself
+(`library: ONT_cDNA` with `stranded_library: false`). See
+[Restranding ONT cDNA libraries](usage.md#restranding-ont-cdna-libraries).
+
+| File | Description |
+|-------------------|-----------------------------------------------------|
+| `<sample>.restranded.fastq.gz` | Oriented reads, reverse-strand reads reverse-complemented so every read matches the orientation of the transcript it came from. |
+| `<sample>.restranded-unknowns.fastq.gz` | Reads whose orientation could not be determined, written aside rather than passed on with an arbitrary strand. Everything downstream treats read strand as RNA strand, so a read of unknown orientation surviving into that path would be assigned a coin-flip strand the rest of the pipeline is instructed to trust. |
+| `<sample>.restrander_config.json` | The configuration the run actually resolved to, copied here so the primer sequences behind every orientation call stay with the results. |
+| `<sample>.restrander_stats.json` | Per-sample orientation counts, including the oriented fraction the success gate tests. |
+
 ## `chopper/` (read filtering and trimming)
 
 | File | Description |
@@ -196,6 +209,8 @@ Only produced for ONT cDNA libraries the pipeline orients itself, and skipped by
 | `BambuOutput_uniqueCounts_transcript.txt` | Uniquely mapped transcript count matrix. |
 | `BambuOutput_extended_annotations.gtf` | Extended reference transcript annotations. |
 | `bambu_novel_transcripts.gtf` | Novel isoform candidates identified by Bambu. |
+| `bambu_run_metrics.csv` | The parameters this run actually used: `ndr_used`, `ndr_requested`, `library`, `stranded_declared`. Bambu reports its automatically chosen NDR only on stdout, so it is parsed back out here rather than lost with the work directory. The report prints it at the top. |
+| `bambu_console.log` | Bambu's full console output for the run. |
 
 ### Standard automatic plots
 
@@ -250,6 +265,26 @@ Only produced for ONT cDNA libraries the pipeline orients itself, and skipped by
 | `BambuOutput_fullLength_validated.gtf` | GTF of validated full-length transcript isoforms. |
 | `BambuOutput_annotations_validated.gtf` | Final validated annotation. |
 | `BambuOutput_uniquelyMapped_validated.gtf` | Validated transcript isoforms supported by uniquely mapped reads. |
+| `annotations_final.gtf` | Known transcripts re-read from the reference with CDS and UTR features intact, plus the novel models. What the genomic context figures are drawn from. |
+| `pca_validated.png`, `pca_grouped_validated.png` | Bambu's PCA, regenerated from the curated transcriptome. |
+| `heatmap_gene_validated.png`, `heatmap_transcript_validated.png` | Bambu's expression heatmaps, regenerated from the curated transcriptome. |
+| `se_multiSample_validated.rds`, `seGene_multiSample_validated.rds` | The `SummarizedExperiment` objects subset to the curated features. |
+| `validation_summary.csv` | The curation yield, one row per feature type. See below. |
+
+#### Reading `validation_summary.csv`
+
+| Column | Meaning |
+|---|---|
+| `feature_type` | `transcript` or `gene`. |
+| `curated_set` | Features kept by curation **and** carrying at least one count. |
+| `total_quantified` | Features with at least one count in at least one sample. The denominator `recovery` is measured against. |
+| `extended_annotations` | Every feature Bambu quantified against the extended annotation, including those no read supports. |
+| `recovery` | `curated_set / total_quantified`. |
+
+Recovery is measured against the expressed features rather than against
+`extended_annotations`, because Bambu quantifies against every reference feature
+whether or not the library contains it. Counting the unexpressed ones as losses would
+report the size of the reference annotation as a failure of the curation.
 
 ### Annotated GTF attributes
 
@@ -318,7 +353,7 @@ With `rnamining`:
 > RNAmining is currently under review — see [Coding potential](usage.md#coding-potential)
 > in the usage documentation before selecting it.
 
-## `annotations_metadata/` (metadata handling)
+## `novel_transcripts/` and `ref_transcripts/` (metadata handling)
 
 | File | Description |
 |-------------------------|-----------------------------------------------|
@@ -337,16 +372,14 @@ With `rnamining`:
 | `novel_lncRNA_exon_lengths.csv` | Exon length summary for novel lncRNA isoform candidates. |
 | `novel_lncRNAs.gtf` | GTF file containing novel lncRNA isoform candidates. |
 | `novel_lncRNAs_metadata.csv` | Metadata table for novel lncRNA isoform candidates. |
-| `novel_pc_lnc_RNAs_metadata.csv` | Combined metadata table for novel protein-coding and lncRNA transcript isoform candidates. |
+| `novel_pc_lnc_RNAs_metadata.csv` | Combined metadata table for the novel candidates. Despite its name it holds **all three** routed categories, `novel_non_coding` included. |
 | `novel_protein-coding_exon_lengths.csv` | Exon length summary for novel protein-coding isoform candidates. |
 | `novel_protein-coding.gtf` | GTF file containing novel protein-coding RNA isoform candidates. |
 | `novel_protein-coding_metadata.csv` | Metadata table for novel protein-coding RNA isoform candidates. |
 | `novel_transcripts_metadata.csv` | Metadata table for all novel RNA isoform candidates. |
-| `novel_transcripts.gtf` | GTF file containing only the validated set of novel isoform candidates. |
+| `novel_transcripts_validated.gtf` | GTF file containing only the validated set of novel isoform candidates. |
 | `novel_non_coding_metadata.csv` | Metadata table for models predicted non-coding that share splice structure with a reference gene which is not an lncRNA. |
 | `novel_non_coding.gtf` | GTF file for the same set, with `transcript_biotype "novel_non_coding"`. |
-| `novel_context_flags.csv` | Structural evidence per novel transcript: the reference gene, its biotype and strand, `same_strand_as_host`, how many samples quantified the transcript, and the read counts behind the boundary and junction tests. |
-| `novel_context_summary.csv` | Aggregate counts from the same tests, as rendered in the report. |
 
 ### Which class codes become candidates
 
@@ -435,51 +468,9 @@ actually contains.
 
 These are named `ref_` rather than `host_` because a host is something a transcript
 sits *inside*, which holds for `i`, `x`, `m` and `n` but is backwards for `k` and
-`y`, where the novel transcript contains the reference. Columns describing what
-*reads* do — `same_strand_as_host`, `reads_with_host_junction`,
-`reads_spliced_into_host_exon` — keep the word, since the step producing them runs
-only on intronic candidates, where it is accurate.
-
-### Reading `novel_context_flags.csv`
-
-Only **sense-intronic** candidates appear in this file. The question these columns
-answer — could this model be a fragment of its host's unspliced precursor — is only
-open for a model lying inside an intron of a gene on its own strand. An antisense
-model cannot come from the host's precursor whatever its reads do, and for a model
-sharing splice structure with the host, carrying the host's junctions is what its
-class code already says.
-
-Reads are counted **only in the samples where the candidate was quantified**. Every
-sample carries reads over the same locus whether or not the model was called there,
-and in a sample that did not call it those reads are the host's; pooling them in
-would measure the host and report the number as the candidate's. A model supported
-in one sample and absent from the rest is measured in that one sample.
-
-The genomic context panels still draw **every** sample's coverage over the locus.
-Seeing what the locus looks like in the samples that did not call the model is the
-point of the figure; the samples the numbers came from are named in bold.
-
-| Column | Meaning |
-|--------------------------|----------------------------------------------|
-| `same_strand_as_host` | `TRUE` throughout, since only sense-intronic candidates are evaluated. Retained so the file is self-describing. |
-| `samples_quantified` / `samples_total` | How many samples carry a non-zero count for this transcript, and how many were sequenced. Every read count in the row is over those samples. |
-| `quantified_samples` | Which samples those are, semicolon-separated. The genomic context panel names them in bold beside their coverage tracks. |
-| `reads_total` | Supporting reads over the candidate, in the quantified samples. Zero where the candidate was quantified in no sample. |
-| `median_overrun_5p` / `median_overrun_3p` | Median distance, in bases, that supporting reads extend past the transcript's 5′ and 3′ end. A discrete transcript sits near zero on both. Zero where most reads stop within the model. `NA` where no reads were recovered. |
-| `q90_overrun_5p` / `q90_overrun_3p` | The 90th percentile of the same distances. Reported beside the median because a candidate where a third of the reads run through by a kilobase has a median of zero — the median alone would hide it. |
-| `reads_with_host_junction` | Supporting reads carrying a splice junction belonging to the host gene. Evidence that the read came from the host, not from the candidate. |
-| `reads_spliced_into_host_exon` | Supporting reads spliced from the candidate into one of the host's exons. This is a **finding**, not an artifact: the candidate is most likely an unannotated exon of the host. |
-| `frac_with_host_junction` | The count over `reads_total`. `NA` where no reads were recovered. |
-
-Boundary overrun is reported as a **distance**, not as a count of reads past a
-cutoff. There is no principled cutoff to use: the tolerances published for SQANTI3
-(50 bp) and gffcompare (`-e`, 100 bp) compare one transcript *model* against
-another, where this compares a read against the model that was assembled *from*
-that read. Those are different quantities, and the second has no literature
-constant behind it.
-
-No transcript is removed on the basis of these columns. They are reported so that
-a count is never quoted without the evidence behind it.
+`y`, where the novel transcript contains the reference. The word *host* is kept only
+in the genomic context outputs, which cover intronic candidates alone, where it is
+accurate.
 
 
 ## `genomic_context/` (coverage and transcript models at selected loci)
@@ -489,16 +480,25 @@ a count is never quoted without the evidence behind it.
 | `genomic_context_<gene>.png` | Gene structure, every isoform at the locus with novel ones highlighted, and one coverage track per sample on a shared scale. Selected from genes carrying both known and novel isoforms. |
 | `genomic_context_candidates.csv` | The loci drawn, with their windows and isoform counts. |
 | `genomic_context_regions.gtf` | The plotted regions as a small GTF. Built to feed `makeTxDbFromGFF`, but useful on its own — load it in IGV beside the published bigWigs. |
-| `intronic_context_<transcript>.png` | The flagged set: intronic candidates on their host's strand whose supporting reads run past the boundaries or carry host junctions. Windowed on the **whole host intron**, because a window drawn tightly around a truncated fragment looks discrete whatever it is. |
-| `intronic_context_candidates.csv` | The flagged candidates drawn, with the read counts behind their selection. |
+| `intronic_context_<transcript>.png` | Sense-intronic candidates: models lying inside a reference gene's intron, on that gene's own strand. Windowed on the **whole host intron**, because a window drawn tightly around a truncated fragment looks discrete whatever it is. |
+| `intronic_context_candidates.csv` | The candidates drawn, with the structure and counts behind their ordering: `num_exons`, `full_length_support`, `counts_total`, and which samples quantified each. |
+
+Sense intronic is the one relationship the assembly cannot resolve on its own. Such a
+model is sequence-identical to part of its host's **unspliced precursor** — the primary
+transcript, before its introns are removed — so position cannot separate the two, and
+neither can any count. On the opposite strand there is no such ambiguity: the host's
+precursor runs the other way and cannot produce it.
+
+Candidates are ordered most ambiguous first — unspliced models, then those with no
+full-length support, then by count so each panel has coverage worth looking at. The
+ordering is structural; nothing is scored and nothing is filtered.
 
 The two sets exist to be read against each other. A candidate that really is host
 pre-mRNA shows coverage running flat across the whole intron and continuous with
 the flanking exons; a genuine independent transcript shows a discrete block with
-quiet intron either side. If a flagged candidate looks discrete, the flag is what
-needs revisiting — not the transcript.
+quiet intron either side. The panel is the evidence.
 
-## `bam_coverage/` (per-sample coverage tracks)
+## `coverage/` (per-sample coverage tracks)
 
 | File | Description |
 |--------------------------|----------------------------------------------|

@@ -48,10 +48,13 @@ Two consequences follow:
   reverse transcription starts from an internal position and the resulting cDNA
   is a truncated fragment that appears to end inside an intron. This is *internal
   priming*, and it produces exactly the profile of a candidate intronic lncRNA:
-  unspliced, intronic, no ORF, a few hundred bases to a few kb. The pipeline
-  flags the affected population (see `novel_context_flags.csv` in the
-  [output documentation](output.md)) rather than filtering it, because filtering
-  would destroy the measurement and remove real transcripts alongside artifacts.
+  unspliced, intronic, no ORF, a few hundred bases to a few kb. The pipeline does
+  not filter the affected population, because filtering would remove real
+  transcripts alongside artifacts. It surfaces it instead: such models are counted
+  as mono-exonic sense-intronic candidates in the report, and each of the ones
+  drawn is shown over its whole host intron in the genomic context panels, where
+  internal priming reads as coverage continuous with the host rather than as a
+  discrete block.
 
 Neither constraint is fundamental to long-read sequencing. Protocols exist that
 capture 3' ends independently of polyadenylation, and being free of oligo-dT they
@@ -124,6 +127,7 @@ After seeting up the samplesheet, follow up to set the pipeline parameters.
 | `restrand_config` | Optional custom Restrander configuration JSON; overrides `restrand_kit` |
 | `restrand_min_frac` | Minimum oriented fraction, per sample; below it the run stops (default `0.80`, minimum `0.5`) |
 | `skip_class` | Skip transcriptome characterization; `bambu` still runs (runs MultiQC, then finishes pipeline execution) |
+| `ndr` | Bambu's novel discovery rate. Leave unset for Bambu's own automatic choice (see [below](#novel-discovery-rate)) |
 | `coding_potential_pred` | Coding-potential predictor: `cpc2` (default) or `rnamining` |
 | `organism` | Organism scientific name (e.g. `"Homo_sapiens"`). Required by `rnamining`, ignored by `cpc2` |
 
@@ -164,6 +168,21 @@ Two things it deliberately does not do:
 The `restrander` report exists only for ONT cDNA the pipeline has to orient itself.
 Naming it for a library that is already oriented is not an error — the run proceeds
 and logs a warning saying the token had nothing to act on.
+
+### Novel discovery rate {#novel-discovery-rate}
+
+`ndr` is Bambu's threshold for calling a read class a novel transcript, and it has
+the single largest effect on how many novel candidates exist. Leave it unset and
+Bambu chooses one itself from the data; set it to a number between 0 and 1 to fix it.
+
+Bambu reports an automatically chosen NDR only on stdout, so the pipeline parses it
+back out and writes it to `bambu/bambu_run_metrics.csv` alongside what was requested.
+The report prints both at the top of **Overall Assembly Statistics**, so a figure is
+never read without knowing the threshold behind it.
+
+A lower NDR admits fewer, better-supported novel models; a higher one admits more and
+shifts the burden onto the evidence reported per candidate. Neither is a default worth
+recommending sight-unseen — if you fix it, record why.
 
 ### Coding potential
 

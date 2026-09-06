@@ -61,7 +61,6 @@ process NOVEL_TRANSCRIPTS {
     """
 
     stub:
-    // REMOVED the unused 'def args' line from here
     """
     touch novel_transcripts_metadata.csv
     touch novel_lncRNAs_metadata.csv

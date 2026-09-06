@@ -75,7 +75,7 @@ output:
   - novel_gtf:
       type: file
       description: GTF containing all novel transcripts.
-      pattern: "novel_transcripts.gtf"
+      pattern: "novel_transcripts_validated.gtf"
   - novel_lncrna_exon_lengths:
       type: file
       description: Exon length distribution for novel lncRNA transcripts.

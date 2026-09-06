@@ -23,7 +23,11 @@ format:
                 background-repeat: no-repeat !important;
                 background-origin: content-box;
                 }
-            </style>    
+                /* Bootstrap's .img-fluid rule does not always survive into the
+                   self-contained HTML, and without it a figure lays out at its
+                   natural pixel width and the page scrolls sideways. */
+                img { max-width: 100%; height: auto; }
+            </style>
     include-after-body:
         text: |
             <style>
@@ -70,6 +74,9 @@ execute:
     warning: false
     message: false
     error: true
+    # Without this knitr draws every device at twice fig-width x dpi and relies on
+    # the HTML to scale it back down, which this document does not do.
+    fig-retina: 1
 params:
     counts_genes: "BambuOutput_counts_gene_validated.txt"
     counts_transcript: "BambuOutput_counts_transcript_validated.txt"
@@ -84,8 +91,6 @@ params:
     novel_lncrna_exonlength: "novel_lncRNA_exon_lengths.csv"
     novel_protein_coding_exonlength: "novel_protein-coding_exon_lengths.csv"
     novel_non_coding_meta: "novel_non_coding_metadata.csv"
-    context_flags: "novel_context_flags.csv"
-    context_summary: "novel_context_summary.csv"
     genomic_context_candidates: "genomic_context_candidates.csv"
     intronic_context_candidates: "intronic_context_candidates.csv"
     raw_pca: "pca.png"
@@ -101,10 +106,9 @@ params:
 knitr:
   opts_chunk:
     fig.showtext: true
-    # 150 dpi rather than 300. The figures are embedded as base64 in a
-    # self-contained HTML, and 300 dpi pushed the rendered report past 20 MB for
-    # no visible gain on screen -- 150 is indistinguishable at normal zoom and
-    # roughly quarters the pixel count.
+    # Kept at 300 so figures stay legible when zoomed or printed. Two things move
+    # with it: REPORT_DPI in the setup chunk, which showtext uses to size every
+    # glyph, and fig-retina above.
     #
     # fig-format: svg would be sharper still, but showtext draws glyphs as
     # polygons, so every axis label, facet strip and legend entry becomes vector
@@ -130,8 +134,8 @@ library(ComplexUpset)
 ```{r}
 #| label: setup
 #| include: false
-# Keep in step with `dpi:` in the YAML header above. If they disagree, showtext}
-# sizes every glyph against the wrong resolution and all text scales wrongly.
+# Must match `dpi:` in the YAML header above. If they disagree, showtext sizes every
+# glyph against the wrong resolution and all text scales wrongly.
 REPORT_DPI <- 300
 REF_WIDTH  <- 10
 BASE_SIZE  <- 11
@@ -159,8 +163,7 @@ update_geom_defaults("label", list(family = "Source Sans 3", size = 9 / .pt))
 
 # --- Shared log axes ---------------------------------------------------------
 # Every log-scaled axis in this report goes through these, so tick labels read
-# 1,000 rather than a mixture of 1,000 and 1e+03. scales::breaks_log() replaces
-# trans_breaks(), which is deprecated from scales 1.3.0.
+# 1,000 rather than a mixture of 1,000 and 1e+03.
 #
 # expand_top adds headroom above the highest bar. Set it wherever count labels
 # are drawn on top of bars, otherwise the topmost label is clipped by the panel
@@ -239,7 +242,7 @@ is_assembled_chromosome <- function(x) {
 # biotype rows. One row per biotype rather than one panel, so a genome-wide figure
 # is a single grid instead of five stacked panels sharing an axis.
 chr_dist_layout <- function(n_x, n_rows, x_w = 0.3, row_h = 1.5,
-                            min_w = 6, max_w = 14, min_h = 3, max_h = 20) {
+                            min_w = 6, max_w = 12, min_h = 3, max_h = 20) {
   w_want <- n_x * x_w + 2.4
   if (w_want > max_w) {
     warning(sprintf("chr_dist_layout: %d x categories want %.1f in, capped at %.1f; labels may collide.",
@@ -456,11 +459,13 @@ plot_upset <- function(df, sets, fill_col = NULL, title = NULL, subtitle = NULL,
 
 ## Introduction
 
-This report provides a detailed analysis of a transcriptome assembled from long-read RNA sequencing data. The primary goal is to identify and characterize both known (annotated) and novel protein-coding and lncRNA transcripts. These results are organized into three main sections:
+This report provides a detailed analysis of a transcriptome assembled from long-read RNA sequencing data. The primary goal is to identify and characterize both known (annotated) and novel protein-coding and lncRNA transcripts. These results are organized into five sections:
 
 1.  **Overall Assembly Statistics:** A high-level view of the assembly results.
 2.  **Annotated RNAs Overview:** Characteristics of known transcripts identified in your samples.
-3.  **Novel RNAs Overview:** An exploration of the newly discovered protein-coding and lncRNA transcripts.
+3.  **Novel Candidates Overview:** An exploration of the newly discovered transcripts.
+4.  **Evidence Behind the Novel Calls:** What each novel candidate does and does not have going for it.
+5.  **Genomic Context:** Coverage and transcript models drawn together at selected loci.
 
 This automated report was generated by the `integrativebioinformatics/pulposeq` pipeline.
 
@@ -472,10 +477,15 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 
 [^1]: Chen, Ying, et al. "Context-aware transcript quantification from long-read RNA-seq data with Bambu." Nature methods 20.8 (2023): 1187-1195. https://doi.org/10.1038/s41592-023-01908-w
 
-1.  Any gene or transcript that had zero counts across all samples were subset out(check the subset quantification files in the results folder `bambu_filter/`).
+1.  Any gene or transcript with zero counts across all samples was filtered out (the filtered quantification files are in the results folder `bambu_filter/`).
 2.  Novel transcript isoforms were compared to the reference annotation by **GffCompare** [^2] and submitted to coding-potential prediction with **CPC2** [^3], or with **RNAmining** [^4] where that predictor was selected. Each was then routed into one of three categories from its class code, its prediction and the biotype of the reference gene it was matched against.
 3.  The structure of the isoforms is characterized, and metadata regarding isoform-level structure is retrieved directly from the reference annotation and assembly GTF files with **rtracklayer**[^5].
-4.  Finally, annotations, count matrices and characterization metadata are standardized into comprehensive metadatasets that are easily accessible for downstream analyses, and the overall statistics of the assembly are summarized in the following sections of this report.
+4.  Count matrices and GTFs are restricted to the curated set, and biotype and classification attributes are attached to the validated annotations.
+5.  Bambu's PCA and expression heatmaps are regenerated from the curated transcriptome, so the sample-level view can be read beside the one built from the raw assembly.
+6.  Per-base coverage is written per sample as bigWig, and selected loci are drawn over those tracks with **plotgardener**[^7].
+7.  Finally, annotations, count matrices and characterization metadata are standardized into comprehensive metadatasets that are easily accessible for downstream analyses, and the overall statistics of the assembly are summarized in the following sections of this report.
+
+[^7]: Kramer, Nicole E., et al. "Plotgardener: cultivating precise multi-panel figures in R." Bioinformatics 38.7 (2022): 2042-2045. https://doi.org/10.1093/bioinformatics/btac057
 
 [^2]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1
 
@@ -485,7 +495,7 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 
 [^5]: Lawrence, Michael, Robert Gentleman, and Vincent Carey. "rtracklayer: an R package for interfacing with genome browsers." Bioinformatics 25.14 (2009): 1841-1842. https://doi.org/10.1093/bioinformatics/btp328
 
-Final validated results are organized into the folders `bambu_validated`, `novel_trancripts` and `ref_transcripts` in the output directory.
+Final validated results are organized into the folders `bambu_validated`, `novel_transcripts` and `ref_transcripts` in the output directory. Per-sample coverage tracks are published to `coverage/` as bigWig, and the genomic context figures to `genomic_context/`.
 
 ::: callout-note
 ## Filtering criteria
@@ -497,10 +507,10 @@ A novel transcript is carried forward only if it meets **all** of the following:
 - **Non-zero counts** in at least one sample.
 - **An accepted gffcompare class code** — `u`, `i`, `x`, `j`, `k`, `o`, `y`, `m` or `n`.
 
-Nothing is filtered on structural evidence. Candidates carrying warning signs are reported with those signs attached, in [Structural Validation of Novel Calls].
+Nothing is filtered on structural evidence. Candidates carrying warning signs are reported with those signs attached, in [Evidence Behind the Novel Calls].
 :::
 
-  [Structural Validation of Novel Calls]: #structural-validation-of-novel-calls
+  [Evidence Behind the Novel Calls]: #evidence-behind-the-novel-calls
 
 </details>
 
@@ -571,9 +581,11 @@ A transcript lying inside an intron **on the host gene's own strand** is sequenc
 
 **On the opposite strand there is no such ambiguity.** The host's precursor runs the other way and cannot produce it.
 
-The ambiguity comes from splicing, not from coding potential, so it applies to any host carrying introns whatever its biotype — lncRNA genes are transcribed by Pol II and spliced exactly as protein-coding genes are, and the hosts here are frequently lncRNA genes. Sense-intronic candidates are kept, never dropped; the read-level evidence gathered for each is reported in [Structural Validation of Novel Calls].
+The ambiguity comes from splicing, not from coding potential, so it applies to any host carrying introns whatever its biotype — lncRNA genes are transcribed by Pol II and spliced exactly as protein-coding genes are, and the hosts here are frequently lncRNA genes. Sense-intronic candidates are kept, never dropped. They are counted as such in [Evidence Behind the Novel Calls], and each of the ones drawn is shown over its whole host intron in [Genomic Context], where coverage continuous with the flanking exons distinguishes a fragment of the precursor from a discrete transcript.
 
-  [Structural Validation of Novel Calls]: #structural-validation-of-novel-calls
+  [Genomic Context]: #genomic-context
+
+  [Evidence Behind the Novel Calls]: #evidence-behind-the-novel-calls
 
 </details>
 
@@ -601,9 +613,9 @@ It is not a set of validated lncRNAs. A coding-potential prediction is evidence 
 - A **sense-intronic** model cannot be distinguished from a fragment of its host's unspliced precursor by position alone.
 - A model **sharing splice structure with a protein-coding gene** may be an unproductive isoform of that gene rather than a new non-coding locus; these are reported as *predicted non-coding* rather than as lncRNA candidates.
 
-The [Structural Validation of Novel Calls] section reports what other evidence each candidate carries. Nothing is filtered on that basis: a candidate set with the evidence stated per member is a stronger result than an unqualified count.
+The [Evidence Behind the Novel Calls] section reports what other evidence each candidate carries. Nothing is filtered on that basis: a candidate set with the evidence stated per member is a stronger result than an unqualified count.
 
-  [Structural Validation of Novel Calls]: #structural-validation-of-novel-calls
+  [Evidence Behind the Novel Calls]: #evidence-behind-the-novel-calls
 
 </details>
 
@@ -645,21 +657,24 @@ cat(sprintf("**Novel discovery rate (NDR):** %s%s\n\n",
               " — selected automatically by Bambu" else " — set explicitly"))
 
 if (!is.null(vsum)) {
+  # Two decimals: 392,130 of 392,201 is 99.98%, and "100.0%" reads as a curation
+  # that lost nothing at all.
   vtab <- data.frame(
-    Feature      = vsum$feature_type,
-    `Curated set`= format(vsum$retained, big.mark = ","),
-    Expressed    = format(vsum$total, big.mark = ","),
-    `Recovery %` = sprintf("%.1f%%", 100 * vsum$fraction_retained),
-    check.names  = FALSE
+    Feature            = vsum$feature_type,
+    `Curated set`      = format(vsum$curated_set, big.mark = ","),
+    `Total quantified` = format(vsum$total_quantified, big.mark = ","),
+    `Recovery %`       = sprintf("%.2f%%", 100 * vsum$recovery),
+    check.names        = FALSE
   )
-  if (!is.null(vsum$total_quantified)) {
-    vtab$Quantified <- format(vsum$total_quantified, big.mark = ",")
+  if (!is.null(vsum$extended_annotations)) {
+    vtab$`Extended annotation` <- format(vsum$extended_annotations, big.mark = ",")
   }
   cat(knitr::kable(vtab, format = "markdown"), sep = "\n")
-  cat(paste("\n\nRecovery is measured against the expressed features: those with at least",
-            "one count in at least one sample. Features quantified against the extended",
-            "annotation but supported by no reads are outside the curation and are not",
-            "counted as losses.\n"))
+  cat(paste("\n\n**Total quantified** is the expressed set: features carrying at least",
+            "one count in at least one sample, and the denominator recovery is measured",
+            "against. **Extended annotation** is every feature Bambu quantified against,",
+            "including those no read supports -- those are outside the curation and are",
+            "not counted as losses.\n"))
 }
 cat("\n:::\n")
 ```
@@ -1188,7 +1203,7 @@ cat("\n:::\n\n")
 
 This visualization maps the distribution of different gene biotypes across all chromosomes, revealing genomic hotspots for certain types of genes.
 
-> The layout of this figure adapts to how many chromosomes your data covers, so it should not need manual adjustment. If you do want to change the proportions, the per-panel allowance is set by `facet_layout()` in the `load-libraries` chunk; the plot itself is `fig-gb-across-chr`.
+> The layout of this figure adapts to how many chromosomes your data covers, so it should not need manual adjustment. If you do want to change the proportions, the per-panel allowance is set by `chr_dist_layout()` in the `setup` chunk; the plot itself is `fig-gb-across-chr`.
 
 ```{r}
 #| label: prep-chr-data
@@ -1431,11 +1446,13 @@ p19
 
 ------------------------------------------------------------------------
 
-## Novel Protein-Coding and lncRNA Candidates Overview
+## Novel Candidates Overview
 
-This section focuses on the characterization of newly identified protein-coding and lncRNA transcripts that were not present in the reference annotation. Every count below is a count of **candidates**: transcripts that meet the classification criteria and have not yet been shown to be independent transcriptional units. The evidence gathered for them is reported in [Structural Validation of Novel Calls].
+This section characterizes the transcripts that were not present in the reference annotation, across all three routed categories — **novel lncRNA candidates**, models **predicted protein-coding**, and models **predicted non-coding**. Every count below is a count of **candidates**: transcripts that meet the classification criteria and have not yet been shown to be independent transcriptional units. The evidence gathered for them is reported in [Evidence Behind the Novel Calls].
 
-  [Structural Validation of Novel Calls]: #structural-validation-of-novel-calls
+> The metadata behind this section is `novel_pc_lnc_RNAs_metadata.csv`. Despite its name it holds all three categories, `novel_non_coding` included.
+
+  [Evidence Behind the Novel Calls]: #evidence-behind-the-novel-calls
 
 > **About the Tools:**
 >
@@ -1455,8 +1472,8 @@ class_counts <- novel_tx %>% group_by(biotype, classification) %>% summarise(cou
 ```{r}
 #| label: fig-novel-biotypes-and-classes
 #| fig-cap: "**GFFCompare Classification of Novel Transcripts.** This bar chart shows the counts of novel protein-coding and lncRNA transcripts according to their GFFCompare classification code."
-#| fig-width: 6
-#| fig-height: 10
+#| fig-width: 7
+#| fig-height: 9
 
 p20 <- plot_count_lollipop(
   class_counts, x = classification, y = biotype,
@@ -1501,8 +1518,8 @@ has_ref_bt <- !is.null(ref_bt_long) && nrow(ref_bt_long) > 0
 ```{r}
 #| label: fig-lnc-ix-ref-biotype
 #| fig-cap: "**Reference biotypes behind the intronic and antisense novel lncRNA candidates.** Class codes `i` and `x` become lncRNA candidates on the coding prediction alone, whatever the reference gene is, so this figure says what those references actually were. Columns are the gene and transcript level of the reference; rows are the classification. The count is printed above each point, and a combination absent from the data reads as a labelled 0."
-#| fig-width: 12
-#| fig-height: 10
+#| fig-width: 11
+#| fig-height: 9
 #| eval: !expr has_ref_bt
 
 lnc_ix <- ref_bt_long %>%
@@ -1515,7 +1532,7 @@ if (nrow(lnc_ix)) {
     title = "Novel lncRNA candidates: intronic and antisense",
     subtitle = "",
     x_lab = "Reference biotype", count_lab = "Candidates", angle_x = 90) +
-    theme_width(13) +
+    theme_width(11) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), 
           strip.text.y = element_text(angle = 0))
 } else {
@@ -1526,8 +1543,8 @@ if (nrow(lnc_ix)) {
 ```{r}
 #| label: fig-related-ref-biotype
 #| fig-cap: "**Reference biotypes behind the remaining novel calls.** These class codes share splice structure with a reference transcript, so the reference gene's biotype is part of how they are routed. One figure per routed category; columns are the gene and transcript level of the reference, rows the classification."
-#| fig-width: 15
-#| fig-height: 10
+#| fig-width: 12
+#| fig-height: 9
 #| eval: !expr has_ref_bt
 
 related <- ref_bt_long %>%
@@ -1545,7 +1562,7 @@ for (cat_name in c("predicted protein-coding", "predicted non-coding",
       d, x = ref_biotype, y = classification, facet = "level",
       title = sprintf("%s: structurally related calls", cat_name),
       x_lab = "Reference biotype", count_lab = "Transcripts", angle_x = 90) +
-      theme_width(13) +
+      theme_width(12) +
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), 
             strip.text.y = element_text(angle = 0))
   )
@@ -1561,7 +1578,7 @@ The figure below is therefore an UpSet over the two stricter definitions, stacke
 ```{r}
 #| label: fig-lnc-matrix-support
 #| fig-cap: "**Read support for novel lncRNA candidates, by classification.** Each bar is one combination of read support, stacked by classification. Full-length support means reads spanning the whole model; unique support means reads not compatible with any other transcript. The bar with both dots grey holds candidates quantified purely from expectation-maximisation — reads were assigned to them, but none spanned them and none was unambiguous. Set sizes on the right are the totals per kind of support."
-#| fig-width: 14
+#| fig-width: 11
 #| fig-height: 6
 
 lnc_sets <- novel_tx %>%
@@ -1583,7 +1600,7 @@ plot_upset(
 
 This visualization maps the distribution of novel protein-coding and lncRNA transcripts across all chromosomes.
 
-> The layout of this figure adapts to how many chromosomes your data covers, so it should not need manual adjustment. If you do want to change the proportions, the per-panel allowance is set by `facet_layout()` in the `load-libraries` chunk; the plot itself is `fig-novel-across-chr`.
+> The layout of this figure adapts to how many chromosomes your data covers, so it should not need manual adjustment. If you do want to change the proportions, the per-panel allowance is set by `chr_dist_layout()` in the `setup` chunk; the plot itself is `fig-novel-across-chr`.
 
 ```{r}
 #| label: prep-novel-chr-data
@@ -1848,17 +1865,17 @@ p32 <- ggplot(exlen_novel, aes(x = biotype, y = width,
 p32
 ```
 
-## Structural Validation of Novel Calls {#structural-validation-of-novel-calls}
+## Evidence Behind the Novel Calls {#evidence-behind-the-novel-calls}
 
-Novel transcripts are candidates, not findings. This section reports the structural evidence gathered for each one, and nothing here filters the output: every transcript counted above is still present. The point is to say which candidates carry warning signs and which do not, so that a count is never quoted without knowing what sits behind it.
+Novel transcripts are candidates, not findings. This section reports what evidence each one carries, and nothing here filters the output: every transcript counted above is still present. The point is to say which candidates carry warning signs and which do not, so that a count is never quoted without knowing what sits behind it.
 
-Evidence is reported separately for the three categories a novel model is routed into — **novel lncRNA candidates**, models **predicted protein-coding**, and models **predicted non-coding** — because the same warning sign does not carry the same weight in each.
+The evidence is **structural and quantitative**, not read-level: how a model is spliced, whether Bambu's full-length and unique count matrices contain it, and what its class code says about its relationship to the annotation. Each is a property of the assembly rather than a measurement made against the alignments, so none of it depends on a threshold chosen after the fact.
 
-Strand relative to the reference gene is carried by the classification itself. For every candidate class code except `i` it is fixed: `x` is antisense by definition, and `j`, `k`, `o`, `y`, `m` and `n` are same-strand matches. Class code `i` is qualified **(sense)** or **(antisense)**, and that distinction is what the figures below are grouped on.
+Strand relative to the reference gene is carried by the classification itself. For every candidate class code except `i` it is fixed: `x` is antisense by definition, and `j`, `k`, `o`, `y`, `m` and `n` are same-strand matches. Class code `i` is qualified **(sense)** or **(antisense)**, and it is the sense half that cannot be resolved from the assembly at all: such a model lies inside a host gene's intron on the host's own strand, which makes it sequence-identical to part of that host's **unspliced precursor** — the primary transcript, before its introns are removed. Position cannot separate the two, and neither can any count.
 
-The read-level test asks whether the reads supporting a candidate stop where the candidate stops. Reads running past its boundaries, or carrying splice junctions that belong to the host rather than to the candidate, came from a longer molecule — most often the host's own **unspliced precursor**, the primary transcript before its introns are removed. A sense-intronic candidate is sequence-identical to part of that precursor, so position alone cannot separate the two; an antisense candidate cannot be explained that way at all. Hosts are frequently lncRNA genes rather than protein-coding ones — a lncRNA gene is transcribed by Pol II and spliced just as a protein-coding gene is — so the host biotype is reported alongside every candidate.
+Those candidates are drawn individually in [Genomic Context], windowed on the whole host intron, and read by eye.
 
-Each candidate is measured **only in the samples where it was quantified**. Every sample carries reads over the same locus whether or not the model was called there, and those reads belong to the host; counting them would measure the host and report the result as the candidate's. A model supported in one sample and absent from the others is measured in that one sample, and the number of samples behind each figure is reported with it.
+  [Genomic Context]: #genomic-context
 
 ```{r}
 #| label: context-prep
@@ -1870,170 +1887,18 @@ read_csv_safe <- function(path) {
   if (is.null(df) || !nrow(df)) NULL else df
 }
 
-ctx_flags   <- read_csv_safe(params$context_flags)
-ctx_summary <- read_csv_safe(params$context_summary)
-novel_nc    <- read_csv_safe(params$novel_non_coding_meta)
-
-#' Attach the routed category and the classification wording to a table keyed on
-#' qry_id. Anything the metadata does not carry is named rather than dropped.
-#'
-#' The classification, not the bare class code, is what the figures in this section
-#' group on: it carries the sense/antisense split of `i`, which is the only strand
-#' distinction that varies within a class code.
-add_novel_category <- function(df, id_col = "qry_id") {
-  if (is.null(df) || !nrow(df)) return(df)
-
-  df$novel_category <- NA_character_
-  df$classification <- NA_character_
-
-  if (exists("novel_tx") && "transcript_biotype" %in% names(novel_tx)) {
-    idx <- match(df[[id_col]], novel_tx$qry_id)
-    df$novel_category <- unname(NOVEL_BIOTYPE_LABELS[novel_tx$transcript_biotype[idx]])
-    if ("classification" %in% names(novel_tx)) {
-      df$classification <- novel_tx$classification[idx]
-    }
-  }
-
-  df$novel_category[is.na(df$novel_category)] <- "not routed"
-  miss <- is.na(df$classification) | !nzchar(df$classification)
-  df$classification[miss] <- ifelse(is.na(df$class_code[miss]), "unknown",
-                                    df$class_code[miss])
-
-  df$novel_category <- factor(df$novel_category,
-                              levels = c(unname(NOVEL_BIOTYPE_LABELS), "not routed"))
-  df
-}
-
-ctx_flags <- add_novel_category(ctx_flags)
-
-# Rows whose classification is sense intronic, matched on the wording rather than
-# on class code plus strand so it keeps working if either changes shape. The
-# host-relationship figures below are restricted to these: boundary read-through
-# and host-junction reads answer "could this be a fragment of the host's unspliced
-# precursor", and that question is only open for a model inside a same-strand
-# intron.
-SENSE_INTRONIC_ROWS <- function(d) {
-  grepl("^sense intronic", as.character(d$classification))
-}
-
-# Chunk options cannot use `!expr !is.null(x)`: YAML reads `!expr` as a tag and
-# then hits a second `!`, which is a duplicate tag property and a parse error.
-# Same reason the existing scaffold chunks carry a plain `has_*` flag.
-has_ctx_flags <- !is.null(ctx_flags)
-
-ctx_metric <- function(key) {
-  if (is.null(ctx_summary)) return(NA_integer_)
-  v <- ctx_summary$value[ctx_summary$metric == key]
-  if (length(v)) as.integer(v[1]) else NA_integer_
-}
-
-fmt_n <- function(x) if (is.na(x)) "not recorded" else format(x, big.mark = ",")
-```
-
-```{r}
-#| label: context-callout
-#| echo: false
-#| output: asis
-
-if (is.null(ctx_flags)) {
-  cat('::: {.callout-warning appearance="simple"}\n')
-  cat("## Structural validation did not run\n\n")
-  cat("No `novel_context_flags.csv` was available, so the candidates in this report ")
-  cat("carry no structural evidence. Every count above should be read as unvalidated.\n")
-  cat(":::\n")
-} else {
-  same  <- ctx_metric("same_strand_as_host")
-  opp   <- ctx_metric("opposite_strand_to_host")
-  isame <- ctx_metric("intronic_same_strand")
-  ijunc <- ctx_metric("intronic_same_strand_with_host_junction")
-  none  <- ctx_metric("no_reads_recovered")
-
-  cat('::: {.callout-note appearance="simple"}\n')
-  cat("## Structural evidence, in short\n\n")
-  cat(sprintf("- **%s** candidates evaluated.\n", fmt_n(ctx_metric("candidates_evaluated"))))
-  cat(sprintf("- **%s** lie within a host gene: %s on the same strand, %s on the opposite strand.\n",
-              fmt_n(ctx_metric("with_host_gene")), fmt_n(same), fmt_n(opp)))
-  cat(sprintf("- **%s** are intronic *and* on the host's strand, which is the ambiguous population.\n",
-              fmt_n(isame)))
-  cat(sprintf("- Of those, **%s** are supported by reads carrying one of the host's splice junctions, which is evidence those reads came from the host.\n",
-              fmt_n(ijunc)))
-  if (!is.na(none) && none > 0) {
-    cat(sprintf("- **%s** recovered no overlapping reads at all and cannot be assessed either way.\n",
-                fmt_n(none)))
-  }
-  cat("\n:::\n")
-}
-```
-
-### Read-level evidence
-
-```{r}
-#| label: fig-context-overrun
-#| fig-cap: "**How far the supporting reads run past each end of a sense-intronic candidate.** One point per candidate: the median distance, in bases, that its reads extend beyond its 5′ and 3′ boundary. A discrete transcript sits at zero on both — its reads stop where it stops. A fragment of the host's unspliced precursor has reads continuing into the surrounding intron, and shows as a large overrun. The axis is log-like but includes zero, which is where most candidates should sit."
-#| fig-width: 11
-#| fig-height: 6
-#| eval: !expr has_ctx_flags
-
-# The two ends are separated because they are not equivalent: reverse transcription
-# falls short at the 5' end while the poly(A) tail anchors the 3', so they have
-# different noise floors and pooling them hides that.
-overrun_df <- ctx_flags %>%
-  filter(SENSE_INTRONIC_ROWS(.), reads_total > 0) %>%
-  select(novel_category, median_overrun_5p, median_overrun_3p) %>%
-  pivot_longer(cols = c(median_overrun_5p, median_overrun_3p),
-               names_to = "end", values_to = "bases") %>%
-  filter(!is.na(bases)) %>%
-  mutate(end = recode(end,
-    median_overrun_5p = "5' end",
-    median_overrun_3p = "3' end")) %>%
-  droplevels()
-
-ggplot(overrun_df, aes(x = novel_category, y = bases, fill = end)) +
-  geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3) +
-  scale_y_continuous(trans = COUNT_TRANS, breaks = COUNT_BREAKS,
-                     labels = scales::label_number(big.mark = ",")) +
-  scale_fill_viridis_d(option = "viridis", begin = 0.25, end = 0.75) +
-  theme_width(11) +
-  labs(title = "Read overrun past the boundaries of sense-intronic candidates",
-       subtitle = "Median bases each candidate's reads extend beyond it; zero means the reads stop where it does",
-       x = NULL, y = "Median overrun (bases)", fill = NULL) +
-  theme(legend.position = "top")
-```
-
-```{r}
-#| label: fig-context-junction
-#| fig-cap: "**Fraction of supporting reads carrying one of the host gene's splice junctions.** A read carrying a junction the candidate does not have came from the molecule that does — the host's own transcript. A discrete transcript sits near zero; values near one mean the support belongs to the host."
-#| fig-width: 9
-#| fig-height: 5
-#| eval: !expr has_ctx_flags
-
-junction_df <- ctx_flags %>%
-  filter(SENSE_INTRONIC_ROWS(.), reads_total > 0) %>%
-  select(novel_category, frac_with_host_junction) %>%
-  filter(!is.na(frac_with_host_junction)) %>%
-  droplevels()
-
-ggplot(junction_df, aes(x = novel_category, y = frac_with_host_junction,
-                        fill = novel_category)) +
-  geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.3, show.legend = FALSE) +
-  scale_fill_viridis_d(option = "viridis", end = 0.85, guide = "none") +
-  theme_width(9) +
-  labs(title = "Supporting reads carrying a host splice junction",
-       subtitle = "Higher means more of the support belongs to the host rather than to the candidate",
-       x = NULL, y = "Fraction of supporting reads")
+novel_nc <- read_csv_safe(params$novel_non_coding_meta)
 ```
 
 ### Which warning signs occur together
 
-The figures above each show one signal at a time. What decides whether a candidate is worth distrusting is whether the signals **agree** — and that is a question about combinations, not about any single distribution.
+Any one of these properties, on its own, describes a great many perfectly ordinary transcripts. What decides whether a candidate is worth distrusting is whether the signals **agree** — and that is a question about combinations, not about any single distribution.
 
-Each bar below is one exact combination of flags: mono-exonic, most reads overrunning the 5′ end, most reads overrunning the 3′ end, reads carrying the host's junctions, and no full-length support. The transcripts to look at first are in the bar carrying all five at once — an unspliced model whose reads run past both of its ends, carry junctions belonging to something else, and never span it. That is the profile of a precursor fragment, and it is one bar you can point at rather than a conjunction assembled from several figures.
+Each bar below is one exact combination of four facts: the model is unspliced, Bambu's full-length matrix does not contain it, its unique matrix does not contain it, and it sits inside a host intron on the host's own strand. The candidates to look at first are in the bar carrying all four — an unspliced model inside a host intron, never spanned end to end by a read and never assigned one unambiguously. That is the profile a fragment of the host's precursor has, and it is one bar you can point at rather than a conjunction assembled from several figures.
 
-The two overrun flags mean *the median read overruns at all* — more than half the supporting reads extend past that end by at least one base. A set has to be a yes or no, and that is the one boolean an overrun distance yields without a cutoff chosen in advance: the split sits at the median of the data. How far they overrun is the figure above; this only asks whether most of them do.
+Every set here is threshold-free: each is a membership or a count being zero, not a value crossing a cutoff. None of them is a verdict on its own — a genuine mono-exonic lncRNA looks like this too, which is exactly why the panels in [Genomic Context] exist.
 
-**Restricted to sense-intronic candidates**, as above: two of these flags are host-relationship measures, and a model that is not inside a same-strand intron cannot be a fragment of that host's precursor whatever its reads do. Bars are stacked by the category each model was routed into.
-
-Every flag here is structural and threshold-free — each is a count being zero or non-zero, not a value crossing a cutoff.
+  [Genomic Context]: #genomic-context
 
 ```{r}
 #| label: evidence-sets-prep
@@ -2041,42 +1906,27 @@ Every flag here is structural and threshold-free — each is a count being zero 
 
 evidence_sets <- NULL
 
-if (!is.null(ctx_flags)) {
-  ev <- ctx_flags
-  if (exists("novel_tx") && "exon" %in% names(novel_tx)) {
-    ev <- dplyr::left_join(ev, novel_tx[, c("qry_id", "exon")], by = "qry_id")
-  } else {
-    ev$exon <- NA_character_
-  }
-
-  # Full-length support is membership of Bambu's fullLengthCounts matrix, which is
-  # a zero/non-zero fact rather than a threshold on a fraction.
+if (exists("novel_tx") && nrow(novel_tx)) {
+  # Membership of Bambu's matrices: a zero/non-zero fact rather than a threshold
+  # on a fraction.
   fl_ids <- if (exists("bambu_ids") && !is.null(bambu_ids$fullLength)) {
     bambu_ids$fullLength
   } else {
     character(0)
   }
+  uq_ids <- if (exists("bambu_ids") && !is.null(bambu_ids$uniquelyMapped)) {
+    bambu_ids$uniquelyMapped
+  } else {
+    character(0)
+  }
 
-  # Sense intronic only, for the same reason as the figure above: two of these four
-  # flags are host-relationship measures, and they are only interpretable for a
-  # model sitting inside a same-strand intron.
-  #
-  # Strand is not a set here. It varies only for class code i, and after this filter
-  # every row is sense intronic anyway, so a strand set would be a matrix row that
-  # is TRUE throughout.
-  evidence_sets <- ev %>%
-    dplyr::filter(SENSE_INTRONIC_ROWS(.)) %>%
+  evidence_sets <- novel_tx %>%
     dplyr::mutate(
-      `mono-exonic`                 = !is.na(exon) & exon == "mono-exonic",
-      # "The median read overruns at all" -- more than half the supporting reads
-      # extend past that end by at least one base. A set has to be a yes/no, and
-      # this is the one boolean a distance yields without a chosen cutoff: the
-      # split is at the median of the data, not at a number picked in advance.
-      `most reads overrun 5'`       = !is.na(median_overrun_5p) & median_overrun_5p > 0,
-      `most reads overrun 3'`       = !is.na(median_overrun_3p) & median_overrun_3p > 0,
-      `reads carry a host junction` = reads_with_host_junction > 0,
-      `no full-length support`      = !(qry_id %in% fl_ids),
-      novel_category                = droplevels(factor(novel_category))
+      `mono-exonic`            = !is.na(exon) & exon == "mono-exonic",
+      `no full-length support` = !(qry_id %in% fl_ids),
+      `no unique support`      = !(qry_id %in% uq_ids),
+      `sense intronic`         = grepl("^sense intronic", classification),
+      novel_category           = droplevels(factor(biotype))
     )
 
   if (!nrow(evidence_sets)) evidence_sets <- NULL
@@ -2087,19 +1937,19 @@ has_evidence_sets <- !is.null(evidence_sets)
 
 ```{r}
 #| label: fig-evidence-upset
-#| fig-cap: "**Combinations of structural warning signs across sense-intronic candidates.** Each bar is one exact combination; the dot matrix below names it, filled dots marking the flags that combination carries and grey dots the ones it does not. Bars are stacked by the category the model was routed into. Set sizes on the right give how many candidates carry each flag in total, whatever else they carry. The bar whose dots are all grey carries no warning signs at all. Counts are printed above each bar, since a small combination beside a large one is a short bar."
+#| fig-cap: "**Combinations of structural warning signs across novel candidates.** Each bar is one exact combination; the dot matrix below names it, filled dots marking the signs that combination carries and grey dots the ones it does not. Bars are stacked by the category the model was routed into. Set sizes on the right give how many candidates carry each sign in total, whatever else they carry. The bar whose dots are all grey carries no warning signs at all. Counts are printed above each bar, since a small combination beside a large one is a short bar."
 #| fig-width: 8
 #| fig-height: 6
 #| eval: !expr has_evidence_sets
 
 plot_upset(
   evidence_sets,
-  sets = c("mono-exonic", "most reads overrun 5'", "most reads overrun 3'",
-           "reads carry a host junction", "no full-length support"),
+  sets = c("mono-exonic", "no full-length support", "no unique support",
+           "sense intronic"),
   fill_col = "novel_category",
-  title    = "Structural warning signs among sense-intronic candidates",
+  title    = "Structural warning signs among novel candidates",
   subtitle = sprintf(
-    "%s candidates; more flags at once means less of the evidence is explained by a real, discrete transcript",
+    "%s candidates; more signs at once means less of the model is explained by a real, discrete transcript",
     format(nrow(evidence_sets), big.mark = ",")))
 ```
 
@@ -2108,28 +1958,24 @@ plot_upset(
 #| echo: false
 #| output: asis
 
-# Counted from the sets the UpSet above actually draws. Strand is not among them --
-# it varies only for class code i and is carried by the classification instead -- so
-# reading it here would index a column that does not exist, which is what the
-# "invalid argument type" error was.
 if (!is.null(evidence_sets)) {
-  flags <- c("most reads overrun 5'", "most reads overrun 3'",
-             "reads carry a host junction", "no full-length support")
-  flags <- flags[flags %in% names(evidence_sets)]
+  signs <- c("mono-exonic", "no full-length support", "no unique support",
+             "sense intronic")
+  signs <- signs[signs %in% names(evidence_sets)]
 
-  if (length(flags)) {
-    mat <- as.matrix(as.data.frame(evidence_sets[flags]))
+  if (length(signs)) {
+    mat <- as.matrix(as.data.frame(evidence_sets[signs]))
     mat[is.na(mat)] <- FALSE
-    n_all   <- sum(rowSums(mat) == length(flags))
+    n_all   <- sum(rowSums(mat) == length(signs))
     n_clean <- sum(rowSums(mat) == 0)
 
     cat(sprintf(paste0(
-      "Of %s candidates, **%s** carry every read-level flag at once (%s), and ",
-      "**%s** carry none of them. Neither number is a verdict: the first is the ",
-      "set to inspect, the second is the set with nothing arguing against it.\n"),
+      "Of %s candidates, **%s** carry every sign at once (%s), and **%s** carry ",
+      "none of them. Neither number is a verdict: the first is the set to inspect, ",
+      "the second is the set with nothing arguing against it.\n"),
       format(nrow(evidence_sets), big.mark = ","),
       format(n_all, big.mark = ","),
-      paste(flags, collapse = "; "),
+      paste(signs, collapse = "; "),
       format(n_clean, big.mark = ",")))
   }
 }
@@ -2195,8 +2041,8 @@ has_support <- !is.null(support)
 ```{r}
 #| label: fig-support-fraction
 #| fig-cap: "**Full-length and uniquely-mapped read support for novel transcripts, split by routed category.** Columns are the two support measures, rows the three categories, and the x axis the classification. Low full-length support means the reads behind a call do not span it; low unique support means those reads are compatible with other transcripts too, so the count came largely from expectation-maximisation rather than from unambiguous evidence."
-#| fig-width: 13
-#| fig-height: 10
+#| fig-width: 11
+#| fig-height: 9
 #| eval: !expr has_support
 
 support_long <- support %>%
@@ -2215,7 +2061,7 @@ ggplot(support_long, aes(x = classification, y = fraction, fill = exon)) +
   geom_boxplot() +
   facet_grid(rows = vars(novel_category), cols = vars(measure), scales = "free_x") +
   scale_fill_viridis_d(option = "viridis", begin = 0.3, end = 0.8) +
-  theme_width(13) +
+  theme_width(11) +
   labs(title = "Read support for novel transcripts",
        subtitle = "Low values mark candidates whose supporting reads fit them poorly",
        x = NULL, y = "Fraction of supporting reads", fill = "Exon class") +
@@ -2349,14 +2195,16 @@ embed_figures(gc_clean, "figure", c("tab", "label"), function(r) {
 })
 ```
 
-### Flagged intronic candidates
+### Sense-intronic candidates
 
-These are chosen for the opposite reason: each is an intronic candidate on its host's strand whose supporting reads run past its boundaries or carry the host's splice junctions. They are drawn windowed on the **whole host intron**, because a window drawn tightly around a truncated fragment looks like a discrete transcript whatever it is. The flanking intron is where the difference shows.
+These are chosen for the opposite reason: each lies inside an intron of its host gene, **on the host's own strand**. That is the one relationship position cannot resolve — such a model is sequence-identical to part of the host's unspliced precursor — so it is shown rather than scored. They are drawn windowed on the **whole host intron**, because a window drawn tightly around a truncated fragment looks like a discrete transcript whatever it is. The flanking intron is where the difference shows.
+
+Ordered most ambiguous first: unspliced models, then those Bambu never spanned with a full-length read, then by count, so each panel has coverage worth looking at.
 
 ::: {.callout-tip appearance="simple"}
 ## What to look for
 
-A candidate that really is host precursor shows coverage running flat across the entire intron and continuous with the flanking exons. A candidate that is a genuine independent transcript shows a discrete block of coverage with quiet intron either side. If a flagged candidate looks discrete here, the flag is what needs revisiting, not the transcript.
+A candidate that really is host precursor shows coverage running flat across the entire intron and continuous with the flanking exons. A candidate that is a genuine independent transcript shows a discrete block of coverage with quiet intron either side. Nothing upstream has judged these one way or the other — the panel is the evidence.
 :::
 
 ```{r}
@@ -2367,27 +2215,19 @@ A candidate that really is host precursor shows coverage running flat across the
 embed_figures(gc_flagged, "figure", "qry_id", function(r) {
   host <- ifelse(is.na(r$ref_gene_name) | !nzchar(r$ref_gene_name),
                  r$ref_gene_id, r$ref_gene_name)
-  pct  <- function(x) if (is.null(x) || !length(x) || is.na(x)) NA_real_ else 100 * x
-  fj   <- pct(r$frac_host_junction)
-  fe   <- pct(r$frac_into_host_exon)
 
-  # The overrun reads as a distance and the junction figures as fractions, which is
-  # what each one is. The junction fraction is a fraction for the same reason the
-  # selection ranks on one: a raw count of host-junction reads ranks by expression.
-  ov <- if (is.null(r$median_overrun_3p) || !length(r$median_overrun_3p) ||
-            is.na(r$median_overrun_3p)) {
-    "median 3' overrun not recorded"
-  } else {
-    sprintf("median 3' overrun %s bp",
-            format(round(r$median_overrun_3p), big.mark = ","))
-  }
+  struct <- paste(
+    if (isTRUE(r$num_exons == 1L)) "mono-exonic" else sprintf("%d exons", r$num_exons),
+    if (isTRUE(r$full_length_support)) "full-length support"
+      else if (isFALSE(r$full_length_support)) "no full-length support"
+      else "full-length support not recorded",
+    sep = ", ")
 
-  # Reads are counted only in the samples that quantified the candidate, so the
-  # caption says how many those were.
+  # Coverage is drawn for every sample; the panel marks in bold the ones that
+  # quantified the model, so it is clear which tracks the count came from. Named
+  # here where there are few enough to read.
   scope <- if (is.null(r$samples_quantified) || !length(r$samples_quantified) ||
                is.na(r$samples_quantified)) "" else {
-    # Named where there are few enough to read; the panel marks them in bold
-    # either way. Coverage is drawn for every sample regardless.
     who <- if (is.null(r$quantified_samples) || !length(r$quantified_samples) ||
                is.na(r$quantified_samples) || !nzchar(r$quantified_samples)) "" else {
       nm <- trimws(strsplit(r$quantified_samples, ";", fixed = TRUE)[[1]])
@@ -2397,16 +2237,8 @@ embed_figures(gc_flagged, "figure", "qry_id", function(r) {
             r$samples_quantified, r$samples_total, who)
   }
 
-  ev <- if (is.na(fj)) {
-    sprintf("%d reads%s: %s, %d carry a host junction",
-            r$reads_total, scope, ov, r$reads_with_host_junction)
-  } else {
-    sprintf("%d reads%s: %s, %.0f%% carry a host junction%s",
-            r$reads_total, scope, ov, fj,
-            if (is.na(fe)) "" else
-              sprintf(", %.0f%% splice into a host exon", fe))
-  }
-  sprintf("%s inside an intron of %s (%s). %s.", r$qry_id, host,
-          r$ref_gene_biotype, ev)
+  sprintf("%s inside an intron of %s (%s), on the same strand. %s. %s counts%s.",
+          r$qry_id, host, r$ref_gene_biotype, struct,
+          format(round(r$counts_total), big.mark = ","), scope)
 })
 ```

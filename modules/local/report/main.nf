@@ -23,10 +23,6 @@ process RENDER_REPORT {
     path novel_protein_coding_exonlength
     path novel_non_coding_meta
 
-    // structural validation of the novel calls
-    path context_flags
-    path context_summary
-
     // genomic context figures. The PNGs are staged rather than passed as
     // parameters: the candidate tables carry the filenames, and the report reads
     // them from the working directory.
@@ -47,11 +43,12 @@ process RENDER_REPORT {
     path post_heatmap_gene
     path post_heatmap_transcript
 
-    // quarto template
     // run metrics
     path bambu_metrics
     path validation_summary
-    path qmd_report // <- ADDED: The .qmd file is now a formal input
+
+    // quarto template
+    path qmd_report
 
     output:
     path "*.html"                      , emit: report
@@ -67,7 +64,6 @@ process RENDER_REPORT {
     export XDG_CACHE_HOME=/tmp/quarto_cache_home
     export XDG_DATA_HOME=/tmp/quarto_data_home
 
-    # Render the input file directly
     quarto render $qmd_report \\
         -P counts_genes:${counts_genes} \\
         -P counts_transcript:${counts_transcript} \\
@@ -82,8 +78,6 @@ process RENDER_REPORT {
         -P novel_lncrna_exonlength:${novel_lncrna_exonlength} \\
         -P novel_protein_coding_exonlength:${novel_protein_coding_exonlength} \\
         -P novel_non_coding_meta:${novel_non_coding_meta} \\
-        -P context_flags:${context_flags} \\
-        -P context_summary:${context_summary} \\
         -P genomic_context_candidates:${genomic_context_candidates} \\
         -P intronic_context_candidates:${intronic_context_candidates} \\
         -P raw_pca:${raw_pca} \\

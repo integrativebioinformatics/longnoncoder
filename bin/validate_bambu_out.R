@@ -102,7 +102,7 @@ seGene_filtered <- subset_se(seGene, valid_gene_ids, "gene")
 # --- Identify the expressed features ----------------------------------------
 # Bambu quantifies against the extended annotation, so the raw objects carry a
 # row for every reference feature, including those with no reads in any sample.
-# Those rows are dropped by the zero-count filter in subset_bambu_counts.sh, so
+# Those rows are dropped by the zero-count filter in filter_bambu_counts.sh, so
 # measuring the yield against them would count the reference itself as a loss.
 # The denominator below is the same set that filter keeps: features with at
 # least one count in at least one sample.
@@ -138,16 +138,21 @@ retained_expressed <- function(object, ids, expressed, label) {
   sum(keep)
 }
 
+# Columns state what each number is, not what the step did to it:
+#   curated_set          kept by curation and carrying reads
+#   total_quantified     at least one count in at least one sample
+#   extended_annotations every row Bambu quantified against the extended annotation
+#   recovery             curated_set / total_quantified
 validation_summary <- data.frame(
-  feature_type    = c("transcript", "gene"),
-  retained        = c(retained_expressed(se, valid_tx_ids, tx_expressed, "transcript"),
-                      retained_expressed(seGene, valid_gene_ids, gene_expressed, "gene")),
-  total           = c(sum(tx_expressed), sum(gene_expressed)),
-  total_quantified = c(nrow(se), nrow(seGene)),
-  stringsAsFactors = FALSE
+  feature_type         = c("transcript", "gene"),
+  curated_set          = c(retained_expressed(se, valid_tx_ids, tx_expressed, "transcript"),
+                           retained_expressed(seGene, valid_gene_ids, gene_expressed, "gene")),
+  total_quantified     = c(sum(tx_expressed), sum(gene_expressed)),
+  extended_annotations = c(nrow(se), nrow(seGene)),
+  stringsAsFactors     = FALSE
 )
-validation_summary$fraction_retained <-
-  validation_summary$retained / validation_summary$total
+validation_summary$recovery <-
+  validation_summary$curated_set / validation_summary$total_quantified
 
 write.csv(validation_summary,
           file.path(output_dir, "validation_summary.csv"), row.names = FALSE)

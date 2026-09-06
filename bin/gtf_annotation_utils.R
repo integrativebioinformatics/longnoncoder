@@ -1,10 +1,9 @@
 # Shared helpers for reading transcript metadata out of a reference annotation GTF.
 #
-# These replace the biomaRt queries that known_transcripts.R used to run against the
-# Ensembl servers. Every field biomaRt returned is already present in the annotation
-# the user supplies with --annotation, so reading it locally removes the network
-# dependency and guarantees the metadata matches the annotation actually used for
-# assembly.
+# Everything needed is already present in the annotation the user supplies with
+# --annotation, so it is read locally rather than queried from a server: no network
+# dependency, and the metadata is guaranteed to match the annotation the assembly
+# actually used.
 #
 # Both Ensembl and GENCODE GTFs are accepted. They differ in three ways that matter:
 #
@@ -15,7 +14,7 @@
 #                     GENCODE: versioned inline (ENSG00000290825.2), no *_version
 #   sequence names    Ensembl: 1        GENCODE: chr1
 #
-# Sourced by known_transcripts.R, novel_transcripts.R and enrich_validated_gtf.R,
+# Sourced by ref_transcripts.R, novel_transcripts.R and annotation.R,
 # each of which stages this file alongside itself.
 
 suppressPackageStartupMessages({
@@ -105,8 +104,7 @@ build_id_forms <- function(ids, versions) {
 #' of that, none of which is used here.
 #'
 #' Returns a list with:
-#'   $tx            one row per transcript, columns named to match what biomaRt
-#'                  previously returned
+#'   $tx            one row per transcript
 #'   $exons         one row per exon
 #'   $gene_biotype  named lookup, gene id (both forms) -> biotype, used to give
 #'                  novel transcripts the biotype of the reference gene they

@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 
 # Genomic context figures, drawn with plotgardener. Two families of PNG -- one per
-# selected gene, one per flagged intronic candidate -- each stacking:
+# selected gene, one per sense-intronic candidate -- each stacking:
 #
 #   title       the subject and the region actually plotted, chromosome included
 #   chromosome  a bar marking where on the chromosome this window sits
@@ -49,8 +49,10 @@ option_list <- list(
               help = "Comma-separated sample labels, same order as --bigwigs", metavar = "character"),
   make_option(c("-o", "--outdir"), type = "character", default = ".",
               help = "Output directory [default %default]", metavar = "character"),
-  make_option(c("-c", "--context_flags"), type = "character", default = NULL,
-              help = "novel_context_flags.csv from VALIDATE_NOVEL_CONTEXT", metavar = "character"),
+  make_option(c("-c", "--counts"), type = "character", default = NULL,
+              help = "Validated transcript counts matrix, one column per sample", metavar = "character"),
+  make_option("--fl_counts", type = "character", default = NULL,
+              help = "Validated full-length transcript counts matrix", metavar = "character"),
   make_option(c("-a", "--annotation"), type = "character", default = NULL,
               help = "Reference annotation GTF, for annotated gene and intron structure", metavar = "character")
 )
@@ -71,17 +73,19 @@ dir.create(opt$outdir, showWarnings = FALSE, recursive = TRUE)
 MAX_PANELS <- 24L
 MAX_TX     <- 12L
 
-# How many flagged intronic candidates to draw. These are the visual control: a
-# candidate the flags call host pre-mRNA should look like it when drawn -- coverage
-# running flat across the whole intron and continuous with the flanking exons -- and
-# if it does not, the flag is what needs revisiting, not the transcript.
+# How many sense-intronic candidates to draw. A model inside a host intron on the
+# host's own strand is sequence-identical to part of that host's unspliced precursor,
+# and no property of the assembly separates the two. The panel shows what each one
+# actually looks like -- coverage flat across the whole intron and continuous with the
+# flanking exons, or a discrete block with quiet intron either side -- and leaves the
+# reading to the eye.
 N_INTRONIC <- 5L
 
-# Flagged candidates are ranked on the fraction of reads carrying a host junction, so
-# a candidate needs enough reads for that fraction to mean anything.
-MIN_READS_FOR_FRAC <- 20L
+# A floor on total count, so a candidate with three reads does not take a panel from
+# one with two thousand. Skipped if it would empty the set, as it would on a small run.
+MIN_COUNTS <- 20L
 
-# The drawing window for a flagged candidate is the host intron it sits in, padded so
+# The drawing window for a candidate is the host intron it sits in, padded so
 # the flanking exons are on screen. Without them the panel cannot show whether
 # coverage stops at the intron boundary or runs straight through it, which is the only
 # question it exists to answer.
@@ -326,8 +330,8 @@ slug <- function(x) {
 # lncRNA inside a protein-coding gene is a different claim from the same model
 # inside an lncRNA gene, and that pair is the lncDACH1 argument in one figure each.
 #
-# Ranking WITHIN a stratum is the old one -- richest locus first -- so each panel is
-# still the most informative example of its kind.
+# Within a stratum the richest locus wins, so each panel is the most informative
+# example of its kind.
 #
 # u is excluded: it is intergenic, so there is no reference gene to draw it against
 # and the panel would be the novel model alone on an empty window.
@@ -440,78 +444,86 @@ if (nrow(novel_tx)) {
   message("No novel model outside class code u has a drawable reference context.")
 }
 
-# --- Flagged intronic candidates ----------------------------------------------
+# --- Sense-intronic candidates ------------------------------------------------
 
 # The second selection, and a different unit: one transcript rather than one gene.
-# These are the candidates the structural tests say are hardest -- inside a host
-# intron, on the host's strand, and supported by reads that do not stop where the
-# transcript does. Drawn on purpose so the report can show what a flagged call
-# looks like beside a clean one.
-FLAG_COLS <- c("qry_id", "ref_gene_id", "ref_gene_biotype", "class_code",
-               "strand", "reads_total", "median_overrun_3p",
-               "reads_with_host_junction")
-
+# Sense intronic is the one relationship position cannot resolve -- a model inside a
+# host intron, on the host's own strand, is sequence-identical to part of that host's
+# unspliced precursor. Nothing here scores them; they are drawn so the report can show
+# one beside a clean call and leave the reading to the eye.
+#
+# `classification` is written by novel_transcripts.R from the class code and the strand
+# comparison, and rides on the enriched GTF this script already reads, so the selection
+# needs nothing from the alignments.
 flagged <- data.frame()
 
-if (!is.null(opt$context_flags) && file.exists(opt$context_flags)) {
-  flags <- tryCatch(read.csv(opt$context_flags, stringsAsFactors = FALSE),
-                    error = function(e) NULL)
+sense_i <- which(grepl("^sense intronic", tx$classification))
 
-  if (!is.null(flags) && nrow(flags) && all(FLAG_COLS %in% names(flags))) {
-    sel <- flags$class_code == "i" &
-           flags$same_strand_as_host %in% TRUE &
-           flags$reads_total > 0
-    flagged <- flags[which(sel), , drop = FALSE]
+if (length(sense_i)) {
+  flagged <- data.frame(
+    qry_id           = tx$transcript_id[sense_i],
+    ref_gene_id      = tx$ref_gene_id[sense_i],
+    ref_gene_biotype = tx$ref_gene_biotype[sense_i],
+    class_code       = tx$class_code[sense_i],
+    strand           = tx$strand[sense_i],
+    stringsAsFactors = FALSE
+  )
 
-    # Rank on the FRACTION of supporting reads that carry a host junction, not on the
-    # raw count. A count ranks by expression: 225 of 2084 reads (10.8%) outranks 40 of
-    # 40 (100%), so the panel fills up with whatever is highly expressed instead of
-    # whatever is most clearly host-derived. validate_novel_context.R already writes
-    # the fractions; recompute only as a fallback for an older flags table.
-    if (nrow(flagged)) {
-      # Optional in older flags tables, and the one signal that separates host
-      # pre-mRNA from an unannotated host exon -- worth carrying even when absent.
-      if (!"reads_spliced_into_host_exon" %in% names(flagged)) {
-        flagged$reads_spliced_into_host_exon <- NA_integer_
-      }
-      frac <- function(num) ifelse(flagged$reads_total > 0, num / flagged$reads_total, 0)
-      flagged$frac_host_junction  <- if ("frac_with_host_junction" %in% names(flagged)) {
-        flagged$frac_with_host_junction
-      } else frac(flagged$reads_with_host_junction)
-      flagged$frac_into_host_exon <- frac(flagged$reads_spliced_into_host_exon)
+  # Exon count is not carried on `tx`, and it is the one number that says whether a
+  # candidate is fully unspliced.
+  all_exons <- gtf[as.character(S4Vectors::mcols(gtf)$type) == "exon"]
+  n_exons   <- table(as.character(S4Vectors::mcols(all_exons)$transcript_id))
+  flagged$num_exons <- as.integer(n_exons[flagged$qry_id])
 
-      # The second sort key is now the median 3' overrun, a distance in bases, in
-      # place of the fraction of reads past a boundary margin. The margin was a
-      # guess and the fraction inherited it; the distance does not need one.
-      #
-      # 3' rather than 5': reverse transcription falls short at the 5' end, so 5'
-      # overrun is the noisier of the two and a poorer discriminator.
-      if (!"median_overrun_3p" %in% names(flagged)) {
-        flagged$median_overrun_3p <- NA_real_
-      }
+  # Per-sample counts. Not evidence about the candidate: this decides whether a panel
+  # has anything to look at, and which coverage tracks the figure marks in bold.
+  read_counts <- function(path) {
+    if (is.null(path) || !file.exists(path)) return(NULL)
+    df <- tryCatch(read.delim(path, header = TRUE, sep = "\t", check.names = FALSE),
+                   error = function(e) NULL)
+    if (is.null(df) || !nrow(df)) return(NULL)
+    num <- df[, vapply(df, is.numeric, logical(1)), drop = FALSE]
+    if (!ncol(num)) return(NULL)
+    rownames(num) <- as.character(df[[1]])
+    num
+  }
 
-      # Read counts are taken over the samples that quantified the candidate, so
-      # the panel says which samples they came from. Absent in an older flags
-      # table, in which case the subtitle simply omits the scope.
-      if (!all(c("samples_quantified", "samples_total") %in% names(flagged))) {
-        flagged$samples_quantified <- NA_integer_
-        flagged$samples_total      <- NA_integer_
-      }
-      if (!"quantified_samples" %in% names(flagged)) {
-        flagged$quantified_samples <- NA_character_
-      }
+  cnt <- read_counts(opt$counts)
+  if (!is.null(cnt)) {
+    m <- cnt[match(flagged$qry_id, rownames(cnt)), , drop = FALSE]
+    flagged$counts_total       <- rowSums(m, na.rm = TRUE)
+    flagged$samples_quantified <- rowSums(m > 0, na.rm = TRUE)
+    flagged$samples_total      <- ncol(cnt)
+    # Semicolon-separated, since a sample name may itself contain a comma.
+    flagged$quantified_samples <- vapply(seq_len(nrow(m)), function(i) {
+      hit <- colnames(m)[which(!is.na(m[i, ]) & m[i, ] > 0)]
+      if (length(hit)) paste(hit, collapse = ";") else NA_character_
+    }, character(1))
+    flagged$counts_total[is.na(flagged$counts_total)]             <- 0
+    flagged$samples_quantified[is.na(flagged$samples_quantified)] <- 0L
+  } else {
+    flagged$counts_total       <- NA_real_
+    flagged$samples_quantified <- NA_integer_
+    flagged$samples_total      <- NA_integer_
+    flagged$quantified_samples <- NA_character_
+  }
 
-      # A floor on read count, so 3-of-3 does not beat 1700-of-2147 on noise. Skipped
-      # if it would empty the panel, which it would on a small test run.
-      enough <- flagged$reads_total >= MIN_READS_FOR_FRAC
-      if (any(enough)) flagged <- flagged[enough, , drop = FALSE]
+  # Membership of Bambu's full-length matrix: a zero/non-zero fact, not a threshold.
+  fl <- read_counts(opt$fl_counts)
+  flagged$full_length_support <- if (is.null(fl)) NA else flagged$qry_id %in% rownames(fl)
 
-      flagged <- flagged[order(-flagged$frac_host_junction,
-                               -flagged$median_overrun_3p,
-                               -flagged$reads_total,
-                               flagged$qry_id), , drop = FALSE]
-      flagged <- head(flagged, N_INTRONIC)
-    }
+  if (nrow(flagged)) {
+    enough <- !is.na(flagged$counts_total) & flagged$counts_total >= MIN_COUNTS
+    if (any(enough)) flagged <- flagged[enough, , drop = FALSE]
+
+    # Ranked by structure, not by a score. Mono-exonic first -- an unspliced model
+    # inside an intron is the profile a precursor fragment has -- then models Bambu
+    # never spanned end to end, then by count so a panel has coverage worth looking at.
+    flagged <- flagged[order(-(flagged$num_exons %in% 1L),
+                             -(flagged$full_length_support %in% FALSE),
+                             -flagged$counts_total,
+                             flagged$qry_id), , drop = FALSE]
+    flagged <- head(flagged, N_INTRONIC)
   }
 }
 
@@ -569,14 +581,7 @@ if (nrow(flagged)) {
   flagged$start <- tx_pos$start
   flagged$end   <- tx_pos$end
 
-  # Exon count is not carried on `tx`, and it is the one number that says whether a
-  # candidate is fully unspliced -- worth counting rather than leaving out.
-  all_exons <- gtf[as.character(S4Vectors::mcols(gtf)$type) == "exon"]
-  n_exons   <- table(as.character(S4Vectors::mcols(all_exons)$transcript_id))
-  flagged$num_exons <- as.integer(n_exons[flagged$qry_id])
-
-  # Drop anything the GTF cannot place: the flags come from the metadata, and a
-  # transcript missing from the enriched GTF has nothing to draw.
+  # Drop anything the GTF cannot place.
   flagged <- flagged[!is.na(flagged$chrom), , drop = FALSE]
 }
 
@@ -609,7 +614,7 @@ if (nrow(flagged)) {
   flagged$ref_gene_name <- genes$gene_name[match(flagged$ref_gene_id, genes$gene_id)]
 }
 
-cat(sprintf("%d flagged intronic candidates selected for drawing\n", nrow(flagged)))
+cat(sprintf("%d sense-intronic candidates selected for drawing\n", nrow(flagged)))
 
 if (nrow(cand) == 0 && nrow(flagged) == 0) {
   message("Nothing to draw; writing empty candidate tables.")
@@ -1278,25 +1283,22 @@ if (nrow(cand)) {
 }
 cat("Wrote genomic_context_candidates.csv\n")
 
-# --- Flagged intronic candidates ----------------------------------------------
+# --- Sense-intronic candidates ------------------------------------------------
 
 if (nrow(flagged)) {
   flagged$figure <- NA_character_
   for (i in seq_len(nrow(flagged))) {
     row <- flagged[i, ]
-    cat(sprintf("Drawing flagged %s in %s intron at %s:%d-%d\n",
+    cat(sprintf("Drawing sense-intronic %s in %s intron at %s:%d-%d\n",
                 row$qry_id, ifelse(is.na(row$ref_gene_name), row$ref_gene_id,
                                    row$ref_gene_name),
                 row$chrom, row$win_s, row$win_e))
 
     # Everything in the window, not just the host's isoforms: an intronic candidate
     # carries its own Bambu gene id, so filtering on the host gene would leave other
-    # novel models in the window out of the panel entirely.
-    #
-    # The candidate is in here too, and appears only here. It briefly had a dedicated
-    # row above the track as well, which drew it twice; the track entry is the one kept,
-    # because it carries the full label -- identifier, class code wording and strand --
-    # where the dedicated row could only show the bare id.
+    # novel models in the window out of the panel entirely. The candidate is in here
+    # too, and appears only here, where the track label carries its identifier, class
+    # code wording and strand.
     panel_tx <- tx[tx$transcript_id %in% flagged_ids[[i]], , drop = FALSE]
 
     host_lab <- if (is.na(row$ref_gene_name) || !nzchar(row$ref_gene_name)) {
@@ -1310,23 +1312,18 @@ if (nrow(flagged)) {
       structure_gr = gene_structure(row$ref_gene_id),
       panel_tx     = panel_tx,
       title        = sprintf("%s in %s", row$qry_id, host_lab),
-      # The overrun is a distance and reads as one; the junction figures stay
-      # percentages, because the ranking is on fractions and a bare count invites the
-      # same misreading the ranking used to make. The host-exon figure is reported
-      # separately: reads splicing into a host exon mean an unannotated exon of the
-      # host, which is a finding rather than an artifact.
       subtitle     = sprintf(
-        "sense intronic (%s) | %d reads%s: median 3' overrun %s bp, %.0f%% carry a host junction%s",
+        "sense intronic (%s) | %s | %s | %s counts%s",
         ifelse(is.na(row$ref_gene_biotype), "unknown biotype", row$ref_gene_biotype),
-        row$reads_total,
+        if (isTRUE(row$num_exons == 1L)) "mono-exonic"
+          else sprintf("%d exons", row$num_exons),
+        if (isTRUE(row$full_length_support)) "full-length support"
+          else if (isFALSE(row$full_length_support)) "no full-length support"
+          else "full-length support not recorded",
+        format(round(row$counts_total), big.mark = ","),
         if (is.na(row$samples_quantified)) "" else
           sprintf(" in the %d of %d samples that quantified it (named in bold)",
-                  row$samples_quantified, row$samples_total),
-        ifelse(is.na(row$median_overrun_3p), "n/a",
-               format(round(row$median_overrun_3p), big.mark = ",")),
-        100 * row$frac_host_junction,
-        if (is.na(row$reads_spliced_into_host_exon)) "" else
-          sprintf(", %.0f%% splice into a host exon", 100 * row$frac_into_host_exon)),
+                  row$samples_quantified, row$samples_total)),
       out_png      = file.path(opt$outdir,
                                sprintf("intronic_context_%s.png", row$qry_id)),
       structure_label = "host",
@@ -1340,10 +1337,8 @@ if (nrow(flagged)) {
                         "chrom", "start", "end", "win_s", "win_e", "strand",
                         "class_code", "num_exons",
                         "samples_quantified", "samples_total",
-                        "quantified_samples", "reads_total",
-                        "median_overrun_3p", "reads_with_host_junction",
-                        "reads_spliced_into_host_exon",
-                        "frac_host_junction", "frac_into_host_exon",
+                        "quantified_samples", "counts_total",
+                        "full_length_support",
                         "figure")],
             file.path(opt$outdir, "intronic_context_candidates.csv"), row.names = FALSE)
 } else {
