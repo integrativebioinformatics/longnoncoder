@@ -317,10 +317,7 @@ genes <- do.call(rbind, lapply(names(by_gene), function(gid) {
 # call should be read. The exact biotype still reaches the panel subtitle; this is
 # only the stratifying key, and leaving it fine-grained would scatter single
 # transcripts across a dozen near-empty strata.
-LNCRNA_REF_BIOTYPES <- c(
-  "lncRNA", "lincRNA", "antisense", "antisense_RNA", "sense_intronic",
-  "sense_overlapping", "macro_lncRNA", "bidirectional_promoter_lncRNA",
-  "3prime_overlapping_ncRNA", "non_coding", "processed_transcript")
+LNCRNA_REF_BIOTYPES <- "lncRNA"
 
 ref_class_of <- function(bt) {
   ifelse(is.na(bt) | !nzchar(bt),     "no reference",
