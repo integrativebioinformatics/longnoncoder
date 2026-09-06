@@ -136,6 +136,15 @@ showtext_auto()
 # against the wrong resolution.
 showtext_opts(dpi = 300)
 
+# Reference biotypes that current Ensembl and GENCODE releases all call "lncRNA".
+# The rest are the vocabularies older releases used for the same molecules, kept so
+# a run against an archived annotation groups them together rather than scattering
+# them into "other".
+LNCRNA_REF_BIOTYPES <- c(
+  "lncRNA", "lincRNA", "antisense", "antisense_RNA", "sense_intronic",
+  "sense_overlapping", "macro_lncRNA", "bidirectional_promoter_lncRNA",
+  "3prime_overlapping_ncRNA", "non_coding", "processed_transcript")
+
 base_theme <- theme(
   strip.background = element_rect(fill = "#f0f0f0", color = "black"),
   plot.background = element_blank(),
@@ -143,10 +152,10 @@ base_theme <- theme(
   panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
 )
 
-theme_set(theme_bw(base_family = "Source Sans 3") + base_theme)
+theme_set(theme_bw(base_family = "Source Sans 3", base_size = 8) + base_theme)
 
-update_geom_defaults("text",  list(family = "Source Sans 3"))
-update_geom_defaults("label", list(family = "Source Sans 3"))
+update_geom_defaults("text",  list(family = "Source Sans 3", size = 6 / .pt))
+update_geom_defaults("label", list(family = "Source Sans 3", size = 6 / .pt))
 
 # --- Shared log axes ---------------------------------------------------------
 # Every log-scaled axis in this report goes through these, so tick labels read
@@ -412,6 +421,12 @@ plot_upset <- function(df, sets, fill_col = NULL, title = NULL, subtitle = NULL,
                                 stat = "count", hjust = 1.15,
                                 colour = "white") +
                               ggplot2::ylab("Set size"),
+    # ComplexUpset builds a theme per component rather than inheriting the one set
+    # by theme_set(), so the font has to be injected here or the matrix, the set
+    # sizes and the intersection bars each fall back to the ggplot default.
+    themes                = ComplexUpset::upset_default_themes(
+                              text = ggplot2::element_text(family = "Source Sans 3",
+                                                           size = 8)),
     width_ratio           = 0.3
   )
 
@@ -772,6 +787,13 @@ tryCatch({
 }, error = function(e) {
   stop("Critical Error reading annotated transcriptome metadata file: ", e$message)
 })
+
+# Collapse the older lncRNA vocabularies onto "lncRNA" once, here, so every
+# `gene_biotype == "lncRNA"` downstream is right for an archived annotation as well
+# as a current one. Only gene_biotype: transcript_biotype is left as the annotation
+# wrote it, since the figures that break lncRNA genes down by transcript biotype are
+# there to show exactly that detail.
+ann_txome$gene_biotype[ann_txome$gene_biotype %in% LNCRNA_REF_BIOTYPES] <- "lncRNA"
 
 # --- 2B. Import Novel lncRNA/PC Metadata ---
 tryCatch({
@@ -1192,7 +1214,7 @@ has_scaffolds <- nrow(chr_gb_scf) > 0
 plot_chr_distribution(
   chr_gb_asm,
   "Gene Biotype Diversity Across Chromosomes",
-  "Transcript isoforms per biotype on each assembled chromosome",
+  "Transcript isoforms per biotype on each assembled chromosome"
 )
 ```
 
@@ -1208,7 +1230,6 @@ plot_chr_distribution(
   "Gene Biotype Diversity Across Unplaced Scaffolds",
   sprintf("%d unplaced contigs carrying annotated transcripts",
           nlevels(chr_gb_scf$chromosome))
-,
 )
 ```
 :::
@@ -1282,6 +1303,11 @@ The number and length of exons per transcript is compared for protein-coding ver
 
 ann_pc_txome <- read.csv(params$protein_coding_meta)
 ann_lnc_txome <- read.csv(params$lncrna_meta)
+
+# As for ann_txome: without this an archived annotation splits the lncRNA side of
+# every figure below into lincRNA, antisense and the rest.
+ann_lnc_txome$gene_biotype[ann_lnc_txome$gene_biotype %in% LNCRNA_REF_BIOTYPES] <- "lncRNA"
+
 ann_pc_lnc_txome <- rbind(ann_pc_txome, ann_lnc_txome)
 
 median_exnum <- ann_pc_lnc_txome %>% group_by(gene_biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
@@ -1792,7 +1818,7 @@ has_novel_scaffolds <- nrow(chr_novel_scf) > 0
 plot_chr_distribution(
   chr_novel_asm,
   "Novel RNA Diversity Across Chromosomes",
-  "Novel transcripts per biotype on each assembled chromosome",
+  "Novel transcripts per biotype on each assembled chromosome"
 )
 ```
 
@@ -1808,7 +1834,6 @@ plot_chr_distribution(
   "Novel RNA Diversity Across Unplaced Scaffolds",
   sprintf("%d unplaced contigs carrying novel transcripts",
           nlevels(chr_novel_scf$chromosome))
-,
 )
 ```
 :::

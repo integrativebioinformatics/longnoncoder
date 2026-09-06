@@ -127,13 +127,17 @@ BIOTYPE_FALLBACK <- "#969696"
 # intron, so host isoforms running the length of the gene lose their names -- see the
 # note on the isoform track in draw_panel().
 TX_LABEL_SIZE <- 6
-TX_LABEL_H    <- 0.09    # band above each model for its label
+# A 6 pt label is about 0.083 in tall, so a 0.09 in band left it touching the model
+# above it. The label band clears the text, and the row gap is trailing space so one
+# row's model cannot run into the next row's label.
+TX_LABEL_H    <- 0.13    # band above each model for its label
+TX_ROW_GAP    <- 0.08    # clear space below a model, before the next row's label
 TX_BOX_MM     <- 4       # exon box height, against plotgardener's 2 mm default
 TX_SPACE_H    <- 0.2     # padding inside a model's own band, as a fraction of the box
 TX_STROKE     <- 0.1     # transcript body outline, plotgardener's default
 
 TX_MODEL_H <- (TX_BOX_MM / 25.4) * (1 + TX_SPACE_H)
-TX_ROW_H   <- TX_LABEL_H + TX_MODEL_H   # one row: label band plus the model
+TX_ROW_H   <- TX_LABEL_H + TX_MODEL_H + TX_ROW_GAP
 
 # The isoform track calls plotTranscripts once per transcript rather than once per
 # panel, and this is deliberate -- do not collapse it back into a single call.
