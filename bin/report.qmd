@@ -141,8 +141,17 @@ library(ComplexUpset)
 # Must match `dpi:` in the YAML header above. If they disagree, showtext sizes every
 # glyph against the wrong resolution and all text scales wrongly.
 REPORT_DPI <- 300
-REF_WIDTH  <- 10
+
+# Calibration for theme_width(). Every figure is drawn wider than the body column
+# and scaled down into it, so on-screen text is base_size * column / (72 * width):
+# the declared width sets how hard a figure is shrunk, and REF_WIDTH is what
+# theme_width() cancels that against. It has to track the column the report is read
+# in -- 10 was right for `page-layout: full`, and leaves text half size in the
+# article column this document now uses. Nothing above MAX_FIG_WIDTH, so the fixed
+# 9pt count labels below are not shrunk past reading either.
+REF_WIDTH  <- 6
 BASE_SIZE  <- 11
+MAX_FIG_WIDTH <- 9
 
 font_add_google("Source Sans 3", "Source Sans 3")
 showtext_auto()
@@ -246,7 +255,7 @@ is_assembled_chromosome <- function(x) {
 # biotype rows. One row per biotype rather than one panel, so a genome-wide figure
 # is a single grid instead of five stacked panels sharing an axis.
 chr_dist_layout <- function(n_x, n_rows, x_w = 0.3, row_h = 1.2,
-                            min_w = 6, max_w = 12, min_h = 3, max_h = 14) {
+                            min_w = 6, max_w = MAX_FIG_WIDTH, min_h = 3, max_h = 12) {
   w_want <- n_x * x_w + 2.4
   if (w_want > max_w) {
     warning(sprintf("chr_dist_layout: %d x categories want %.1f in, capped at %.1f; labels may collide.",
@@ -772,9 +781,8 @@ Support says how directly a transcript was measured; nothing is discarded on thi
 ```{r}
 #| label: fig-bambu-gene-transcript-stats
 #| fig-cap: "**Summary of assembled genes and transcripts.** (A) Genes identified by Bambu, split into total, annotated and novel. (B) Every detected transcript, grouped by the kind of read support it has. A transcript can hold both kinds at once, so the bars are not the three nested totals of the count matrices but the four mutually exclusive combinations those totals imply: the dot matrix below each bar reads as *full-length support*, *unique support*, *both* or *neither*, filled dots marking which supports the bar has. The bars to the left of the matrix give each set's overall size. Bars are stacked by annotated vs novel. Nearly every novel model carries both kinds of support -- Bambu calls novel isoforms from full-length read classes -- so the other three bars are almost entirely annotated. The *neither* bar holds transcripts with no full-length and no uniquely-mapping read of their own; they are quantified purely by expectation-maximisation, from reads distributed across the isoforms they are compatible with."
-#| fig-width: 10
-#| fig-height: 4
-#| column: page
+#| fig-width: 9
+#| fig-height: 3.6
 
 bambu_gene_data <- bambu_df %>% filter(FeatureType == "Gene")
 
@@ -987,7 +995,6 @@ support_sets$category <- factor(
 #| fig-cap: "**Read support for every transcript in the validated assembly.** Each bar is a distinct combination of evidence, with the dot matrix below showing which kinds of support that combination has. Bars are stacked by transcript category. The *neither* bar — no full-length and no uniquely-mapping read — is quantified purely from expectation-maximisation. The bars to the left of the matrix are the set sizes, one per row, with the count written beside each."
 #| fig-width: 8
 #| fig-height: 4
-#| column: page
 
 plot_upset(
   support_sets,
@@ -1245,7 +1252,6 @@ has_scaffolds <- nrow(chr_gb_scf) > 0
 #| fig-cap: "**Chromosomal Distribution of Gene Biotypes.** Transcript isoforms of each biotype annotated on every assembled chromosome. One facet row per biotype, with the exact count printed above each point. A chromosome carrying none of a biotype sits on the baseline as a hollow point labelled 0."
 #| fig-width: !expr chr_asm_lay$width
 #| fig-height: !expr chr_asm_lay$height
-#| column: page
 
 plot_chr_distribution(
   chr_gb_asm,
@@ -1262,7 +1268,6 @@ plot_chr_distribution(
 #| fig-cap: "**Gene Biotypes on Unplaced Scaffolds.** The same breakdown for contigs not assigned to an assembled chromosome. These typically carry a handful of transcripts each."
 #| fig-width: !expr chr_scf_lay$width
 #| fig-height: !expr chr_scf_lay$height
-#| column: page
 #| eval: !expr has_scaffolds
 
 plot_chr_distribution(
@@ -1310,7 +1315,6 @@ p12 <- selected_tx %>% filter(gene_biotype == "lncRNA") %>%
 #| fig-cap: "**Transcript Length Distributions.** This panel of boxplots compares transcript lengths (on a log10 scale) across different biotypes. (A) Compares major gene biotypes. (B) Details the lengths of different transcript types within the protein-coding category. (C) Does the same for lncRNAs. Median lengths for each category are shown in the legend."
 #| fig-width: 9
 #| fig-height: 7
-#| column: page
 
 panel3 <- plot_grid(p10, p11, p12, nrow = 3, labels="AUTO", label_y = 1, rel_widths = c(1.5,2,1.5))
 panel3
@@ -1346,7 +1350,6 @@ p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcr
 #| fig-cap: "**Exon Number Distributions.** This panel examines the number of exons per transcript. (A) A direct comparison between protein-coding and lncRNA gene biotypes. (B) A detailed view of exon numbers for different protein-coding transcript types. (C) A similar detailed view for lncRNA transcript types."
 #| fig-width: 9
 #| fig-height: 7
-#| column: page
 
 panel4 <- plot_grid(
   p13, p14, p15, 
@@ -1386,7 +1389,6 @@ p17 <- ggplot(ann_pc_lnc_txome, aes(x = gene_biotype, y = transcript_length, fil
 #| fig-cap: "**Counts of Mono- vs. Multi-exonic Transcripts.** This plot shows the number of mono- and multi-exonic transcripts for each transcript biotype, separated by protein-coding and lncRNA gene categories."
 #| fig-width: 8
 #| fig-height: 5
-#| column: page
 
 p16
 ```
@@ -1408,7 +1410,6 @@ A 2D density plot helps visualize the relationship between the number of exons i
 #| fig-cap: "**Relationship Between Exon Count and Transcript Length.** This plot shows the density of transcripts based on their exon count (x-axis) and total length (y-axis). Higher density (brighter color) indicates a common combination of exon number and length. The analysis is shown separately for protein-coding genes and lncRNAs."
 #| fig-width: 8
 #| fig-height: 4
-#| column: page
 
 p18 <- ggplot(ann_pc_lnc_txome, aes(x = num_exons, y = transcript_length)) +
   stat_density2d(aes(fill = after_stat(level)), geom = "polygon", alpha = 0.8) +
@@ -1442,7 +1443,6 @@ ann_pc_lnc_exon <- merge(
 #| fig-cap: "**Length of individual exons.** This boxplot compares the individual exon length of protein-coding and lncRNA transcripts, separeted by mono and multi-exonic structures."
 #| fig-width: 8
 #| fig-height: 4
-#| column: page
 
 p19 <- ggplot(ann_pc_lnc_exon, aes(x = gene_biotype, y = width,
                                    fill = class_exon)) +
@@ -1490,7 +1490,6 @@ class_counts_h <- lollipop_height(dplyr::n_distinct(class_counts$biotype))
 #| fig-cap: "**GFFCompare classification of the novel candidates.** Counts per classification, one facet row per routed category."
 #| fig-width: 8
 #| fig-height: !expr class_counts_h
-#| column: page
 
 p20 <- plot_count_lollipop(
   class_counts, x = classification, y = biotype,
@@ -1565,9 +1564,8 @@ related_h  <- lollipop_height(related_rows)
 ```{r}
 #| label: fig-lnc-ix-ref-biotype
 #| fig-cap: "**Reference biotypes behind the intronic and antisense novel lncRNA candidates.** Class codes `i` and `x` become lncRNA candidates on the coding prediction alone, whatever the reference gene is, so this figure says what those references actually were. Columns are the gene and transcript level of the reference; rows are the classification. A combination absent from the data reads as a labelled 0."
-#| fig-width: 11
+#| fig-width: 9
 #| fig-height: !expr lnc_ix_h
-#| column: page
 #| eval: !expr has_ref_bt
 
 lnc_ix <- ref_bt_long %>%
@@ -1580,7 +1578,7 @@ if (nrow(lnc_ix)) {
     title = "Novel lncRNA candidates: intronic and antisense",
     subtitle = "",
     x_lab = "Reference biotype", count_lab = "Candidates", angle_x = 90) +
-    theme_width(11) +
+    theme_width(9) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), 
           strip.text.y = element_text(angle = 0))
 } else {
@@ -1591,9 +1589,8 @@ if (nrow(lnc_ix)) {
 ```{r}
 #| label: fig-related-ref-biotype
 #| fig-cap: "**Reference biotypes behind the remaining novel calls.** These class codes share splice structure with a reference transcript, so the reference gene's biotype is part of how they are routed. Columns are the gene and transcript level of the reference, rows the classification."
-#| fig-width: 12
+#| fig-width: 9
 #| fig-height: !expr related_h
-#| column: page
 #| eval: !expr has_related
 #| fig-subcap: true
 
@@ -1616,7 +1613,7 @@ for (cat_name in related_cats) {
       d, x = ref_biotype, y = classification, facet = "level",
       title = cat_name,
       x_lab = "Reference biotype", count_lab = "Transcripts", angle_x = 90) +
-      theme_width(12) +
+      theme_width(9) +
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
             strip.text.y = element_text(angle = 0))
   )
@@ -1632,7 +1629,6 @@ Full-length and unique support are both subsets of total, so a candidate holds b
 #| fig-cap: "**Read support for novel lncRNA candidates, by classification.** Each bar is one combination of read support, stacked by classification. Full-length support means reads spanning the whole model; unique support means reads not compatible with any other transcript. A bar with both dots grey would hold candidates quantified purely from expectation-maximisation. Set sizes on the right are the totals per kind of support."
 #| fig-width: 9
 #| fig-height: 5
-#| column: page
 
 lnc_sets <- novel_tx %>%
   filter(biotype == "novel lncRNA candidate") %>%
@@ -1686,7 +1682,6 @@ has_novel_scaffolds <- nrow(chr_novel_scf) > 0
 #| fig-cap: "**Chromosomal Distribution of Novel Transcripts.** Novel transcripts of each category discovered on every assembled chromosome. One facet row per category, with the exact count printed above each point. A chromosome carrying none of a category sits on the baseline as a hollow point labelled 0."
 #| fig-width: !expr chr_novel_asm_lay$width
 #| fig-height: !expr chr_novel_asm_lay$height
-#| column: page
 
 plot_chr_distribution(
   chr_novel_asm,
@@ -1703,7 +1698,6 @@ plot_chr_distribution(
 #| fig-cap: "**Novel Transcripts on Unplaced Scaffolds.** The same breakdown for contigs not assigned to an assembled chromosome."
 #| fig-width: !expr chr_novel_scf_lay$width
 #| fig-height: !expr chr_novel_scf_lay$height
-#| column: page
 #| eval: !expr has_novel_scaffolds
 
 plot_chr_distribution(
@@ -1746,9 +1740,8 @@ p24 <- novel_tx %>% filter(biotype == "novel lncRNA candidate") %>%
 ```{r}
 #| label: fig-panel5
 #| fig-cap: "**Length Distribution of Novel Transcripts.** (A) Compares the overall length of novel protein-coding vs. novel lncRNA transcripts. (B) and (C) provide a more detailed view, showing length distributions for each GFFCompare classification within the novel protein-coding and lncRNA categories, respectively."
-#| fig-width: 10
-#| fig-height: 8
-#| column: page
+#| fig-width: 9
+#| fig-height: 7.2
 
 panel5 <- plot_grid(p22, p23, p24, nrow = 3, labels="AUTO", label_y = 1)
 panel5
@@ -1819,7 +1812,7 @@ p29 <- ggplot(novel_tx, aes(x = classification, y = len, fill = classification))
        y = "Transcript length (log10 scale)", fill = "Classification") +
   # Drawn at fig-width 12 rather than the report's reference 10, so the base size
   # is scaled to match before the local theme tweaks are layered on top.
-  theme_width(12) +
+  theme_width(9) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
         strip.text.y = element_text(angle = 0),
         legend.position = "none",
@@ -1831,9 +1824,8 @@ p29 <- ggplot(novel_tx, aes(x = classification, y = len, fill = classification))
 ```{r}
 #| label: fig-novel-mono-multi-counts
 #| fig-cap: "**Distribution of mono and multi-exonic structures in Novel Transcripts within its subtypes.** This barplot compares the distribution of mono and multi-exonic structures for novel protein-coding versus novel lncRNA subtypes."
-#| fig-width: 10
-#| fig-height: 8
-#| column: page
+#| fig-width: 9
+#| fig-height: 7.2
 
 p25
 ```
@@ -1843,7 +1835,6 @@ p25
 #| fig-cap: "**Exon Number in Novel Transcripts.** This boxplot compares the number of exons per transcript for novel protein-coding versus novel lncRNA biotypes."
 #| fig-width: 8
 #| fig-height: 4
-#| column: page
 
 p26
 ```
@@ -1864,16 +1855,14 @@ p27
 #| fig-cap: "**Length of mono- vs. multi-exonic novel transcripts,** by routed category."
 #| fig-width: 8
 #| fig-height: 4.5
-#| column: page
 p28
 ```
 
 ```{r}
 #| label: fig-novel-mono-multi-length-subtypes
 #| fig-cap: "**Length of mono- and multi-exonic novel transcripts, by classification.** Columns are the exon class, rows the routed category."
-#| fig-width: 12
-#| fig-height: 6.5
-#| column: page
+#| fig-width: 9
+#| fig-height: 5
 
 p29
 ```
@@ -1885,9 +1874,8 @@ A 2D density plot helps visualize the relationship between the number of exons i
 ```{r}
 #| label: fig-density-novel
 #| fig-cap: "**Exon count vs. transcript length for novel RNAs.** As @fig-density, for the newly discovered transcripts."
-#| fig-width: 10
-#| fig-height: 4
-#| column: page
+#| fig-width: 9
+#| fig-height: 3.6
 
 p30 <- ggplot(novel_tx, aes(x = num_exons, y = len)) +
   stat_density2d(aes(fill = after_stat(level)), geom = "polygon", alpha = 0.8) +
@@ -1923,7 +1911,6 @@ exlen_novel <- merge(
 #| fig-cap: "**Length of individual exons across novel transcripts.** This boxplot compares the individual exon length of protein-coding and lncRNA novel transcripts, separated by mono and multi-exonic structures."
 #| fig-width: 8
 #| fig-height: 4
-#| column: page
 p32 <- ggplot(exlen_novel, aes(x = biotype, y = width,
                                    fill = class_exon)) +
   geom_boxplot() +
@@ -2021,7 +2008,6 @@ has_evidence_sets <- !is.null(evidence_sets) && length(EVIDENCE_SIGNS_DRAWN) >= 
 #| fig-cap: "**Structural warning signs among novel candidates.** Each bar is one exact combination; the dot matrix below names it, filled dots marking the signs that combination carries. Bars are stacked by routed category, and set sizes on the right give how many candidates carry each sign in total. The bar whose dots are all grey carries none. A sign carried by no candidate at all is not drawn."
 #| fig-width: 8
 #| fig-height: 4.5
-#| column: page
 #| eval: !expr has_evidence_sets
 
 # Only the sets that anyone is in. ComplexUpset drops an empty set from the matrix
@@ -2129,9 +2115,8 @@ has_support <- !is.null(support)
 ```{r}
 #| label: fig-support-fraction
 #| fig-cap: "**Full-length and uniquely-mapped read support for novel transcripts, split by routed category.** Columns are the two support measures, rows the three categories, and the x axis the classification. Low full-length support means the reads behind a call do not span it; low unique support means those reads are compatible with other transcripts too, so the count came largely from expectation-maximisation rather than from unambiguous evidence."
-#| fig-width: 11
-#| fig-height: 7
-#| column: page
+#| fig-width: 9
+#| fig-height: 5.8
 #| eval: !expr has_support
 
 support_long <- support %>%
@@ -2150,7 +2135,7 @@ ggplot(support_long, aes(x = classification, y = fraction, fill = exon)) +
   geom_boxplot() +
   facet_grid(rows = vars(novel_category), cols = vars(measure), scales = "free_x") +
   scale_fill_viridis_d(option = "viridis", begin = 0.3, end = 0.8) +
-  theme_width(11) +
+  theme_width(9) +
   labs(title = "Read support for novel transcripts",
        subtitle = "Low values mark candidates whose supporting reads fit them poorly",
        x = NULL, y = "Fraction of supporting reads", fill = "Exon class") +
@@ -2267,7 +2252,6 @@ Each panel shows the reference gene's exonic footprint, then every isoform at th
 #| label: fig-genomic-context-clean
 #| echo: false
 #| output: asis
-#| column: page
 
 embed_figures(gc_clean, "figure", c("tab", "label"), function(r) {
   ref_bt <- if (is.null(r$ref_gene_biotype) || is.na(r$ref_gene_biotype) ||
@@ -2299,7 +2283,6 @@ A candidate that really is host precursor shows coverage running flat across the
 #| label: fig-genomic-context-flagged
 #| echo: false
 #| output: asis
-#| column: page
 
 embed_figures(gc_flagged, "figure", "qry_id", function(r) {
   host <- ifelse(is.na(r$ref_gene_name) | !nzchar(r$ref_gene_name),
