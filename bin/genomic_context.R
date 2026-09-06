@@ -711,7 +711,12 @@ if (length(windows) && !is.null(opt$annotation) && file.exists(opt$annotation)) 
       ref_gene_id        = NA_character_,
       ref_gene_name      = NA_character_,
       ref_gene_biotype   = NA_character_,
-      ref_transcript_id  = NA_character_,
+      # These undetected reference transcripts are not novel models, so they have
+      # no reference match and no Bambu class. The columns exist because `tx` has
+      # them and rbind needs both frames to agree.
+      ref_transcript_id   = NA_character_,
+      ref_transcript_name = NA_character_,
+      BambuTxClass        = NA_character_,
       chrom              = as.character(GenomeInfoDb::seqnames(rt)),
       strand             = as.character(BiocGenerics::strand(rt)),
       start              = BiocGenerics::start(rt),
