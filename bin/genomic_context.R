@@ -1252,10 +1252,8 @@ if (nrow(cand)) {
       title        = row$label,
       # The stratum is the point of the panel, so it leads: this figure is here as
       # the example of its kind, not because the locus is remarkable.
-      subtitle     = sprintf(
-        "%s, %s | reference: %s | %d drawn: %d detected, %d novel, %d annotated only",
-        row$novel_biotype, row$classification, ref_bt,
-        n_drawn, n_kno, n_nov, n_ann),
+      subtitle     = sprintf("%s, %s | reference: %s",
+                             row$novel_biotype, row$classification, ref_bt),
       out_png      = file.path(opt$outdir,
                                sprintf("genomic_context_%s_%s.png",
                                        slug(row$label), slug(row$stratum)))
@@ -1322,13 +1320,16 @@ if (nrow(flagged)) {
           else "full-length support not recorded",
         format(round(row$counts_total), big.mark = ","),
         if (is.na(row$samples_quantified)) "" else
-          sprintf(" in the %d of %d samples that quantified it (named in bold)",
+          sprintf(" in %d/%d samples",
                   row$samples_quantified, row$samples_total)),
       out_png      = file.path(opt$outdir,
                                sprintf("intronic_context_%s.png", row$qry_id)),
       structure_label = "host",
+      # Bold marks which samples the count came from, so it says nothing when every
+      # sample quantified the candidate.
       quantified   = if (is.na(row$quantified_samples) ||
-                         !nzchar(row$quantified_samples)) NULL else
+                         !nzchar(row$quantified_samples) ||
+                         isTRUE(row$samples_quantified == row$samples_total)) NULL else
                        trimws(strsplit(row$quantified_samples, ";", fixed = TRUE)[[1]])
     )
   }
