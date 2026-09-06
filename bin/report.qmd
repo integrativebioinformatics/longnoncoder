@@ -105,12 +105,10 @@ params:
 knitr:
   opts_chunk:
     fig.showtext: true
-    # Quarto defaults this to 2, which draws every device at twice fig-width x dpi
-    # and expects the HTML to scale it back. Nothing here does, so a figure declared
-    # 12 inches arrives as 24. Keep at 1 so a declared size is the size.
     fig.retina: 1
-    # showtext_opts(dpi = ) in the setup chunk must match this.
     dpi: 300
+    fig.width: 8
+    fig.asp: 0.618 
 ---
 
 ```{r}
@@ -304,7 +302,8 @@ plot_chr_distribution <- function(df, title, subtitle) {
       panel.grid.minor   = element_blank(),
       axis.text.x   = element_text(angle = 0),
       plot.title    = element_text(hjust = 0.5),
-      plot.subtitle = element_text(hjust = 0.5)
+      plot.subtitle = element_text(hjust = 0.5),
+      strip.text.y = element_text(angle = 0)
     )
 }
 
@@ -323,7 +322,7 @@ plot_bar_counts <- function(df, x, y, fill = NULL, title = NULL, subtitle = NULL
               vjust = -0.5) +
     scale_y_continuous(expand = expansion(mult = c(0, 0.25)),
                        labels = scales::label_number(big.mark = ",")) +
-    scale_fill_viridis_d(option = "D", end = 0.92, name = legend_name) +
+    scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, name = legend_name) +
     theme(
       panel.grid.major.x = element_blank(),
       panel.grid.minor   = element_blank(),
@@ -1244,17 +1243,17 @@ median_lnc <- selected_tx %>% filter(gene_biotype == "lncRNA") %>% group_by(tran
 
 p10 <- ggplot(selected_tx, aes(x = gene_biotype, y = transcript_length, fill = factor(gene_biotype))) +
   geom_boxplot() + labs(title = "Transcript length across gene biotypes", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Gene biotype\n(median length)") +
-  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_stx$gene_biotype, " (", round(median_stx$median_length, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_stx$gene_biotype, " (", round(median_stx$median_length, 2), ")"))
 
 p11 <- selected_tx %>% filter(gene_biotype == "protein_coding") %>%
   ggplot(aes(x = gene_biotype, y = transcript_length, fill = transcript_biotype)) +
   geom_boxplot() + labs(title = "Transcript length across protein-coding biotypes", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Transcript biotypes\n(median length)") +
-  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_pc$transcript_biotype, " (", round(median_pc$median_length_txb, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_pc$transcript_biotype, " (", round(median_pc$median_length_txb, 2), ")"))
 
 p12 <- selected_tx %>% filter(gene_biotype == "lncRNA") %>%
   ggplot(aes(x = gene_biotype, y = transcript_length, fill = transcript_biotype)) +
   geom_boxplot() + labs(title = "Transcript length across lncRNA biotypes", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Transcript biotypes\n(median length)") +
-  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_lnc$transcript_biotype, " (", round(median_lnc$median_length_txb, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_lnc$transcript_biotype, " (", round(median_lnc$median_length_txb, 2), ")"))
 ```
 
 Transcript lengths on a log10 scale, with the median for each category in the legend.
@@ -1307,12 +1306,12 @@ ann_pc_lnc_txome <- rbind(ann_pc_txome, ann_lnc_txome)
 median_exnum <- ann_pc_lnc_txome %>% group_by(gene_biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
 p13 <- ggplot(ann_pc_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = gene_biotype)) +
   geom_boxplot() + labs(title = "Number of exons across protein-coding and lncRNA biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Gene biotype\n(median number)") +
-  scale_y_log10_exons() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_exnum$gene_biotype, " (", round(median_exnum$median_exnum, 2), ")"))
+  scale_y_log10_exons() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_exnum$gene_biotype, " (", round(median_exnum$median_exnum, 2), ")"))
 
 median_pc_exnum <- ann_pc_txome %>% group_by(transcript_biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
 median_lnc_exnum <- ann_lnc_txome %>% group_by(transcript_biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
-p14 <- ggplot(ann_pc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across protein-coding transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10_exons() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_pc_exnum$transcript_biotype, " (", round(median_pc_exnum$median_exnum, 2), ")"))
-p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across lncRNA transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10_exons() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_lnc_exnum$transcript_biotype, " (", round(median_lnc_exnum$median_exnum, 2), ")"))
+p14 <- ggplot(ann_pc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across protein-coding transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10_exons() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_pc_exnum$transcript_biotype, " (", round(median_pc_exnum$median_exnum, 2), ")"))
+p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcript_biotype)) + geom_boxplot() + theme(plot.margin = margin(1, 1, 1, 1, "cm")) + labs(title = "Number of exons across lncRNA transcript biotypes", x = "Gene biotype", y = "Exon number (log10 scale)", fill = "Transcript biotype\n(total median number)") + scale_y_log10_exons() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_lnc_exnum$transcript_biotype, " (", round(median_lnc_exnum$median_exnum, 2), ")"))
 ```
 
 #### Exon Number Comparison
@@ -1360,7 +1359,7 @@ p16 <- plot_count_lollipop(
   count_momu, x = transcript_biotype, y = gene_biotype, facet = "class_exon",
   title = "Distribution of mono and multi-exonic transcripts",
   x_lab = "Transcript biotype", count_lab = "Transcripts"
-)
+) + theme(strip.text.y = element_text(angle = 0))
 
 p17 <- ggplot(ann_pc_lnc_txome, aes(x = gene_biotype, y = transcript_length, fill = class_exon)) +
   geom_boxplot() + labs(title = "Mono and multi-exonic transcript length", x = "Gene biotype", y = "Transcript length (log10 scale)", fill = "Exon class") +
@@ -1467,7 +1466,7 @@ p20 <- plot_count_lollipop(
   class_counts, x = classification, y = biotype,
   title = "GFFCompare classification of novel protein-coding and lncRNA candidates",
   x_lab = "Classification", count_lab = "Transcripts", angle_x = 90
-)
+) + theme(strip.text.y = element_text(angle = 0))
 p20
 ```
 
@@ -1571,9 +1570,9 @@ for (cat_name in related_cats) {
 }
 ```
 
-#### What Bambu had to invent
+#### Bambu Transcript Classification
 
-A class code says how a novel model sits relative to the reference it was matched against. Bambu's own `BambuTxClass` says something the class code cannot: **which part of the model was not already in the annotation** — a new first exon, a new junction, a whole new gene. A `j` model whose only novelty is `newLastExon` and a `j` model that is `allNew` carry the same class code and are not the same claim.
+A class code says how a novel model sits relative to the reference it was matched against. Bambu's own `txClassDescription` says something the class code cannot: **which part of the model was not already in the annotation** — a new first exon, a new junction, a whole new gene. A `j` model whose only novelty is `newLastExon` and a `j` model that is `allNew` carry the same class code and are not the same claim.
 
 A model can carry several at once — `newFirstJunction:newJunction:newFirstExon` — so they are sets, not categories.
 
@@ -1843,19 +1842,19 @@ Here, we investigate the length of novel protein-coding and lncRNA transcripts a
 median_txlen_novel <- novel_tx %>% group_by(biotype) %>% summarise(median_length = median(len), .groups = 'drop')
 p22 <- ggplot(novel_tx, aes(x = biotype, y = len, fill = factor(biotype))) +
   geom_boxplot() + labs(title = "Transcript length across novel transcripts", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Biotype\n(median length)") +
-  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_txlen_novel$biotype, " (", round(median_txlen_novel$median_length, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_txlen_novel$biotype, " (", round(median_txlen_novel$median_length, 2), ")"))
 
 median_pc_novel <- novel_tx %>% filter(biotype == "predicted protein-coding") %>% group_by(classification) %>% summarise(median_length_novel = median(len), .groups = 'drop')
 p23 <- novel_tx %>% filter(biotype == "predicted protein-coding") %>%
   ggplot(aes(x = biotype, y = len, fill = classification)) +
   geom_boxplot() + labs(title = "Transcript length across novel protein-coding sub-biotypes", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Transcript sub-biotypes\n(median length)") +
-  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_pc_novel$classification, " (", round(median_pc_novel$median_length_novel, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_pc_novel$classification, " (", round(median_pc_novel$median_length_novel, 2), ")"))
 
 median_lnc_novel <- novel_tx %>% filter(biotype == "novel lncRNA candidate") %>% group_by(classification) %>% summarise(median_length_novel = median(len), .groups = 'drop')
 p24 <- novel_tx %>% filter(biotype == "novel lncRNA candidate") %>%
   ggplot(aes(x = biotype, y = len, fill = classification)) +
   geom_boxplot() + labs(title = "Transcript length across novel lncRNA sub-biotypes", x = "Biotype", y = "Transcript length (log10 scale)", fill = "Transcript sub-biotypes\n(median length)") +
-  scale_y_log10_std() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_lnc_novel$classification, " (", round(median_lnc_novel$median_length_novel, 2), ")"))
+  scale_y_log10_std() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_lnc_novel$classification, " (", round(median_lnc_novel$median_length_novel, 2), ")"))
 ```
 
 Novel transcript lengths on a log10 scale, with the median for each category in the legend.
@@ -1910,27 +1909,28 @@ p25 <- plot_count_lollipop(
   count_momu_novel, x = classification, y = biotype, facet = "class_exon",
   title = "Distribution of mono and multi-exonic novel transcripts",
   x_lab = "Classification", count_lab = "Transcripts", angle_x = 90
-)
+) + theme(strip.text.y = element_text(angle = 0))
 
 # plot exon numbers
 
 median_exnum_novel <- novel_tx %>% group_by(biotype) %>% summarise(median_exnum = median(num_exons), .groups = 'drop')
 p26 <- ggplot(novel_tx, aes(x = biotype, y = num_exons, fill = biotype)) +
   geom_boxplot() + labs(title = "Number of exons across novel transcripts", x = "Biotype", y = "Exon number (log10 scale)", fill = "Biotype\n(median number)") +
-  scale_y_log10_exons() + scale_fill_viridis_d(option = "D", end = 0.92, labels = paste0(median_exnum_novel$biotype, " (", round(median_exnum_novel$median_exnum, 2), ")"))
+  scale_y_log10_exons() + scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, labels = paste0(median_exnum_novel$biotype, " (", round(median_exnum_novel$median_exnum, 2), ")")) + theme(strip.text.y = element_text(angle = 0))
 
 p27 <- ggplot(novel_tx, aes(x = classification, y = num_exons, fill = classification)) +
   geom_boxplot(show.legend = FALSE) +
   facet_wrap(~biotype, strip.position = "right", ncol = 1) +
   scale_y_log10_exons() +
-  scale_fill_viridis_d(option = "D", end = 0.92, guide = "none") +
+  scale_fill_viridis_d(option = "P", begin = 0.2, end = 0.8, guide = "none") +
   labs(
     title = "Number of exons across novel transcripts within subtypes",
     x = NULL,
     y = "Exon number (log10 scale)"
   ) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
-        plot.margin = margin(0.4, 0.6, 0.4, 0.6, "cm"))
+        plot.margin = margin(0.4, 0.6, 0.4, 0.6, "cm"),
+        strip.text.y = element_text(angle = 0))
 
 # plot exon structure class length
 
