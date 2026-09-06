@@ -1,5 +1,5 @@
 process NOVEL_TRANSCRIPTS {
-    label 'process_low'
+    label 'process_novel_transcripts'
 
     container "${ workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container ?
         'docker://itsiaguara/pulposeq:test':
