@@ -355,7 +355,7 @@ plot_upset <- function(df, sets, fill_col = NULL, title = NULL, subtitle = NULL,
 
   placeholder <- function(msg) {
     ggplot() +
-      annotate("text", x = 0, y = 0, label = msg, size = 3, colour = "grey25") +
+      annotate("text", x = 0, y = 0, label = msg, colour = "grey25") +
       theme_void() +
       labs(title = title) +
       theme(plot.title = element_text(hjust = 0.5))
@@ -379,12 +379,12 @@ plot_upset <- function(df, sets, fill_col = NULL, title = NULL, subtitle = NULL,
 
   size_layer <- if (has_fill) {
     ComplexUpset::intersection_size(
-      counts = TRUE, text = list(size = 3, vjust = -0.5),
+      counts = TRUE, text = list(vjust = -0.5),
       bar_number_threshold = Inf,
       mapping = ggplot2::aes(fill = .data[[fill_col]]))
   } else {
     ComplexUpset::intersection_size(
-      counts = TRUE, text = list(size = 3, vjust = -0.5),
+      counts = TRUE, text = list(vjust = -0.5),
       bar_number_threshold = Inf)
   }
 
@@ -409,7 +409,7 @@ plot_upset <- function(df, sets, fill_col = NULL, title = NULL, subtitle = NULL,
     set_sizes             = ComplexUpset::upset_set_size(position = "right") +
                               ggplot2::geom_text(
                                 ggplot2::aes(label = ggplot2::after_stat(count)),
-                                stat = "count", hjust = 1.15, size = 3,
+                                stat = "count", hjust = 1.15,
                                 colour = "white") +
                               ggplot2::ylab("Set size"),
     width_ratio           = 0.3
