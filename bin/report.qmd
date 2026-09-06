@@ -1532,9 +1532,9 @@ if (all(c("ref_gene_biotype", "ref_transcript_biotype") %in% names(novel_tx))) {
 has_ref_bt <- !is.null(ref_bt_long) && nrow(ref_bt_long) > 0
 
 # Class codes that share splice structure with a reference transcript, and the
-# categories that actually have any. The category list drives both the loop below
-# and its fig-subcap, so an absent category cannot shift the subcaptions out of step
-# with the panels they label.
+# categories that actually have any. Filtering here rather than skipping inside the
+# loop keeps the panel count equal to length(related_cats), which is what the
+# subfigure lettering counts off.
 RELATED_CODES <- c("j", "k", "o", "y", "m", "n")
 
 related_cats <- character(0)
@@ -1595,10 +1595,14 @@ if (nrow(lnc_ix)) {
 #| fig-height: !expr related_h
 #| column: page
 #| eval: !expr has_related
-#| fig-subcap: !expr related_cats
+#| fig-subcap: true
 
-# One panel per routed category, subcaptioned rather than titled: without
-# fig-subcap Quarto repeats the whole caption under every panel.
+# One panel per routed category. fig-subcap collects them into a single figure
+# lettered (a), (b), (c); without it Quarto repeats the whole caption under every
+# panel. It takes `true` or a literal list only -- Quarto validates cell metadata
+# against its schema before knitr runs, so `!expr` is rejected there even though
+# fig-width, fig-height and eval accept it. The panel title carries the category
+# name instead, which the letters cannot.
 related <- ref_bt_long %>%
   filter(class_code %in% RELATED_CODES)
 
@@ -1610,6 +1614,7 @@ for (cat_name in related_cats) {
   print(
     plot_count_lollipop(
       d, x = ref_biotype, y = classification, facet = "level",
+      title = cat_name,
       x_lab = "Reference biotype", count_lab = "Transcripts", angle_x = 90) +
       theme_width(12) +
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
