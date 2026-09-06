@@ -136,26 +136,20 @@ showtext_auto()
 # against the wrong resolution.
 showtext_opts(dpi = 300)
 
-# Reference biotypes that current Ensembl and GENCODE releases all call "lncRNA".
-# The rest are the vocabularies older releases used for the same molecules, kept so
-# a run against an archived annotation groups them together rather than scattering
-# them into "other".
-LNCRNA_REF_BIOTYPES <- c(
-  "lncRNA", "lincRNA", "antisense", "antisense_RNA", "sense_intronic",
-  "sense_overlapping", "macro_lncRNA", "bidirectional_promoter_lncRNA",
-  "3prime_overlapping_ncRNA", "non_coding", "processed_transcript")
+LNCRNA_REF_BIOTYPES <- "lncRNA"
 
 base_theme <- theme(
   strip.background = element_rect(fill = "#f0f0f0", color = "black"),
   plot.background = element_blank(),
   panel.grid.minor = element_blank(),
+  panel.grid.major = element_blank(),
   panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)
 )
 
-theme_set(theme_bw(base_family = "Source Sans 3", base_size = 8) + base_theme)
+theme_set(theme_bw(base_family = "Source Sans 3", base_size = 10) + base_theme)
 
-update_geom_defaults("text",  list(family = "Source Sans 3", size = 6 / .pt))
-update_geom_defaults("label", list(family = "Source Sans 3", size = 6 / .pt))
+update_geom_defaults("text",  list(family = "Source Sans 3", size = 8 / .pt))
+update_geom_defaults("label", list(family = "Source Sans 3", size = 8 / .pt))
 
 # --- Shared log axes ---------------------------------------------------------
 # Every log-scaled axis in this report goes through these, so tick labels read
@@ -643,7 +637,7 @@ if (!is.null(vsum)) {
     check.names        = FALSE
   )
   if (!is.null(vsum$extended_annotations)) {
-    vtab$`Extended annotation` <- format(vsum$extended_annotations, big.mark = ",")
+    vtab$`Extended annotations` <- format(vsum$extended_annotations, big.mark = ",")
   }
   cat(knitr::kable(vtab, format = "markdown"), sep = "\n")
   cat(paste("\n\n**Total quantified** is the expressed set: features carrying at least",
