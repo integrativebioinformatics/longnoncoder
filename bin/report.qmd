@@ -163,7 +163,7 @@ scale_y_log10_std <- function(expand_top = FALSE, ...) {
   scale_y_log10(
     breaks = scales::breaks_log(),
     labels = scales::label_comma(),
-    expand = if (expand_top) expansion(mult = c(0, 0.2)) else waiver(),
+    expand = if (expand_top) expansion(mult = c(0, 0.25)) else waiver(),
     ...
   )
 }
@@ -190,8 +190,8 @@ scale_y_log10_exons <- function(...) {
 # --- Palette -----------------------------------------------------------------
 
 options(
-  ggplot2.discrete.fill = function(...) scale_fill_viridis_d(..., option = "D", end = 0.92),
-  ggplot2.discrete.colour = function(...) scale_colour_viridis_d(..., option = "D", end = 0.92)
+  ggplot2.discrete.fill = function(...) scale_fill_viridis_d(..., option = "P", begin = 0.2, end = 0.8),
+  ggplot2.discrete.colour = function(...) scale_colour_viridis_d(..., option = "P", begin = 0.2, end = 0.8)
 )
 
 # --- Chromosome ordering -----------------------------------------------------
@@ -302,7 +302,7 @@ plot_chr_distribution <- function(df, title, subtitle) {
     theme(
       panel.grid.major.x = element_blank(),
       panel.grid.minor   = element_blank(),
-      axis.text.x   = element_text(angle = 90, hjust = 1, vjust = 0.5),
+      axis.text.x   = element_text(angle = 0),
       plot.title    = element_text(hjust = 0.5),
       plot.subtitle = element_text(hjust = 0.5)
     )
@@ -420,7 +420,7 @@ plot_upset <- function(df, sets, fill_col = NULL, title = NULL, subtitle = NULL,
     # sizes and the intersection bars each fall back to the ggplot default.
     themes                = ComplexUpset::upset_default_themes(
                               text = ggplot2::element_text(family = "Source Sans 3",
-                                                           size = 8)),
+                                                           size = 10)),
     width_ratio           = 0.3
   )
 
