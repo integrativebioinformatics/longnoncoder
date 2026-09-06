@@ -108,6 +108,7 @@ knitr:
     fig.retina: 1
     dpi: 300
     fig.width: 8
+    fig.height: 8
     fig.asp: 0.618 
 ---
 
@@ -461,10 +462,8 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 3.  The structure of the isoforms is characterized, and metadata regarding isoform-level structure is retrieved directly from the reference annotation and assembly GTF files with **rtracklayer**[^5].
 4.  Count matrices and GTFs are restricted to the curated set, and biotype and classification attributes are attached to the validated annotations.
 5.  Bambu's PCA and expression heatmaps are regenerated from the curated transcriptome, so the sample-level view can be read beside the one built from the raw assembly.
-6.  Per-base coverage is written per sample as bigWig, and selected loci are drawn over those tracks with **plotgardener**[^7].
+6.  Per-base coverage is written per sample as bigWig, and selected loci are drawn over those tracks with **plotgardener**[^6].
 7.  Finally, annotations, count matrices and characterization metadata are standardized into comprehensive metadatasets that are easily accessible for downstream analyses, and the overall statistics of the assembly are summarized in the following sections of this report.
-
-[^7]: Kramer, Nicole E., et al. "Plotgardener: cultivating precise multi-panel figures in R." Bioinformatics 38.7 (2022): 2042-2045. https://doi.org/10.1093/bioinformatics/btac057
 
 [^2]: Pertea, Geo, and Mihaela Pertea. "GFF utilities: GffRead and GffCompare." F1000Research 9 (2020): ISCB-Comm. https://doi.org/10.12688/f1000research.23297.1
 
@@ -473,6 +472,8 @@ Downstream to the assembly with **Bambu** [^1], the raw extended annotations and
 [^4]: Ramos, Thaís AR, et al. "RNAmining: A machine learning stand-alone and web server tool for RNA coding potential prediction." F1000Research 10 (2021): 323. https://doi.org/10.12688/f1000research.52350.2
 
 [^5]: Lawrence, Michael, Robert Gentleman, and Vincent Carey. "rtracklayer: an R package for interfacing with genome browsers." Bioinformatics 25.14 (2009): 1841-1842. https://doi.org/10.1093/bioinformatics/btp328
+
+[^6]: Kramer, Nicole E., et al. "Plotgardener: cultivating precise multi-panel figures in R." Bioinformatics 38.7 (2022): 2042-2045. https://doi.org/10.1093/bioinformatics/btac057
 
 Final validated results are organized into the folders `bambu_validated`, `novel_transcripts` and `ref_transcripts` in the output directory. Per-sample coverage tracks are published to `coverage/` as bigWig, and the genomic context figures to `genomic_context/`.
 
@@ -552,9 +553,8 @@ A transcript lying inside an intron **on the host gene's own strand** is sequenc
 
 The ambiguity comes from splicing, not from coding potential, so it applies to any host carrying introns whatever its biotype — lncRNA genes are transcribed by Pol II and spliced exactly as protein-coding genes are, and the hosts here are frequently lncRNA genes. Sense-intronic candidates are kept, never dropped. They are counted as such in [Tracking Evidence], and each of the ones drawn is shown over its whole host intron in [Genomic Context], where coverage continuous with the flanking exons distinguishes a fragment of the precursor from a discrete transcript.
 
-  [Genomic Context]: #genomic-context
-
   [Tracking Evidence]: #tracking-evidence
+  [Genomic Context]: #genomic-context
 
 </details>
 
@@ -569,9 +569,9 @@ pulposeq adresses this conceptual bottleneck when classifying novel isoforms tha
 1.  Coding potential predictions;
 2.  Structural features identified based on their length, relationship with reference transcripts and their exon-intron structures.
 
-Consequently, a newly discovered isoform lacking coding potential but originating from a known protein-coding locus or any other gene biotype is classified strictly as a novel lncRNA transcript. This standardization process follows the current recommendations of the consensus statement of Mattick and colleagues [^6] for lncRNA classification and naming.
+Consequently, a newly discovered isoform lacking coding potential but originating from a known protein-coding locus or any other gene biotype is classified strictly as a novel lncRNA transcript. This standardization process follows the current recommendations of the consensus statement of Mattick and colleagues [^7] for lncRNA classification and naming.
 
-[^6]: Mattick, J.S., Amaral, P.P., Carninci, P. et al. Long non-coding RNAs: definitions, functions, challenges and recommendations. Nat Rev Mol Cell Biol 24, 430–447 (2023). https://doi.org/10.1038/s41580-022-00566-8
+[^7]: Mattick, J.S., Amaral, P.P., Carninci, P. et al. Long non-coding RNAs: definitions, functions, challenges and recommendations. Nat Rev Mol Cell Biol 24, 430–447 (2023). https://doi.org/10.1038/s41580-022-00566-8
 
 #### Why the report says *candidate*
 
@@ -1172,7 +1172,6 @@ cat("\n:::\n\n")
 
 This visualization maps the distribution of different gene biotypes across all chromosomes, revealing genomic hotspots for certain types of genes.
 
-
 ```{r}
 #| label: prep-chr-data
 #| include: false
@@ -1259,7 +1258,6 @@ p12 <- selected_tx %>% filter(gene_biotype == "lncRNA") %>%
 Transcript lengths on a log10 scale, with the median for each category in the legend.
 
 ::: panel-tabset
-
 #### Across gene biotypes
 
 ```{r}
@@ -1283,7 +1281,6 @@ p11
 #| fig-cap: "**Transcript length across lncRNA transcript biotypes.**"
 p12
 ```
-
 :::
 
 ### Exon Structure
@@ -1319,7 +1316,6 @@ p15 <- ggplot(ann_lnc_txome, aes(x = gene_biotype, y = num_exons, fill = transcr
 Exons per transcript, with the median for each category in the legend.
 
 ::: panel-tabset
-
 ##### Across gene biotypes
 
 ```{r}
@@ -1343,7 +1339,6 @@ p14
 #| fig-cap: "**Number of exons across lncRNA transcript biotypes.**"
 p15
 ```
-
 :::
 
 #### Mono- vs. Multi-exonic Transcripts
@@ -1437,9 +1432,9 @@ p19
 
 This section characterizes the transcripts that were not present in the reference annotation, across all three routed categories — **novel lncRNA candidates**, models **predicted protein-coding**, and models **predicted non-coding**. Every count below is a count of **candidates**: transcripts that meet the classification criteria and have not yet been shown to be independent transcriptional units. The evidence gathered for them is reported in [Tracking Evidence].
 
-> The metadata behind this section is `novel_transcripts_validated_metadata.csv`, which holds all three categories.
-
   [Tracking Evidence]: #tracking-evidence
+
+> The metadata behind this section is `novel_transcripts_validated_metadata.csv`, which holds all three categories.
 
 > **About the Tools:**
 >
@@ -1781,7 +1776,6 @@ plot_upset(
 
 This visualization maps the distribution of novel protein-coding and lncRNA transcripts across all chromosomes.
 
-
 ```{r}
 #| label: prep-novel-chr-data
 #| include: false
@@ -1860,7 +1854,6 @@ p24 <- novel_tx %>% filter(biotype == "novel lncRNA candidate") %>%
 Novel transcript lengths on a log10 scale, with the median for each category in the legend.
 
 ::: panel-tabset
-
 #### Across categories
 
 ```{r}
@@ -1884,7 +1877,6 @@ p23
 #| fig-cap: "**Length of the novel lncRNA candidates, by classification.**"
 p24
 ```
-
 :::
 
 ### Exon Structure
@@ -2307,7 +2299,7 @@ if (is.null(novel_nc)) {
 }
 ```
 
-## Genomic Context
+## Genomic Context {#genomic-context}
 
 Coverage and transcript models drawn together at selected loci. The bigWig tracks behind these figures are published alongside the report, so any region can be opened in IGV to explore beyond the windows chosen here.
 
