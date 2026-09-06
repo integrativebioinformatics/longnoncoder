@@ -234,8 +234,11 @@ tx <- data.frame(
   ref_gene_name      = tx_col("ref_gene_name"),
   ref_gene_biotype   = tx_col("ref_gene_biotype"),
   # The reference TRANSCRIPT a novel model was classified against, which decides
-  # which undetected isoforms are worth drawing.
-  ref_transcript_id  = tx_col("ref_transcript_id"),
+  # which undetected isoforms are worth drawing, and names the match on the label.
+  ref_transcript_id   = tx_col("ref_transcript_id"),
+  ref_transcript_name = tx_col("ref_transcript_name"),
+  # Bambu's own account of which part of the model is new.
+  BambuTxClass        = tx_col("BambuTxClass"),
   chrom              = as.character(GenomeInfoDb::seqnames(tx_gr)),
   strand             = as.character(BiocGenerics::strand(tx_gr)),
   start              = BiocGenerics::start(tx_gr),
@@ -264,9 +267,18 @@ biotype <- ifelse(is.na(tx$transcript_biotype) | !nzchar(tx$transcript_biotype),
 # says everything "i" does, and the letter is still on every row of the metadata CSV.
 cls <- ifelse(is.na(tx$classification) | !nzchar(tx$classification), "",
               paste0(" | ", tx$classification))
+
+# What the model was matched against, named on the label itself. A class code says
+# a novel model shares a junction with "a reference transcript"; without naming
+# which, the panel leaves the reader to work it out from the tracks. The reference
+# transcript's name where the annotation gives one, its identifier otherwise.
+ref_tx <- ifelse(!is.na(tx$ref_transcript_name) & nzchar(tx$ref_transcript_name),
+                 tx$ref_transcript_name, tx$ref_transcript_id)
+ref_mark <- ifelse(is.na(ref_tx) | !nzchar(ref_tx), "", paste0(" | ", ref_tx))
+
 str_mark <- ifelse(tx$strand %in% c("+", "-"), paste0(" | ", tx$strand), "")
 
-tx$label <- paste0(display_name, cls, str_mark)
+tx$label <- paste0(display_name, cls, ref_mark, str_mark)
 # Kept as its own column because the figures colour by it and the legend lists it.
 tx$biotype_key <- biotype
 
@@ -431,6 +443,7 @@ if (nrow(novel_tx)) {
   cand$ref_class      <- sel$ref_class
   cand$example_tx     <- sel$transcript_id
   cand$ref_gene_biotype <- sel$ref_gene_biotype
+  cand$BambuTxClass   <- sel$BambuTxClass
 
   cand$label <- ifelse(is.na(cand$gene_name) | !nzchar(cand$gene_name),
                        cand$gene_id, cand$gene_name)
@@ -466,6 +479,7 @@ if (length(sense_i)) {
     ref_gene_biotype = tx$ref_gene_biotype[sense_i],
     class_code       = tx$class_code[sense_i],
     strand           = tx$strand[sense_i],
+    BambuTxClass     = tx$BambuTxClass[sense_i],
     stringsAsFactors = FALSE
   )
 
@@ -1252,8 +1266,10 @@ if (nrow(cand)) {
       title        = row$label,
       # The stratum is the point of the panel, so it leads: this figure is here as
       # the example of its kind, not because the locus is remarkable.
-      subtitle     = sprintf("%s, %s | reference: %s",
-                             row$novel_biotype, row$classification, ref_bt),
+      subtitle     = sprintf("%s, %s | reference: %s%s",
+                             row$novel_biotype, row$classification, ref_bt,
+                             if (is.na(row$BambuTxClass) || !nzchar(row$BambuTxClass)) ""
+                               else sprintf(" | Bambu: %s", row$BambuTxClass)),
       out_png      = file.path(opt$outdir,
                                sprintf("genomic_context_%s_%s.png",
                                        slug(row$label), slug(row$stratum)))
@@ -1261,7 +1277,7 @@ if (nrow(cand)) {
   }
 
   write.csv(cand[, c("stratum", "novel_biotype", "classification", "class_code",
-                     "ref_class", "ref_gene_biotype", "example_tx",
+                     "ref_class", "ref_gene_biotype", "BambuTxClass", "example_tx",
                      "gene_id", "gene_name", "label", "panel_genes", "chrom",
                      "start", "end", "win_s", "win_e", "n_tx", "n_known",
                      "n_novel", "n_annotated", "n_novel_lnc", "biotypes", "figure")],
@@ -1271,7 +1287,7 @@ if (nrow(cand)) {
   # zero-row table with a different header is harder to handle than an empty one
   # with the right header.
   empty_cols <- c("stratum", "novel_biotype", "classification", "class_code",
-                  "ref_class", "ref_gene_biotype", "example_tx", "gene_id",
+                  "ref_class", "ref_gene_biotype", "BambuTxClass", "example_tx", "gene_id",
                   "gene_name", "label", "panel_genes", "chrom", "start", "end",
                   "win_s", "win_e", "n_tx", "n_known", "n_novel", "n_annotated", "n_novel_lnc",
                   "biotypes", "figure")
@@ -1311,13 +1327,15 @@ if (nrow(flagged)) {
       panel_tx     = panel_tx,
       title        = sprintf("%s in %s", row$qry_id, host_lab),
       subtitle     = sprintf(
-        "sense intronic (%s) | %s | %s | %s counts%s",
+        "sense intronic (%s) | %s | %s%s | %s counts%s",
         ifelse(is.na(row$ref_gene_biotype), "unknown biotype", row$ref_gene_biotype),
         if (isTRUE(row$num_exons == 1L)) "mono-exonic"
           else sprintf("%d exons", row$num_exons),
         if (isTRUE(row$full_length_support)) "full-length support"
           else if (isFALSE(row$full_length_support)) "no full-length support"
           else "full-length support not recorded",
+        if (is.na(row$BambuTxClass) || !nzchar(row$BambuTxClass)) ""
+          else sprintf(" | Bambu: %s", row$BambuTxClass),
         format(round(row$counts_total), big.mark = ","),
         if (is.na(row$samples_quantified)) "" else
           sprintf(" in %d/%d samples",
@@ -1336,7 +1354,7 @@ if (nrow(flagged)) {
 
   write.csv(flagged[, c("qry_id", "ref_gene_id", "ref_gene_name", "ref_gene_biotype",
                         "chrom", "start", "end", "win_s", "win_e", "strand",
-                        "class_code", "num_exons",
+                        "class_code", "BambuTxClass", "num_exons",
                         "samples_quantified", "samples_total",
                         "quantified_samples", "counts_total",
                         "full_length_support",

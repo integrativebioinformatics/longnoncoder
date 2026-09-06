@@ -12,7 +12,7 @@
 # Each validated GTF holds a mixture of known and novel transcripts, so both
 # lookups are applied:
 #   known -> the reference annotation, via annotated_transcriptome_metadata.csv
-#   novel -> the gffcompare/RNAmining results, via novel_pc_lnc_RNAs_metadata.csv
+#   novel -> the gffcompare/RNAmining results, via novel_transcripts_validated_metadata.csv
 
 suppressPackageStartupMessages({
     library(GenomicRanges)
@@ -33,7 +33,7 @@ option_list <- list(
     make_option(c("--known_metadata"), type="character", default=NULL,
                 help="annotated_transcriptome_metadata.csv", metavar="character"),
     make_option(c("--novel_metadata"), type="character", default=NULL,
-                help="novel_pc_lnc_RNAs_metadata.csv", metavar="character"),
+                help="novel_transcripts_validated_metadata.csv", metavar="character"),
     make_option(c("--annotation"), type="character", default=NULL,
                 help="Path to the reference annotation GTF (Ensembl or GENCODE)", metavar="character")
 )
@@ -85,6 +85,10 @@ if (nrow(known) > 0) {
         transcript_biotype = known$transcript_biotype,
         class_code             = NA_character_,
         classification         = NA_character_,
+        # Bambu's txClassDescription is "annotation" for every reference transcript,
+        # which says nothing. NA, like class_code.
+        BambuTxClass           = NA_character_,
+        BambuNDR               = NA_character_,
         # A known transcript IS the reference, so it has nothing to have been
         # compared against. NA rather than self-reference, matching class_code.
         ref_gene_id            = NA_character_,
@@ -135,6 +139,8 @@ if (nrow(novel) > 0) {
         transcript_biotype     = tx_biotype,
         class_code             = as.character(novel$class_code),
         classification         = as.character(novel$classification),
+        BambuTxClass           = col("BambuTxClass"),
+        BambuNDR               = col("BambuNDR"),
         ref_gene_id            = ref_gene,
         ref_gene_name          = col("ref_gene_name"),
         ref_gene_biotype       = col("ref_gene_biotype"),

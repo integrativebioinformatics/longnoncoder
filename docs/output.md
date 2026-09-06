@@ -300,6 +300,8 @@ Bambu writes only `gene_id`, `transcript_id` and `exon_number` into its GTF outp
 | `class_code` | gffcompare class code relative to the reference (novel transcripts only). |
 | `classification` | Human-readable reading of `class_code`, following gffcompare's own definitions, with `i` qualified `(sense)` or `(antisense)` (novel transcripts only). See [Which class codes become candidates](#which-class-codes-become-candidates). |
 | `ref_gene_id` | Reference gene the novel transcript was matched against, where gffcompare found one (novel transcripts only). |
+| `BambuTxClass` | Bambu's `txClassDescription`: which part of the model was not already in the annotation. Colon-separated where a model carries several (novel transcripts only). See [Bambu transcript classes](#bambu-transcript-classes). |
+| `BambuNDR` | The novel discovery rate Bambu assigned to this specific transcript — a per-model score, not the run-level `ndr` threshold it was tested against (novel transcripts only). |
 
 > [!NOTE]
 > Novel transcripts frequently arise from genes that are already annotated. In that case `gene_biotype` reports the reference gene's real biotype while `transcript_biotype` records the novel isoform's predicted class, so the two can legitimately differ, e.g. a `novel_lncRNA` transcript within a `protein_coding` gene.
@@ -367,12 +369,12 @@ With `rnamining`:
 | `bambu_annotated_transcriptome_gene_counts.csv` | Gene-level count matrix for annotated transcriptome features. |
 | `bambu_annotated_transcriptome.gtf` | GTF file for validated annotated features assembled/quantified by bambu. |
 | `bambu_annotated_transcriptome_tx_counts.csv` | Transcript-level count matrix for annotated transcriptome features. |
-| `bambu_novel_pc_lnc_RNA_gene_counts.csv` | Gene-level counts for novel isoform candidates classified as protein-coding or lncRNA. |
-| `bambu_novel_pc_lnc_RNA_tx_counts.csv` | Transcript-level counts for novel isoform candidates classified as protein-coding or lncRNA. |
+| `bambu_novel_gene_counts.csv` | Gene-level counts for the novel candidates, all three routed categories. |
+| `bambu_novel_tx_counts.csv` | Transcript-level counts for the novel candidates, all three routed categories. |
 | `novel_lncRNA_exon_lengths.csv` | Exon length summary for novel lncRNA isoform candidates. |
 | `novel_lncRNAs.gtf` | GTF file containing novel lncRNA isoform candidates. |
 | `novel_lncRNAs_metadata.csv` | Metadata table for novel lncRNA isoform candidates. |
-| `novel_pc_lnc_RNAs_metadata.csv` | Combined metadata table for the novel candidates. Despite its name it holds **all three** routed categories, `novel_non_coding` included. |
+| `novel_transcripts_validated_metadata.csv` | Combined metadata for the novel candidates that passed validation, all three routed categories. Carries `BambuTxClass` and `BambuNDR` alongside the gffcompare fields — see [Bambu transcript classes](#bambu-transcript-classes). |
 | `novel_protein-coding_exon_lengths.csv` | Exon length summary for novel protein-coding isoform candidates. |
 | `novel_protein-coding.gtf` | GTF file containing novel protein-coding RNA isoform candidates. |
 | `novel_protein-coding_metadata.csv` | Metadata table for novel protein-coding RNA isoform candidates. |
@@ -454,6 +456,39 @@ what it is, which is as much as the evidence supports for a non-coding isoform o
 coding gene. The prediction and its probability are kept as columns on every record
 in all three categories.
 
+### Bambu transcript classes
+
+`class_code` and `BambuTxClass` answer different questions about the same model, and
+neither replaces the other.
+
+A **class code** says how the model sits relative to the reference transcript
+gffcompare matched it against — inside an intron, antisense, sharing a junction.
+**`BambuTxClass`** is Bambu's `txClassDescription`, and says which *part* of the model
+was not already in the annotation. A `j` model whose only novelty is a new last exon
+and a `j` model that is `allNew` carry the same class code and are not the same claim.
+
+The value is carried through from the assembly, never re-derived: it comes out of
+Bambu's `SummarizedExperiment`, and nothing downstream could reconstruct it.
+
+| Value | Meaning |
+|---|---|
+| `newGene-spliced` | A spliced model at a locus with no annotated gene. |
+| `newGene-unspliced` | A single-exon model at a locus with no annotated gene. |
+| `allNew` | Every feature of the model is new, at a locus that does have an annotated gene. |
+| `newWithin` | The model lies within an existing gene's bounds using only known junctions. |
+| `newJunction` | Carries a splice junction not in the annotation. |
+| `newFirstJunction` / `newLastJunction` | The novel junction is the model's first or last. |
+| `newFirstExon` / `newLastExon` | The model's first or last exon is not annotated. |
+
+A model can carry several at once, packed into one colon-separated string —
+`newFirstJunction:newJunction:newFirstExon`. They are **sets, not categories**, so a
+count per class sums to more than the number of models. The report splits them into
+sets and draws them as an UpSet for that reason.
+
+`annotation`, which Bambu uses for reference transcripts it merely quantified, is not
+expected here: only novel models reach this step. Seeing it means the RDS and the GTF
+came from different Bambu runs, and the pipeline warns rather than passing it on.
+
 ### Reference identity on novel records
 
 Every novel record carries what it was compared against: `ref_gene_id`,
@@ -478,10 +513,10 @@ accurate.
 | File | Description |
 |--------------------------|----------------------------------------------|
 | `genomic_context_<gene>.png` | Gene structure, every isoform at the locus with novel ones highlighted, and one coverage track per sample on a shared scale. Selected from genes carrying both known and novel isoforms. |
-| `genomic_context_candidates.csv` | The loci drawn, with their windows and isoform counts. |
+| `genomic_context_candidates.csv` | The loci drawn, with their windows, isoform counts and the `BambuTxClass` of the example transcript. |
 | `genomic_context_regions.gtf` | The plotted regions as a small GTF. Built to feed `makeTxDbFromGFF`, but useful on its own — load it in IGV beside the published bigWigs. |
 | `intronic_context_<transcript>.png` | Sense-intronic candidates: models lying inside a reference gene's intron, on that gene's own strand. Windowed on the **whole host intron**, because a window drawn tightly around a truncated fragment looks discrete whatever it is. |
-| `intronic_context_candidates.csv` | The candidates drawn, with the structure and counts behind their ordering: `num_exons`, `full_length_support`, `counts_total`, and which samples quantified each. |
+| `intronic_context_candidates.csv` | The candidates drawn, with the structure and counts behind their ordering: `num_exons`, `full_length_support`, `counts_total`, `BambuTxClass`, and which samples quantified each. |
 
 Sense intronic is the one relationship the assembly cannot resolve on its own. Such a
 model is sequence-identical to part of its host's **unspliced precursor** — the primary

@@ -7,6 +7,7 @@ suppressPackageStartupMessages({
     library(rtracklayer)
     library(GenomicRanges)
     library(optparse)
+    library(SummarizedExperiment)
 
 })
 
@@ -28,7 +29,10 @@ option_list <- list(
     make_option(c("--tx_counts"), type="character", default=NULL,
                 help="Path to transcript counts file", metavar="character"),
     make_option(c("--gene_counts"), type="character", default=NULL,
-                help="Path to gene counts file", metavar="character")
+                help="Path to gene counts file", metavar="character"),
+    make_option(c("--se_rds"), type="character", default=NULL,
+                help="Transcript-level SummarizedExperiment from Bambu, for txClassDescription",
+                metavar="character")
 )
 
 opt_parser <- OptionParser(option_list=option_list)
@@ -198,6 +202,69 @@ tx_info$ref_gene_strand    <- unname(ref_gene_strand[tx_info$ref_gene_id])
 tx_info$same_strand_as_ref <- ifelse(is.na(tx_info$ref_gene_strand), NA,
                                      tx_info$strand == tx_info$ref_gene_strand)
 
+# --- Bambu's own view of why each model is novel -------------------------------
+#
+# gffcompare and Bambu answer different questions about the same transcript, and
+# neither subsumes the other. A class code says how the model sits relative to the
+# reference it was matched against -- inside an intron, antisense, sharing a
+# junction. txClassDescription says which PART of the model Bambu had to invent to
+# build it: a new first exon, a new junction, a whole new gene. A `j` model whose
+# only novelty is `newLastExon` is a different claim from a `j` model that is
+# `allNew`, and the class code alone cannot separate them.
+#
+# It is carried, not re-derived: it comes out of the assembly, and there is nothing
+# downstream that could reconstruct it.
+#
+# One or more classes are packed into a colon-separated string, which is kept whole
+# here. The report splits it into sets; splitting it into columns at this point
+# would fix the vocabulary to whatever this Bambu version emits.
+# BambuNDR is the novel discovery rate Bambu assigned to this transcript, not the
+# run-level threshold: a per-model score, where the run parameter is the cutoff it
+# was tested against. Carried per transcript so a candidate can be read against the
+# threshold that admitted it.
+tx_info$BambuTxClass <- NA_character_
+tx_info$BambuNDR     <- NA_real_
+
+if (!is.null(opt$se_rds) && file.exists(opt$se_rds)) {
+    cat("Reading Bambu transcript classes...\n")
+    se <- tryCatch(readRDS(opt$se_rds), error = function(e) {
+        warning("Could not read ", opt$se_rds, ": ", e$message)
+        NULL
+    })
+
+    if (!is.null(se)) {
+        rd <- SummarizedExperiment::rowData(se)
+        # eqClassById is a list column; as.data.frame on it fails, and nothing here
+        # needs it. Keep only the atomic columns.
+        atomic <- vapply(seq_len(ncol(rd)), function(i) is.atomic(rd[[i]]), logical(1))
+        bambu_meta <- as.data.frame(rd[, atomic, drop = FALSE], stringsAsFactors = FALSE)
+
+        if (all(c("TXNAME", "txClassDescription") %in% names(bambu_meta))) {
+            idx <- match(tx_info$qry_id, as.character(bambu_meta$TXNAME))
+            tx_info$BambuTxClass <- as.character(bambu_meta$txClassDescription)[idx]
+            if ("NDR" %in% names(bambu_meta)) {
+                tx_info$BambuNDR <- as.numeric(bambu_meta$NDR)[idx]
+            }
+            cat(sprintf("  %d of %d novel transcripts carry a Bambu class\n",
+                        sum(!is.na(tx_info$BambuTxClass)), nrow(tx_info)))
+        } else {
+            warning("The SummarizedExperiment carries no txClassDescription column; ",
+                    "BambuTxClass will be NA throughout.")
+        }
+    }
+} else {
+    cat("No SummarizedExperiment supplied; BambuTxClass will be NA throughout.\n")
+}
+
+# "annotation" is Bambu's label for a reference transcript it merely quantified.
+# Only novel models reach this script, so seeing it here means the join matched the
+# wrong row rather than that the model is annotated.
+if (any(tx_info$BambuTxClass %in% "annotation", na.rm = TRUE)) {
+    warning(sum(tx_info$BambuTxClass %in% "annotation"),
+            " novel transcripts matched a Bambu class of \"annotation\"; ",
+            "check that the RDS and the GTF come from the same Bambu run.")
+}
+
 # Load counts
 cat("Filtering transcripts with zero counts...\n")
 tx_counts <- read_table(opt$tx_counts)
@@ -273,6 +340,11 @@ novel_attrs <- function(meta) {
         gene_biotype           = gene_biotype,
         class_code             = as.character(meta$class_code),
         classification         = as.character(meta$classification),
+        # Which part of the model Bambu had to invent, which the class code does not
+        # say: a `j` whose only novelty is a new last exon and a `j` that is allNew
+        # carry the same code.
+        BambuTxClass           = as.character(meta$BambuTxClass),
+        BambuNDR               = as.character(meta$BambuNDR),
         # What it was compared against, carried on the GTF as well as the CSV so the
         # file is self-describing in IGV without the metadata beside it.
         ref_gene_id            = meta$ref_gene_id,
@@ -390,7 +462,7 @@ write_novel_gtf(new_ncRNAs, "novel_non_coding.gtf")
 # Save combined metadata. All three categories: the novel_non_coding models must
 # not drop out of the validated GTF or the counts derived from it.
 new_mRNA_lncRNA <- rbind(new_mRNAs, new_lncRNAs, new_ncRNAs)
-write.csv(new_mRNA_lncRNA, "novel_pc_lnc_RNAs_metadata.csv", row.names = FALSE)
+write.csv(new_mRNA_lncRNA, "novel_transcripts_validated_metadata.csv", row.names = FALSE)
 
 # Update novel transcripts GTF with the new classifications
 write_novel_gtf(new_mRNA_lncRNA, "novel_transcripts_validated.gtf")
@@ -418,9 +490,9 @@ tx_ids <- new_mRNA_lncRNA$qry_id
 gn_ids <- new_mRNA_lncRNA$qry_gene_id
 
 novel_tx_counts <- subset(tx_counts, TXNAME %in% tx_ids)
-write.csv(novel_tx_counts, "bambu_novel_pc_lnc_RNA_tx_counts.csv", row.names = FALSE)
+write.csv(novel_tx_counts, "bambu_novel_tx_counts.csv", row.names = FALSE)
 
 novel_gn_counts <- subset(gene_counts, GENEID %in% gn_ids)
-write.csv(novel_gn_counts, "bambu_novel_pc_lnc_RNA_gene_counts.csv", row.names = FALSE)
+write.csv(novel_gn_counts, "bambu_novel_gene_counts.csv", row.names = FALSE)
 
 cat("Analysis completed successfully!\n")

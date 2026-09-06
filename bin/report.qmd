@@ -86,7 +86,7 @@ params:
     lncrna_meta: "annotated_lncRNAs_metadata.csv"
     protein_coding_exonlength: "annotated_protein-coding_exonlength.csv"
     lncrna_exonlength: "annotated_lncRNAs_exonlength.csv"
-    novel_transcriptome_meta: "novel_pc_lnc_RNAs_metadata.csv"
+    novel_transcriptome_meta: "novel_transcripts_validated_metadata.csv"
     novel_lncrna_exonlength: "novel_lncRNA_exon_lengths.csv"
     novel_protein_coding_exonlength: "novel_protein-coding_exon_lengths.csv"
     novel_non_coding_meta: "novel_non_coding_metadata.csv"
@@ -1463,7 +1463,7 @@ p19
 
 This section characterizes the transcripts that were not present in the reference annotation, across all three routed categories — **novel lncRNA candidates**, models **predicted protein-coding**, and models **predicted non-coding**. Every count below is a count of **candidates**: transcripts that meet the classification criteria and have not yet been shown to be independent transcriptional units. The evidence gathered for them is reported in [Tracking Evidence].
 
-> The metadata behind this section is `novel_pc_lnc_RNAs_metadata.csv`. Despite its name it holds all three categories, `novel_non_coding` included.
+> The metadata behind this section is `novel_transcripts_validated_metadata.csv`, which holds all three categories.
 
   [Tracking Evidence]: #tracking-evidence
 
@@ -1618,6 +1618,201 @@ for (cat_name in related_cats) {
             strip.text.y = element_text(angle = 0))
   )
 }
+```
+
+#### What Bambu had to invent
+
+A class code says how a novel model sits relative to the reference it was matched against. Bambu's own `BambuTxClass` says something the class code cannot: **which part of the model was not already in the annotation** — a new first exon, a new junction, a whole new gene. A `j` model whose only novelty is `newLastExon` and a `j` model that is `allNew` carry the same class code and are not the same claim.
+
+A model can carry several at once — `newFirstJunction:newJunction:newFirstExon` — so they are sets, not categories.
+
+```{r}
+#| label: bambu-class-prep
+#| include: false
+
+# One row per (transcript, class). Split on the colon rather than matching
+# substrings: "newJunction" is a substring of "newLastJunction", so grepl would
+# count every newLastJunction model twice.
+bambu_class_sets <- NULL
+BAMBU_CLASSES    <- character(0)
+
+if ("BambuTxClass" %in% names(novel_tx)) {
+  has_class <- !is.na(novel_tx$BambuTxClass) & nzchar(novel_tx$BambuTxClass)
+
+  if (any(has_class)) {
+    bc <- novel_tx[has_class, , drop = FALSE]
+    class_list    <- strsplit(as.character(bc$BambuTxClass), ":", fixed = TRUE)
+    BAMBU_CLASSES <- sort(unique(trimws(unlist(class_list))))
+
+    for (cl in BAMBU_CLASSES) {
+      bc[[cl]] <- vapply(class_list, function(x) cl %in% trimws(x), logical(1))
+    }
+    bc$novel_category <- droplevels(factor(bc$biotype))
+    bambu_class_sets  <- bc
+  }
+}
+
+# An UpSet over one set is a single bar. Below two, the lollipop and the table
+# carry the section on their own.
+has_bambu_class <- !is.null(bambu_class_sets) && length(BAMBU_CLASSES) >= 2
+
+# --- Bambu class crossed with the gffcompare classification -------------------
+# Long form, so a model carrying two classes is counted under both. That makes the
+# column totals exceed the number of models, which is what a set membership means
+# and is stated in the caption.
+bambu_class_cross      <- NULL
+bambu_class_vs_code_h  <- 5
+has_bambu_class_cross  <- FALSE
+
+bambu_class_table     <- NULL
+has_bambu_class_table <- FALSE
+
+if (!is.null(bambu_class_sets)) {
+  bambu_long <- bambu_class_sets %>%
+    select(qry_id, classification, novel_category, any_of("BambuNDR"),
+           all_of(BAMBU_CLASSES)) %>%
+    pivot_longer(cols = all_of(BAMBU_CLASSES),
+                 names_to = "bambu_class", values_to = "carries") %>%
+    filter(carries)
+
+  if (nrow(bambu_long)) {
+    bambu_class_cross <- bambu_long %>%
+      count(novel_category, classification, bambu_class, name = "count")
+    bambu_class_vs_code_h <- lollipop_height(
+      dplyr::n_distinct(bambu_class_cross$classification))
+    has_bambu_class_cross <- TRUE
+
+    # NDR is Bambu's per-model score, so a median over a class says how confidently
+    # that whole kind of model was called.
+    bambu_class_table <- bambu_long %>%
+      group_by(`Bambu class` = bambu_class) %>%
+      summarise(
+        Models = dplyr::n(),
+        `Median NDR` = if (!"BambuNDR" %in% names(bambu_long) ||
+                           all(is.na(suppressWarnings(as.numeric(BambuNDR))))) {
+          NA_character_
+        } else {
+          sprintf("%.3f", median(suppressWarnings(as.numeric(BambuNDR)), na.rm = TRUE))
+        },
+        .groups = "drop") %>%
+      arrange(dplyr::desc(Models))
+    has_bambu_class_table <- nrow(bambu_class_table) > 0
+  }
+}
+```
+
+```{r}
+#| label: fig-bambu-class-upset
+#| fig-cap: "**Which parts of each novel model were new to the annotation.** Each bar is one exact combination of Bambu transcript classes; the dot matrix below names it. Bars are stacked by the category the model was routed into, and set sizes on the right give how many models carry each class in total. A model with several filled dots needed more than one novel feature to be built."
+#| fig-width: 9
+#| fig-height: 5
+#| eval: !expr has_bambu_class
+
+plot_upset(
+  bambu_class_sets,
+  sets     = BAMBU_CLASSES,
+  fill_col = "novel_category",
+  title    = "Bambu transcript classes",
+  subtitle = sprintf("%s novel models carrying a class",
+                     format(nrow(bambu_class_sets), big.mark = ",")))
+```
+
+```{r}
+#| label: bambu-class-note
+#| echo: false
+#| output: asis
+
+if (is.null(bambu_class_sets)) {
+  cat("No novel model carries a Bambu transcript class in this run. ",
+      "`BambuTxClass` is read from the assembly's `SummarizedExperiment`; ",
+      "an empty column means that object did not reach this step.\n")
+} else if (!has_bambu_class) {
+  cat(sprintf("Every novel model in this run is **%s**, so there are no combinations to plot.\n",
+              BAMBU_CLASSES[1]))
+}
+```
+
+The two vocabularies are not redundant, and where they disagree is where the interesting models are. The figure below crosses them.
+
+```{r}
+#| label: fig-bambu-class-vs-code
+#| fig-cap: "**Bambu transcript class against gffcompare classification.** Rows are the classification gffcompare assigned, columns the routed category, and the x axis the Bambu class. A model appears once per class it carries, so a row total can exceed the number of models. A combination absent from the data reads as a labelled 0."
+#| fig-width: 9
+#| fig-height: !expr bambu_class_vs_code_h
+#| eval: !expr has_bambu_class_cross
+
+plot_count_lollipop(
+  bambu_class_cross, x = bambu_class, y = classification, facet = "novel_category",
+  x_lab = "Bambu transcript class", count_lab = "Transcripts", angle_x = 90) +
+  theme_width(9) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5),
+        strip.text.y = element_text(angle = 0))
+```
+
+```{r}
+#| label: bambu-class-support-prep
+#| include: false
+
+# Read support per Bambu class. Long form: a model carrying two classes is counted
+# under both, which is the only honest way to describe a set membership.
+bambu_class_support <- NULL
+
+if (!is.null(bambu_class_sets) && exists("bambu_ids")) {
+  fl_ids <- if (!is.null(bambu_ids$fullLength)) bambu_ids$fullLength else character(0)
+  uq_ids <- if (!is.null(bambu_ids$uniquelyMapped)) bambu_ids$uniquelyMapped else character(0)
+
+  bambu_class_support <- bambu_class_sets %>%
+    select(qry_id, novel_category, all_of(BAMBU_CLASSES)) %>%
+    pivot_longer(cols = all_of(BAMBU_CLASSES),
+                 names_to = "bambu_class", values_to = "carries") %>%
+    filter(carries) %>%
+    mutate(`full-length support` = qry_id %in% fl_ids,
+           `unique support`      = qry_id %in% uq_ids) %>%
+    group_by(bambu_class) %>%
+    summarise(n = dplyr::n(),
+              `full-length` = mean(`full-length support`),
+              `unique`      = mean(`unique support`),
+              .groups = "drop") %>%
+    pivot_longer(cols = c(`full-length`, `unique`),
+                 names_to = "measure", values_to = "fraction")
+
+  if (!nrow(bambu_class_support)) bambu_class_support <- NULL
+}
+
+has_bambu_class_support <- !is.null(bambu_class_support)
+```
+
+```{r}
+#| label: fig-bambu-class-support
+#| fig-cap: "**Read support by Bambu transcript class.** The fraction of models in each class that appear in Bambu's full-length and unique count matrices. A class whose models are rarely spanned end to end was built from reads that did not cover it, whatever its class code says."
+#| fig-width: 9
+#| fig-height: 4.5
+#| eval: !expr has_bambu_class_support
+
+ggplot(bambu_class_support,
+       aes(x = reorder(bambu_class, -n), y = fraction, fill = measure)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.75) +
+  geom_text(aes(label = sprintf("%.0f%%", 100 * fraction)),
+            position = position_dodge(width = 0.8), vjust = -0.6) +
+  scale_y_continuous(limits = c(0, 1.08), breaks = seq(0, 1, 0.25),
+                     labels = scales::label_percent()) +
+  scale_fill_viridis_d(option = "viridis", begin = 0.3, end = 0.8) +
+  theme_width(9) +
+  labs(title = "Read support by Bambu transcript class",
+       subtitle = "Fraction of models in each class carrying each kind of support",
+       x = NULL, y = "Models with this support", fill = NULL) +
+  theme(legend.position = "top",
+        axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
+```
+
+```{r}
+#| label: tbl-bambu-class
+#| tbl-cap: "Novel models per Bambu transcript class, with the median NDR Bambu assigned them."
+#| echo: false
+#| eval: !expr has_bambu_class_table
+
+bambu_class_table %>%
+  knitr::kable(format = "markdown", row.names = FALSE)
 ```
 
 #### Read support behind the lncRNA candidates

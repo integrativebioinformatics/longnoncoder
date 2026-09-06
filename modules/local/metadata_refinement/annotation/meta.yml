@@ -40,7 +40,7 @@ input:
   - novel_metadata:
       type: file
       description: Combined metadata for the novel candidates, all three routed categories.
-      pattern: "novel_pc_lnc_RNAs_metadata.csv"
+      pattern: "novel_transcripts_validated_metadata.csv"
   - annotation:
       type: file
       description: Reference annotation GTF, read for CDS and UTR features.

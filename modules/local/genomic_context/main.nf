@@ -58,12 +58,12 @@ process GENOMIC_CONTEXT {
     """
     touch genomic_context_STUBGENE.png
     touch genomic_context_regions.gtf
-    printf 'gene_id,gene_name,label,chrom,start,end,win_s,win_e,n_tx,n_known,n_novel,n_novel_lnc,biotypes,figure\\n' > genomic_context_candidates.csv
-    printf 'ENSG00000000000,STUBGENE,STUBGENE,chr1,1000,9000,950,9050,4,3,1,1,protein_coding;novel_lncRNA,genomic_context_STUBGENE.png\\n' >> genomic_context_candidates.csv
+    printf 'gene_id,gene_name,label,chrom,start,end,win_s,win_e,n_tx,n_known,n_novel,n_novel_lnc,biotypes,BambuTxClass,figure\\n' > genomic_context_candidates.csv
+    printf 'ENSG00000000000,STUBGENE,STUBGENE,chr1,1000,9000,950,9050,4,3,1,1,protein_coding;novel_lncRNA,newWithin,genomic_context_STUBGENE.png\\n' >> genomic_context_candidates.csv
 
     touch intronic_context_STUBTX.png
-    printf 'qry_id,ref_gene_id,ref_gene_name,ref_gene_biotype,chrom,start,end,win_s,win_e,strand,class_code,num_exons,samples_quantified,samples_total,quantified_samples,counts_total,full_length_support,figure\\n' > intronic_context_candidates.csv
-    printf 'BambuTxSTUB,ENSG00000000000,STUBGENE,protein_coding,chr1,3000,3800,2000,5000,+,i,1,2,3,s1;s2,42,FALSE,intronic_context_STUBTX.png\\n' >> intronic_context_candidates.csv
+    printf 'qry_id,ref_gene_id,ref_gene_name,ref_gene_biotype,chrom,start,end,win_s,win_e,strand,class_code,BambuTxClass,num_exons,samples_quantified,samples_total,quantified_samples,counts_total,full_length_support,figure\\n' > intronic_context_candidates.csv
+    printf 'BambuTxSTUB,ENSG00000000000,STUBGENE,protein_coding,chr1,3000,3800,2000,5000,+,i,newWithin,1,2,3,s1;s2,42,FALSE,intronic_context_STUBTX.png\\n' >> intronic_context_candidates.csv
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
